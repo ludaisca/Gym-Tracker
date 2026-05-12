@@ -1,0 +1,32 @@
+# Dependencias
+node_modules/
+
+# Builds generados
+dist/
+backend/dist/
+
+# Variables de entorno (contienen secretos — NUNCA commitear)
+.env
+.env.*
+!.env.example
+
+# Android / Capacitor (descartado)
+frontend/android/
+*.apk
+*.aab
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Code (configuración local)
+.claude/
