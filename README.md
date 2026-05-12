@@ -1,61 +1,80 @@
-# Gym Tracker
+<div align="center">
 
-App web de seguimiento de entrenamiento personal. Construida con React 19, Fastify, PostgreSQL y Prisma. Instalable como PWA.
+# 🏋️ Gym Tracker
+
+**App web de seguimiento de entrenamiento personal — instalable como PWA**
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Fastify](https://img.shields.io/badge/Fastify-5.4-000000?style=flat-square&logo=fastify&logoColor=white)](https://fastify.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-6.8-2D3748?style=flat-square&logo=prisma&logoColor=white)](https://www.prisma.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![nginx](https://img.shields.io/badge/nginx-alpine-009639?style=flat-square&logo=nginx&logoColor=white)](https://nginx.org/)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+
+</div>
 
 ---
 
-## Arquitectura
+## 📋 Tabla de contenidos
+
+- [Arquitectura](#-arquitectura)
+- [Requisitos](#-requisitos-previos)
+- [Configuración del entorno](#-configuración-del-entorno)
+- [Deploy con Coolify](#-deploy-con-coolify)
+- [Docker Compose (producción)](#-docker-compose-producción)
+- [Tailscale](#-tailscale)
+- [Desarrollo local](#-desarrollo-local)
+- [Variables de entorno](#-variables-de-entorno)
+
+---
+
+## 🏗 Arquitectura
 
 ```
 Cliente (browser / móvil)
        │
        ▼
-  nginx :80 (expuesto en APP_PORT del host)
+  nginx :80  (reverse proxy)
        │
        ├── /api/*  ──►  api (Fastify :3001)  ──►  db (PostgreSQL :5432)
        │
-       └── /*      ──►  SPA (dist de Vite)
+       └── /*      ──►  SPA (dist estático de Vite)
 ```
-
-Cuatro servicios Docker:
 
 | Servicio | Imagen | Rol |
 |---|---|---|
-| `nginx` | `nginx:alpine` | Reverse proxy + sirve el SPA |
+| `nginx` | `Dockerfile.nginx` | Reverse proxy + sirve el SPA |
 | `web` | `Dockerfile.frontend` | Compila React con Vite (solo en build) |
 | `api` | `Dockerfile.backend` | Fastify + Prisma, aplica migraciones al arrancar |
-| `db` | `postgres:16-alpine` | Base de datos, datos en volumen `pgdata` |
+| `db` | `postgres:16-alpine` | Base de datos, datos persistentes en volumen `pgdata` |
 
 ---
 
-## Requisitos previos
+## ✅ Requisitos previos
 
 - Docker + Docker Compose
 - `make`
-- Node.js 22 (solo para modo desarrollo local)
+- Node.js 22 (solo para desarrollo local)
 
 ---
 
-## 1. Configuración del entorno
+## ⚙️ Configuración del entorno
 
-Copia el archivo de variables de entorno y rellena los valores:
+Copia el archivo de ejemplo y rellena los valores:
 
 ```bash
 cp .env.example .env
 ```
 
-Edita `.env`:
-
 ```env
-# Puerto donde se expone la app en el host
-APP_PORT=3000
-
 # PostgreSQL
 DB_NAME=gymtracker
 DB_USER=gymuser
 DB_PASSWORD=una_clave_segura_aqui
 
-# Misma contraseña que DB_PASSWORD para el modo desarrollo local
+# Solo para desarrollo local
 DATABASE_URL=postgresql://gymuser:una_clave_segura_aqui@localhost:5432/gymtracker
 
 # Genera cada uno con: openssl rand -base64 32
@@ -63,11 +82,41 @@ JWT_SECRET=cadena_aleatoria_larga_minimo_32_caracteres
 JWT_REFRESH_SECRET=otra_cadena_diferente_para_refresh
 ```
 
+> 💡 Para generar secrets seguros:
+> ```bash
+> openssl rand -base64 32
+> ```
+
 ---
 
-## 2. Entorno Docker Compose (producción)
+## 🚀 Deploy con Coolify
 
-### Levantar por primera vez
+Este proyecto está optimizado para desplegarse en [Coolify](https://coolify.io) usando Docker Compose.
+
+### Pasos
+
+1. **Conecta tu repositorio** en Coolify → New Resource → Docker Compose
+2. **Desactiva "Build Secrets"** en Configuration → General (evita que Coolify corrompa los Dockerfiles)
+3. **Configura las variables de entorno** en la tab *Environment Variables* con los siguientes valores:
+
+```
+DB_NAME=gymtracker
+DB_USER=gymuser
+DB_PASSWORD=<password_seguro>
+JWT_SECRET=<openssl rand -base64 32>
+JWT_REFRESH_SECRET=<openssl rand -base64 32>
+```
+
+4. **Asigna un dominio** al servicio `nginx` en la sección FQDN
+5. **Despliega** — Coolify construirá las 3 imágenes y levantará el stack automáticamente
+
+> ⚠️ **Nota:** Las variables deben marcarse como *Available at Runtime*, no solo en build time.
+
+---
+
+## 🐳 Docker Compose (producción)
+
+### Primer deploy
 
 ```bash
 make build
@@ -75,138 +124,94 @@ make build
 
 Este comando:
 1. Construye la imagen del frontend (Vite → dist estático)
-2. Construye la imagen del backend (TypeScript compilado)
-3. Levanta los cuatro servicios en orden: `db` → `api` → `web` → `nginx`
-4. El backend aplica las migraciones de Prisma automáticamente al arrancar
+2. Construye la imagen del backend (TypeScript compilado, 2 stages)
+3. Construye la imagen de nginx (config embebida)
+4. Levanta los servicios en orden: `db` → `api` → `nginx`
+5. El backend aplica las migraciones de Prisma automáticamente
 
-La app queda disponible en: **`http://localhost:3000`** (o el puerto configurado en `APP_PORT`)
+La app queda disponible en: **`http://localhost:3000`**
 
 ### Comandos de operación
 
 ```bash
-make build       # Reconstruir imágenes y levantar (usado en primer deploy o tras cambios de código)
-make deploy      # git pull + reconstruir + levantar (para actualizaciones en servidor)
-make logs        # Ver logs en tiempo real de nginx y api
-make logs-api    # Ver solo logs del backend
-make logs-db     # Ver solo logs de PostgreSQL
+make build       # Reconstruir imágenes y levantar
+make deploy      # git pull + reconstruir + levantar
+make logs        # Logs en tiempo real de nginx y api
+make logs-api    # Logs solo del backend
+make logs-db     # Logs solo de PostgreSQL
 make restart     # Reiniciar nginx y api sin tocar la BD
-docker compose down          # Parar todos los servicios (datos persisten en volumen pgdata)
-docker compose down -v       # Parar y borrar todos los datos (destructivo)
+
+docker compose down      # Parar servicios (datos persisten)
+docker compose down -v   # Parar y borrar todos los datos ⚠️
 ```
 
-### Persistencia de datos
+### Persistencia
 
-Los datos de PostgreSQL se guardan en el volumen Docker `pgdata`. Sobreviven a reinicios y a `docker compose down`. Solo se borran con `docker compose down -v`.
-
----
-
-## 3. Entorno Docker Compose + Tailscale
-
-Tailscale asigna una IP privada a cada máquina de tu red. Una vez que el stack de Docker está corriendo en el servidor, cualquier dispositivo conectado al mismo tailnet puede acceder a la app directamente por la IP de Tailscale, sin configuración adicional.
-
-### Opción A — Acceso directo por IP (más simple)
-
-1. Levanta el stack normalmente:
-   ```bash
-   make build
-   ```
-
-2. Obtén la IP de Tailscale de la máquina:
-   ```bash
-   tailscale ip -4
-   # Ejemplo: 100.80.118.36
-   ```
-
-3. Accede desde cualquier dispositivo en tu tailnet:
-   ```
-   http://100.80.118.36:3000
-   ```
-
-No se necesita ninguna configuración adicional. Tailscale maneja el enrutamiento a nivel de red.
+Los datos de PostgreSQL se almacenan en el volumen Docker `pgdata`. Sobreviven a reinicios y a `docker compose down`. Solo se eliminan con `docker compose down -v`.
 
 ---
 
-### Opción B — Tailscale Serve (HTTPS con hostname bonito)
+## 🔒 Tailscale
 
-Tailscale Serve crea un endpoint HTTPS con un hostname del tipo `https://nombre-maquina.tailnet-name.ts.net` que enruta al puerto local.
+### Opción A — Acceso directo por IP
 
-> **Requisito:** Habilitar Tailscale Serve en el panel de administración antes de usarlo por primera vez.
-> Visita: `https://login.tailscale.com/f/serve` (o el enlace que muestra el propio comando si no está activado)
+```bash
+make build
+tailscale ip -4        # Obtén tu IP de Tailscale, ej: 100.80.118.36
+# Accede desde cualquier dispositivo del tailnet:
+# http://100.80.118.36:3000
+```
 
-1. Levanta el stack:
-   ```bash
-   make build
-   ```
+### Opción B — HTTPS con hostname (Tailscale Serve)
 
-2. Configura Tailscale Serve para que apunte al puerto de la app:
-   ```bash
-   tailscale serve --bg 3000
-   ```
+```bash
+make build
+tailscale serve --bg 3000
+tailscale serve status   # Muestra la URL HTTPS del tailnet
+# https://nombre-maquina.tailnet-name.ts.net
+```
 
-3. Verifica que está activo y obtén la URL:
-   ```bash
-   tailscale serve status
-   # Muestra la URL pública del tailnet, ej:
-   # https://nombre-maquina.tailnet-name.ts.net
-   ```
-
-4. Accede desde cualquier dispositivo del tailnet usando esa URL HTTPS.
-
-Para detener Tailscale Serve:
+Para desactivar:
 ```bash
 tailscale serve reset
 ```
 
 ---
 
-## 4. Modo desarrollo local
+## 💻 Desarrollo local
 
-Para desarrollo con hot-reload (Vite + tsx watch). Requiere Node.js 22 instalado en la máquina.
+Requiere Node.js 22 instalado. Usa hot-reload con Vite + tsx watch.
 
 ```bash
-# 1. Levantar solo la BD en Docker
+# 1. Levantar solo la BD
 make db-up
 
-# 2. Instalar dependencias (solo la primera vez)
+# 2. Instalar dependencias (primera vez)
 cd frontend && npm install && cd ..
-cd backend && npm install && cd ..
+cd backend  && npm install && cd ..
 
-# 3. Arrancar frontend y backend en paralelo
+# 3. Arrancar en paralelo
 make dev
 ```
 
-- Frontend (Vite): `http://localhost:5173`
-- Backend (Fastify): `http://localhost:3001`
+- **Frontend** (Vite): `http://localhost:5173`
+- **Backend** (Fastify): `http://localhost:3001`
 - El proxy de Vite redirige `/api/*` al backend automáticamente
 
-### Modo desarrollo accesible desde Tailscale
-
-Por defecto Vite solo escucha en `localhost`. Para que sea accesible desde otros dispositivos del tailnet:
+### Acceso desde Tailscale en modo dev
 
 ```bash
-# Levantar el backend normalmente
-cd backend && npm run dev &
-
-# Levantar Vite escuchando en todas las interfaces
+cd backend  && npm run dev &
 cd frontend && npm run dev -- --host
+# Vite mostrará: Network: http://100.80.118.36:5173/
 ```
 
-Vite mostrará las IPs disponibles, incluyendo la de Tailscale:
-
-```
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: http://100.80.118.36:5173/
-```
-
-Accede desde otros dispositivos del tailnet en: **`http://100.80.118.36:5173`**
-
-### Otros comandos útiles en desarrollo
+### Comandos útiles
 
 ```bash
-make db-migrate   # Aplicar nuevas migraciones de Prisma
-make db-studio    # Abrir Prisma Studio en el browser (explorador visual de la BD)
+make db-migrate    # Aplicar nuevas migraciones de Prisma
+make db-studio     # Abrir Prisma Studio (explorador visual de BD)
 
-# Lint y chequeo de tipos
 cd frontend && npm run lint
 cd frontend && npx tsc -b
 cd backend  && npx tsc
@@ -214,19 +219,22 @@ cd backend  && npx tsc
 
 ---
 
-## Variables de entorno — referencia completa
+## 🔐 Variables de entorno
 
 | Variable | Descripción | Ejemplo |
 |---|---|---|
 | `APP_PORT` | Puerto del host donde nginx expone la app | `3000` |
 | `DB_NAME` | Nombre de la base de datos | `gymtracker` |
 | `DB_USER` | Usuario de PostgreSQL | `gymuser` |
-| `DB_PASSWORD` | Contraseña de PostgreSQL | _(usa `openssl rand -base64 32`)_ |
+| `DB_PASSWORD` | Contraseña de PostgreSQL | *(openssl rand -base64 32)* |
 | `DATABASE_URL` | URL de conexión para Prisma en modo dev | `postgresql://user:pass@localhost:5432/db` |
-| `JWT_SECRET` | Secret para firmar access tokens | _(usa `openssl rand -base64 32`)_ |
-| `JWT_REFRESH_SECRET` | Secret para firmar refresh tokens | _(diferente al anterior)_ |
+| `JWT_SECRET` | Secret para firmar access tokens | *(openssl rand -base64 32)* |
+| `JWT_REFRESH_SECRET` | Secret para firmar refresh tokens | *(diferente al anterior)* |
 
-Para generar un secret seguro:
-```bash
-openssl rand -base64 32
-```
+---
+
+<div align="center">
+
+Hecho con ☕ y 🏋️
+
+</div>
