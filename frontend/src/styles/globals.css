@@ -1507,8 +1507,8 @@ input, textarea, select { background: var(--color-surface-2); border: 1px solid 
 }
 
 @keyframes fade-in-global {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* Ensure recharts containers are responsive and smooth */
