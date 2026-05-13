@@ -4,8 +4,7 @@ import { useUIStore, useAuthStore, useOfflineStore } from '../../store'
 import { getRoutineDays } from '../../lib/fitness'
 import {
   ModuleIcon,
-  IconMenu, IconClose, IconSun, IconMoon, IconUser,
-  IconChevronLeft, IconChevronRight,
+  IconMenu, IconClose, IconSun, IconMoon,
   IconStarFilled, IconStar, IconCheck, IconArrowUp, IconArrowDown,
 } from '../ui/Icons'
 

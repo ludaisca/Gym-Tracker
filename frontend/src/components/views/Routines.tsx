@@ -27,7 +27,7 @@ export default function Routines() {
 
   const activeId = user?.activeRoutineId ?? null
 
-  const presets = useMemo(() => Object.values(PRESET_ROUTINES).map(r => ({ ...r, isCustom: false, isPreset: true })), [])
+  const presets = useMemo(() => Object.values(PRESET_ROUTINES).map(r => ({ ...r, userId: 'preset', isCustom: false, isPreset: true })), [])
   const customs = useMemo(() => customRoutines.map(r => ({ ...r, isPreset: false, isCustom: true, description: r.description ?? '' })), [customRoutines])
 
   async function activate(id: string) {
@@ -127,7 +127,7 @@ export default function Routines() {
                   </div>
 
                   <div className="routine-card-days">
-                    {dayEntries.slice(0, 4).map(([d, day]) => (
+                    {dayEntries.slice(0, 4).map(([d, _day]) => (
                       <span key={d} className="routine-day-pill">
                         {capitalize(d).slice(0, 2)}
                       </span>

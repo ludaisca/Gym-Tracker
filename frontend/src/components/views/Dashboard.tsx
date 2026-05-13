@@ -7,7 +7,7 @@ import { usersApi } from '../../api/users'
 import { getRoutineDays, getDayIds, calcStreak, getTodayDayId } from '../../lib/fitness'
 import { PRESET_ROUTINES } from '../../lib/presetRoutines'
 import MigrationModal from '../modals/MigrationModal'
-import { IconCheck, IconFire, IconRocket, IconMoon, IconTarget } from '../ui/Icons'
+import { IconFire, IconRocket, IconMoon, IconTarget } from '../ui/Icons'
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)

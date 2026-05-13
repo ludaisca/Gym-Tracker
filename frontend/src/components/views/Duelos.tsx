@@ -74,7 +74,6 @@ function ChallengeCard({
   onSelect: (c: Challenge) => void
 }) {
   const isCreator = challenge.creator.id === myId
-  const me = isCreator ? challenge.creator : challenge.opponent!
   const rival = isCreator ? challenge.opponent : challenge.creator
   const myStats = isCreator ? challenge.stats?.creator : challenge.stats?.opponent
   const rivalStats = isCreator ? challenge.stats?.opponent : challenge.stats?.creator

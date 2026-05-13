@@ -90,23 +90,23 @@ function AnatomicalMap({ selectedMuscle, onSelectMuscle }: { selectedMuscle: str
             d="M38 40 Q50 48 62 40 L64 60 Q50 66 36 60 Z" 
             style={getStyle('pecho')} 
             onClick={() => onSelectMuscle('pecho')}
-            title="Pecho"
+            aria-label="Pecho"
           />
           
           {/* Hombros frontal */}
-          <path d="M36 40 L26 52 L30 75 L38 65 L38 40 Z" style={getStyle('hombros')} onClick={() => onSelectMuscle('hombros')} title="Hombros" />
-          <path d="M64 40 L74 52 L70 75 L62 65 L64 40 Z" style={getStyle('hombros')} onClick={() => onSelectMuscle('hombros')} title="Hombros" />
+          <path d="M36 40 L26 52 L30 75 L38 65 L38 40 Z" style={getStyle('hombros')} onClick={() => onSelectMuscle('hombros')} aria-label="Hombros" />
+          <path d="M64 40 L74 52 L70 75 L62 65 L64 40 Z" style={getStyle('hombros')} onClick={() => onSelectMuscle('hombros')} aria-label="Hombros" />
           
           {/* Brazos frontal */}
-          <path d="M30 75 L20 105 L25 135 L32 135 L36 100 L38 65 Z" style={getStyle('brazos')} onClick={() => onSelectMuscle('brazos')} title="Brazos" />
-          <path d="M70 75 L80 105 L75 135 L68 135 L64 100 L62 65 Z" style={getStyle('brazos')} onClick={() => onSelectMuscle('brazos')} title="Brazos" />
+          <path d="M30 75 L20 105 L25 135 L32 135 L36 100 L38 65 Z" style={getStyle('brazos')} onClick={() => onSelectMuscle('brazos')} aria-label="Brazos" />
+          <path d="M70 75 L80 105 L75 135 L68 135 L64 100 L62 65 Z" style={getStyle('brazos')} onClick={() => onSelectMuscle('brazos')} aria-label="Brazos" />
           
           {/* Core / Abdomen */}
-          <path d="M38 62 Q50 68 62 62 L58 115 L42 115 Z" style={getStyle('core')} onClick={() => onSelectMuscle('core')} title="Core / Abdomen" />
+          <path d="M38 62 Q50 68 62 62 L58 115 L42 115 Z" style={getStyle('core')} onClick={() => onSelectMuscle('core')} aria-label="Core / Abdomen" />
           
           {/* Piernas frontal */}
-          <path d="M41 117 L28 165 L33 210 L42 210 L48 165 L48 117 Z" style={getStyle('piernas')} onClick={() => onSelectMuscle('piernas')} title="Piernas" />
-          <path d="M59 117 L72 165 L67 210 L58 210 L52 165 L52 117 Z" style={getStyle('piernas')} onClick={() => onSelectMuscle('piernas')} title="Piernas" />
+          <path d="M41 117 L28 165 L33 210 L42 210 L48 165 L48 117 Z" style={getStyle('piernas')} onClick={() => onSelectMuscle('piernas')} aria-label="Piernas" />
+          <path d="M59 117 L72 165 L67 210 L58 210 L52 165 L52 117 Z" style={getStyle('piernas')} onClick={() => onSelectMuscle('piernas')} aria-label="Piernas" />
         </svg>
       </div>
 
@@ -124,20 +124,20 @@ function AnatomicalMap({ selectedMuscle, onSelectMuscle }: { selectedMuscle: str
             d="M38 40 L62 40 L66 80 L58 115 L42 115 L34 80 Z" 
             style={getStyle('espalda')} 
             onClick={() => onSelectMuscle('espalda')}
-            title="Espalda"
+            aria-label="Espalda"
           />
           
           {/* Hombros posterior */}
-          <path d="M38 40 L26 52 L30 75 L34 60 Z" style={getStyle('hombros')} onClick={() => onSelectMuscle('hombros')} title="Hombros" />
-          <path d="M62 40 L74 52 L70 75 L66 60 Z" style={getStyle('hombros')} onClick={() => onSelectMuscle('hombros')} title="Hombros" />
+          <path d="M38 40 L26 52 L30 75 L34 60 Z" style={getStyle('hombros')} onClick={() => onSelectMuscle('hombros')} aria-label="Hombros" />
+          <path d="M62 40 L74 52 L70 75 L66 60 Z" style={getStyle('hombros')} onClick={() => onSelectMuscle('hombros')} aria-label="Hombros" />
           
           {/* Brazos posterior */}
-          <path d="M30 75 L20 105 L25 135 L32 135 L36 100 L34 80 Z" style={getStyle('brazos')} onClick={() => onSelectMuscle('brazos')} title="Brazos" />
-          <path d="M70 75 L80 105 L75 135 L68 135 L64 100 L66 80 Z" style={getStyle('brazos')} onClick={() => onSelectMuscle('brazos')} title="Brazos" />
+          <path d="M30 75 L20 105 L25 135 L32 135 L36 100 L34 80 Z" style={getStyle('brazos')} onClick={() => onSelectMuscle('brazos')} aria-label="Brazos" />
+          <path d="M70 75 L80 105 L75 135 L68 135 L64 100 L66 80 Z" style={getStyle('brazos')} onClick={() => onSelectMuscle('brazos')} aria-label="Brazos" />
           
           {/* Piernas posterior */}
-          <path d="M42 115 L28 165 L33 210 L42 210 L48 165 L48 115 Z" style={getStyle('piernas')} onClick={() => onSelectMuscle('piernas')} title="Piernas y Glúteos" />
-          <path d="M58 115 L72 165 L67 210 L58 210 L52 165 L52 115 Z" style={getStyle('piernas')} onClick={() => onSelectMuscle('piernas')} title="Piernas y Glúteos" />
+          <path d="M42 115 L28 165 L33 210 L42 210 L48 165 L48 115 Z" style={getStyle('piernas')} onClick={() => onSelectMuscle('piernas')} aria-label="Piernas y Glúteos" />
+          <path d="M58 115 L72 165 L67 210 L58 210 L52 165 L52 115 Z" style={getStyle('piernas')} onClick={() => onSelectMuscle('piernas')} aria-label="Piernas y Glúteos" />
         </svg>
       </div>
     </div>

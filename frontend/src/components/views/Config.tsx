@@ -5,7 +5,7 @@ import { usersApi } from '../../api/users'
 import { api } from '../../api/client'
 import type { UserSettings } from '../../types/domain'
 import {
-  IconSun, IconMoon, IconDownload, IconUpload, IconTrash, IconLogout, IconCheck,
+  IconSun, IconMoon, IconDownload, IconUpload, IconTrash, IconLogout,
   IconUser, IconMail, IconLock, IconCamera,
 } from '../ui/Icons'
 
