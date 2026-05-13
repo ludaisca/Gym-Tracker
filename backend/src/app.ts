@@ -14,11 +14,12 @@ import notesRoutes from './routes/notes'
 import nutritionRoutes from './routes/nutrition'
 import aiRoutes from './routes/ai'
 import migrateRoutes from './routes/migrate'
+import challengesRoutes from './routes/challenges'
 
 export async function buildApp() {
   const fastify = Fastify({
     logger: process.env.NODE_ENV !== 'test',
-    bodyLimit: 1 * 1024 * 1024,
+    bodyLimit: 5 * 1024 * 1024,  // 5 MB — para fotos base64 de check-in
   })
 
   await fastify.register(cors, {
@@ -43,8 +44,9 @@ export async function buildApp() {
   await fastify.register(routinesRoutes,  { prefix: '/routines' })
   await fastify.register(notesRoutes,     { prefix: '/notes' })
   await fastify.register(nutritionRoutes, { prefix: '/nutrition' })
-  await fastify.register(aiRoutes,        { prefix: '/ai' })
-  await fastify.register(migrateRoutes,   { prefix: '/migrate' })
+  await fastify.register(aiRoutes,          { prefix: '/ai' })
+  await fastify.register(migrateRoutes,     { prefix: '/migrate' })
+  await fastify.register(challengesRoutes,  { prefix: '/' })
 
   fastify.get('/health', async () => ({ status: 'ok' }))
 

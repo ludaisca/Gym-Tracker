@@ -18,6 +18,7 @@ import Cardio from './components/views/Cardio'
 import Notes from './components/views/Notes'
 import Nutrition from './components/views/Nutrition'
 import Config from './components/views/Config'
+import Duelos from './components/views/Duelos'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
       { path: 'cardio',             element: <Cardio /> },
       { path: 'notas',              element: <Notes /> },
       { path: 'config',             element: <Config /> },
+      { path: 'duelos',             element: <Duelos /> },
       { path: 'entrenamiento/:dayId', element: <DayView /> },
     ],
   },

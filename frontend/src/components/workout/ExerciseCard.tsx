@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { ExerciseDef } from '../../types/domain'
 import type { ExerciseSession } from '../../types/domain'
-import { isPR, getExerciseHistory } from '../../lib/fitness'
+import { isPR, getExerciseHistory, getLastRecordedSets, calc1RM } from '../../lib/fitness'
 import type { WorkoutSession } from '../../types/domain'
 import SetBox from './SetBox'
 import ExerciseLineChart from './ExerciseLineChart'
@@ -16,11 +16,12 @@ interface Props {
   onToggleDone: () => void
   onSetChange: (setIdx: number, field: 'kg' | 'reps', value: string) => void
   onStartTimer: (seconds: number, label: string) => void
+  onAutoFill?: (previousSets: { kg: string; reps: string }[]) => void
 }
 
 export default function ExerciseCard({
   exDef, exState, allSessions, dayIds, currentWeek, routineDays,
-  onToggleDone, onSetChange, onStartTimer,
+  onToggleDone, onSetChange, onStartTimer, onAutoFill,
 }: Props) {
   const currentBest = useMemo(() => {
     let best = 0
@@ -29,6 +30,15 @@ export default function ExerciseCard({
       if (!isNaN(kg) && kg > best) best = kg
     })
     return best || 0
+  }, [exState.sets])
+
+  const max1RM = useMemo(() => {
+    let max = 0
+    exState.sets.forEach((s) => {
+      const rm = calc1RM(s.kg, s.reps)
+      if (rm && rm > max) max = rm
+    })
+    return max
   }, [exState.sets])
 
   const hasPR = useMemo(
@@ -40,6 +50,15 @@ export default function ExerciseCard({
     () => getExerciseHistory(allSessions, dayIds, exDef.name, currentWeek, routineDays),
     [allSessions, dayIds, exDef.name, currentWeek, routineDays]
   )
+
+  const lastRecordedSets = useMemo(
+    () => getLastRecordedSets(allSessions, dayIds, exDef.name, currentWeek, routineDays),
+    [allSessions, dayIds, exDef.name, currentWeek, routineDays]
+  )
+
+  const isCurrentEmpty = useMemo(() => {
+    return exState.sets.every((s) => !s.kg || parseFloat(s.kg) === 0 || !s.reps || parseFloat(s.reps) === 0)
+  }, [exState.sets])
 
   return (
     <article className={`exercise-item${exState.done ? ' done' : ''}`}>
@@ -54,6 +73,7 @@ export default function ExerciseCard({
           </div>
           <div className="exercise-meta">
             Series: {exDef.sets} · Reps objetivo: {exDef.reps}
+            {max1RM > 0 && <span> · <strong>1RM máx ≈ {max1RM} kg</strong></span>}
           </div>
         </div>
         <div
@@ -66,6 +86,20 @@ export default function ExerciseCard({
         </div>
         <div className="rep-tag">{exDef.reps}</div>
       </div>
+
+      {lastRecordedSets && onAutoFill && isCurrentEmpty && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '.5rem' }}>
+          <button
+            className="ghost-btn"
+            style={{ padding: '.25rem .6rem', fontSize: 'var(--text-xs)', color: 'var(--color-accent)' }}
+            type="button"
+            onClick={() => onAutoFill(lastRecordedSets)}
+            title="Copiar series de la última sesión registrada"
+          >
+            ⚡ Autocompletar con sesión anterior
+          </button>
+        </div>
+      )}
 
       <div className="sets">
         {exState.sets.map((set, sidx) => (

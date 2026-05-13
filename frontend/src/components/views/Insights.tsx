@@ -3,6 +3,7 @@ import { useAuthStore } from '../../store'
 import { useSessions } from '../../hooks/useSessions'
 import { getDayIds, calcStreak, calcWeekVolume } from '../../lib/fitness'
 import { aiApi, type ChatMessage } from '../../api/ai'
+import { IconFire } from '../ui/Icons'
 
 function renderLine(line: string): React.ReactNode {
   const parts = line.split(/\*\*(.*?)\*\*/g)
@@ -13,12 +14,12 @@ function renderContent(content: string) {
   return content.split('\n').map((line, i) => {
     if (!line.trim()) return <div key={i} style={{ height: '0.4em' }} />
     if (/^#+\s/.test(line)) {
-      return <div key={i} style={{ fontWeight: 700, marginTop: '0.75rem', marginBottom: '0.2rem' }}>{renderLine(line.replace(/^#+\s/, ''))}</div>
+      return <div key={i} style={{ fontWeight: 700, marginTop: '0.75rem', marginBottom: '0.2rem', color: 'var(--color-accent)' }}>{renderLine(line.replace(/^#+\s/, ''))}</div>
     }
     if (/^[-•]\s/.test(line)) {
-      return <div key={i} style={{ paddingLeft: '0.25rem' }}>• {renderLine(line.replace(/^[-•]\s/, ''))}</div>
+      return <div key={i} style={{ paddingLeft: '0.5rem', marginBottom: '0.2rem', borderLeft: '2px solid var(--color-border)', marginLeft: '0.2rem' }}>• {renderLine(line.replace(/^[-•]\s/, ''))}</div>
     }
-    return <div key={i}>{renderLine(line)}</div>
+    return <div key={i} style={{ lineHeight: 1.5 }}>{renderLine(line)}</div>
   })
 }
 
@@ -52,10 +53,10 @@ export default function Insights() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  async function send() {
-    const text = input.trim()
+  async function send(customText?: string | React.MouseEvent) {
+    const text = (typeof customText === 'string' ? customText : input).trim()
     if (!text || loading) return
-    setInput('')
+    if (typeof customText !== 'string') setInput('')
     setError('')
     const userMsg: ChatMessage = { role: 'user', content: text, ts: new Date().toISOString() }
     setMessages(prev => [...prev, userMsg])
@@ -89,7 +90,9 @@ export default function Insights() {
       <div className="kpis">
         <article className="card kpi">
           <div className="kpi-label">Racha activa</div>
-          <div className="kpi-value">{streak > 0 ? '🔥' : ''} {streak}</div>
+          <div className="kpi-value" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            {streak > 0 && <IconFire className="accent-fire" />} {streak}
+          </div>
           <div className="kpi-meta">{streak >= 2 ? 'semanas seguidas' : 'semanas'}</div>
         </article>
         <article className="card kpi">
@@ -153,6 +156,26 @@ export default function Insights() {
           )}
           <div ref={bottomRef} />
         </div>
+
+        {hasAI && (
+          <div style={{ display: 'flex', gap: 'var(--space-2)', padding: '0 var(--space-5) var(--space-3)', overflowX: 'auto', maxWidth: '100%', boxSizing: 'border-box' }}>
+            {[
+              '📊 Analizar mi carga semanal',
+              '💪 Sugerir ajustes de técnica',
+              '🥗 Tips para mis macros y agua',
+            ].map(prompt => (
+              <button
+                key={prompt}
+                className="ghost-btn"
+                style={{ padding: '.25rem .6rem', fontSize: 'var(--text-xs)', whiteSpace: 'nowrap', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-full)' }}
+                onClick={() => send(prompt)}
+                disabled={loading}
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        )}
 
         {hasAI && (
           <div className="chat-input-row">

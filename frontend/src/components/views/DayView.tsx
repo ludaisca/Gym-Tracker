@@ -67,6 +67,19 @@ export default function DayView() {
     update({ exercises: updated })
   }
 
+  function autoFillExercise(exIdx: number, previousSets: { kg: string; reps: string }[]) {
+    const updated = session!.exercises.map((ex, i) => {
+      if (i !== exIdx) return ex
+      const sets = ex.sets.map((s, si) => {
+        const prev = previousSets[si]
+        if (!prev) return s
+        return { ...s, kg: prev.kg, reps: prev.reps }
+      })
+      return { ...ex, sets }
+    })
+    update({ exercises: updated })
+  }
+
   function updateCardio(field: keyof CardioData, value: string) {
     const current: CardioData = session!.cardio ?? { machine: 'Caminadora inclinada', duration: '', intensity: '' }
     update({ cardio: { ...current, [field]: value } })
@@ -114,6 +127,7 @@ export default function DayView() {
                 onToggleDone={() => toggleDone(idx)}
                 onSetChange={(setIdx, field, value) => updateSet(idx, setIdx, field, value)}
                 onStartTimer={(seconds, label) => setTimer({ seconds, label })}
+                onAutoFill={(prevSets) => autoFillExercise(idx, prevSets)}
               />
             )
           })}

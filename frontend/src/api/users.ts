@@ -4,7 +4,7 @@ import type { User, UserSettings } from '../types/domain'
 export const usersApi = {
   me: () => api.get<User>('/users/me').then((r) => r.data),
 
-  update: (data: Partial<Pick<User, 'name' | 'avatar' | 'theme' | 'accentTheme' | 'currentWeek' | 'activeRoutineId'>>) =>
+  update: (data: Partial<Pick<User, 'name' | 'email' | 'avatar' | 'theme' | 'accentTheme' | 'currentWeek' | 'activeRoutineId'> & { password?: string }>) =>
     api.put<User>('/users/me', data).then((r) => r.data),
 
   updateSettings: (data: Partial<UserSettings> & { aiKey?: string | null }) =>

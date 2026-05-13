@@ -33,7 +33,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="auth-page">
+    <div className="auth-page fade-in">
       <div className="auth-card">
         <div style={{ marginBottom: 'var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
           <div className="brand-mark">

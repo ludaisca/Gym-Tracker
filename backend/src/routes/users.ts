@@ -1,14 +1,18 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  password: z.string().min(8).optional(),
   avatar: z.string().optional(),
   theme: z.enum(['light', 'dark']).optional(),
   accentTheme: z.enum(['teal', 'forest', 'ocean', 'ember', 'violet']).optional(),
   currentWeek: z.number().int().min(1).optional(),
   activeRoutineId: z.string().nullable().optional(),
+  routineStartDate: z.string().datetime().nullable().optional(),
 })
 
 const updateSettingsSchema = z.object({
@@ -48,14 +52,38 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
     return sanitizeUser(user)
   })
 
-  fastify.put('/me', async (request) => {
+  fastify.put('/me', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const body = updateUserSchema.safeParse(request.body)
     if (!body.success) throw { statusCode: 400, message: body.error.issues[0].message }
 
+    const { email, password, activeRoutineId, ...rest } = body.data
+    const data: any = { ...rest }
+
+    if (email) {
+      const existing = await prisma.user.findFirst({ where: { email, NOT: { id: sub } } })
+      if (existing) return reply.status(409).send({ error: 'El email ya está en uso por otro usuario.' })
+      data.email = email
+    }
+
+    if (password) {
+      data.passwordHash = await bcrypt.hash(password, 12)
+    }
+
+    if (activeRoutineId !== undefined) {
+      data.activeRoutineId = activeRoutineId
+      // Auto reset if activating a routine
+      if (activeRoutineId !== null) {
+        data.routineStartDate = new Date()
+        data.currentWeek = 1
+      } else {
+        data.routineStartDate = null
+      }
+    }
+
     const user = await prisma.user.update({
       where: { id: sub },
-      data: body.data,
+      data,
       include: { settings: true },
     })
     return sanitizeUser(user)
@@ -151,6 +179,13 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
     if (!entry) return reply.status(404).send({ error: 'No encontrado' })
     await prisma.bodyWeight.delete({ where: { userId_date: { userId: sub, date } } })
     return { deleted: true }
+  })
+
+  // ── DELETE /me — eliminar cuenta y todos los datos ───────────────────
+  fastify.delete('/me', async (request, reply) => {
+    const { sub } = request.user as { sub: string }
+    await prisma.user.delete({ where: { id: sub } })  // cascade deletes all related data
+    return reply.code(200).send({ deleted: true })
   })
 }
 
