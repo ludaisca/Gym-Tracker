@@ -1504,6 +1504,8 @@ input, textarea, select { background: var(--color-surface-2); border: 1px solid 
 /* ── Global Animations ───────────────────────────────────── */
 .fade-in {
   animation: fade-in-global 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  display: grid;
+  gap: var(--space-5);
 }
 
 @keyframes fade-in-global {
@@ -1831,8 +1833,45 @@ input, textarea, select { background: var(--color-surface-2); border: 1px solid 
   background: var(--color-surface);
   padding: 2px 8px;
   border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
+.preview-exercise-idx {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.preview-exercise-rest {
+  font-size: 10px;
+  color: var(--color-text-faint);
+  margin-top: 1px;
+}
+
+.preview-day-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-divider);
+}
+
+@media (max-width: 480px) {
+  .side-panel {
+    max-width: 100%;
+    border-radius: 0;
+  }
+}
 
 /* ── Checkbox Premium ────────────────────────────────────── */
 .confirm-option-card {

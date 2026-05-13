@@ -212,22 +212,34 @@ export default function Routines() {
           </div>
           
           <div className="side-panel-body">
-            {Object.entries(previewRoutine?.days || {}).map(([id, day]) => (
-              <div key={id} className="preview-day-card">
-                <div className="preview-day-card-head">
-                  <span className="preview-day-label">{capitalize(id)}</span>
-                  <span className="preview-day-subtitle">{(day as any).label}</span>
-                </div>
-                <div className="preview-day-exercises">
-                  {(day as any).exercises.map((ex: any, idx: number) => (
-                    <div key={idx} className="preview-exercise-item">
-                      <div className="preview-exercise-name">{ex.name}</div>
-                      <div className="preview-exercise-meta">{ex.sets}×{ex.reps}</div>
+            {Object.entries(previewRoutine?.days || {}).map(([id, day]) => {
+              const d = day as any
+              return (
+                <div key={id} className="preview-day-card">
+                  <div className="preview-day-card-head">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                      <span className="preview-day-label">{capitalize(id)}</span>
+                      <span className="preview-day-badge">{d.exercises?.length ?? 0} ejercicios</span>
                     </div>
-                  ))}
+                    <span className="preview-day-subtitle">{d.label}</span>
+                  </div>
+                  <div className="preview-day-exercises">
+                    {d.exercises?.map((ex: any, idx: number) => (
+                      <div key={idx} className="preview-exercise-item">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
+                          <span className="preview-exercise-idx">{idx + 1}</span>
+                          <div style={{ minWidth: 0 }}>
+                            <div className="preview-exercise-name">{ex.name}</div>
+                            {ex.rest > 0 && <div className="preview-exercise-rest">{ex.rest}s descanso</div>}
+                          </div>
+                        </div>
+                        <div className="preview-exercise-meta">{ex.sets}×{ex.reps}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           <div className="side-panel-footer">
