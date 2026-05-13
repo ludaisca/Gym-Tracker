@@ -118,7 +118,7 @@ export default function Dashboard() {
 
       {/* Banner de avance de semana (Híbrido) */}
       {showAdvanceBanner && (
-        <div className="card advance-banner" style={{ border: '1px solid var(--color-primary)', background: 'rgba(var(--color-primary-rgb), 0.05)', marginBottom: 'var(--space-4)' }}>
+        <div className="card advance-banner" style={{ border: '1px solid var(--color-primary)', background: 'rgba(var(--color-primary-rgb), 0.05)' }}>
           <div className="panel-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
             <div>
               <h4 style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '.5rem' }}>

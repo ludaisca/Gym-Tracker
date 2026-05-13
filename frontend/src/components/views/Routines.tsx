@@ -84,7 +84,7 @@ export default function Routines() {
         </button>
       </div>
 
-      <div className="stats-tabs" style={{ marginBottom: 'var(--space-6)' }}>
+      <div className="stats-tabs">
         <button className={`stats-tab-btn ${tab === 'presets' ? 'active' : ''}`} onClick={() => setTab('presets')}>
           <IconTarget size={18} /> Predeterminadas
         </button>

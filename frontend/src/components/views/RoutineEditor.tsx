@@ -369,7 +369,7 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
       </div>
 
       {/* BANNER GENERADOR IA */}
-      <section className="card-premium" style={{ marginBottom: 'var(--space-5)', overflow: 'hidden' }}>
+      <section className="card-premium" style={{ overflow: 'hidden' }}>
         <div 
           style={{ 
             padding: 'var(--space-3) var(--space-5)', 
@@ -454,7 +454,7 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
       </section>
 
       {/* BUSCADOR ANATÓMICO (ESTILO MUSCLEWIKI) */}
-      <section className="card-premium" style={{ marginBottom: 'var(--space-5)' }}>
+      <section className="card-premium">
         <div className="panel-head" style={{ borderBottom: '1px solid var(--color-border)', padding: 'var(--space-3) var(--space-5)' }}>
           <h4 style={{ margin: 0, fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <IconDumbbell size={18} /> Buscador Anatómico de Ejercicios
@@ -528,7 +528,7 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
       </section>
 
       {/* METADATOS BÁSICOS */}
-      <section className="card-premium" style={{ marginBottom: 'var(--space-5)' }}>
+      <section className="card-premium">
         <div className="panel-body triple" style={{ padding: 'var(--space-4) var(--space-5)' }}>
           <div className="field" style={{ gridColumn: '1 / span 2', marginBottom: 0 }}>
             <label>Nombre del Plan</label>
