@@ -19,7 +19,7 @@ async function captureWithWatermark(
   ctx.fillRect(0, canvas.height - 56, canvas.width, 56)
   ctx.fillStyle = '#ffffff'
   ctx.font = 'bold 14px monospace'
-  const now = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })
+  const now = new Date().toLocaleString('es-MX')
   ctx.fillText(`${userName} · ${now}`, 12, canvas.height - 32)
   ctx.font = '11px monospace'
   ctx.fillStyle = 'rgba(255,255,255,0.65)'

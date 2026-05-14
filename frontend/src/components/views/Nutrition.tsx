@@ -78,6 +78,7 @@ export default function Nutrition() {
   const [savedFoods, setSavedFoods] = useState<SavedFood[]>([])
   const [sheet, setSheet] = useState<FoodSheet | null>(null)
   const [showGoalModal, setShowGoalModal] = useState(false)
+  const [weekAvg, setWeekAvg] = useState<{ kcal: number; protein: number; carbs: number; fat: number } | null>(null)
 
   const loadDay = useCallback(async (d: string) => {
     const data = await nutritionApi.getDay(d).catch(() => null)
@@ -86,6 +87,32 @@ export default function Nutrition() {
 
   useEffect(() => { loadDay(date) }, [date, loadDay])
   useEffect(() => { nutritionApi.getSavedFoods().then(setSavedFoods).catch(() => {}) }, [])
+
+  // Promedio últimos 7 días (excluye hoy para no sesgar con datos parciales)
+  useEffect(() => {
+    const dates: string[] = []
+    for (let i = 1; i <= 7; i++) dates.push(shiftDate(todayISO(), -i))
+    Promise.all(dates.map(d => nutritionApi.getDay(d).catch(() => null))).then(days => {
+      const valid = days.filter((d): d is NutritionDay => d !== null && !!d.meals)
+      if (valid.length === 0) { setWeekAvg(null); return }
+      const sum = valid.reduce((acc, d) => {
+        const ms = (d.meals ?? {}) as Partial<Record<MealType, FoodEntry[]>>
+        Object.values(ms).flat().forEach((e: FoodEntry) => {
+          acc.kcal    += Number(e.kcal)    || 0
+          acc.protein += Number(e.protein) || 0
+          acc.carbs   += Number(e.carbs)   || 0
+          acc.fat     += Number(e.fat)     || 0
+        })
+        return acc
+      }, { kcal: 0, protein: 0, carbs: 0, fat: 0 })
+      setWeekAvg({
+        kcal:    Math.round(sum.kcal    / valid.length),
+        protein: Math.round(sum.protein / valid.length),
+        carbs:   Math.round(sum.carbs   / valid.length),
+        fat:     Math.round(sum.fat     / valid.length),
+      })
+    })
+  }, [])
 
   const meals = (day?.meals ?? {}) as Partial<Record<MealType, FoodEntry[]>>
   const water = day?.water ?? 0
@@ -105,6 +132,12 @@ export default function Nutrition() {
   macros.protein = Math.round(macros.protein)
   macros.carbs   = Math.round(macros.carbs)
   macros.fat     = Math.round(macros.fat)
+
+  const macroPct = macros.kcal > 0 ? {
+    protein: Math.round(macros.protein * 4 / macros.kcal * 100),
+    carbs:   Math.round(macros.carbs   * 4 / macros.kcal * 100),
+    fat:     Math.round(macros.fat     * 9 / macros.kcal * 100),
+  } : null
 
   async function updateWater(delta: number) {
     const newWater = Math.max(0, water + delta)
@@ -162,11 +195,11 @@ export default function Nutrition() {
         {/* ── Compact half-moon gauges (Slightly larger, 2x2 grid) ── */}
         <div className="nut-gauges-row grid-2x2">
           {[
-            { label: 'Calorías', val: macros.kcal, goal: goals.kcal, unit: 'kcal', over },
-            { label: 'Proteína', val: macros.protein, goal: goals.protein, unit: 'g', over: false },
-            { label: 'Carbos',   val: macros.carbs,   goal: goals.carbs,   unit: 'g', over: false },
-            { label: 'Grasas',   val: macros.fat,     goal: goals.fat,     unit: 'g', over: false },
-          ].map(({ label, val, goal, unit, over: isOver }) => {
+            { label: 'Calorías', val: macros.kcal, goal: goals.kcal, unit: 'kcal', over, pct: null as number | null },
+            { label: 'Proteína', val: macros.protein, goal: goals.protein, unit: 'g', over: false, pct: macroPct?.protein ?? null },
+            { label: 'Carbos',   val: macros.carbs,   goal: goals.carbs,   unit: 'g', over: false, pct: macroPct?.carbs   ?? null },
+            { label: 'Grasas',   val: macros.fat,     goal: goals.fat,     unit: 'g', over: false, pct: macroPct?.fat     ?? null },
+          ].map(({ label, val, goal, unit, over: isOver, pct: macroPctVal }) => {
             const pct = Math.min(1, val / goal)
             const r = 36, circ = Math.PI * r, dash = pct * circ
             return (
@@ -184,7 +217,14 @@ export default function Nutrition() {
                   />
                 </svg>
                 <div className="nut-gauge-val" style={{ fontSize: 'var(--text-base)', marginTop: '-2px' }}>{val}<span>{unit}</span></div>
-                <div className="nut-gauge-label" style={{ fontSize: '11px', marginTop: '2px' }}>{label}</div>
+                <div className="nut-gauge-label" style={{ fontSize: '11px', marginTop: '2px' }}>
+                  {label}
+                  {macroPctVal !== null && macroPctVal > 0 && (
+                    <span style={{ marginLeft: '4px', color: 'var(--color-text-muted)', fontWeight: 400 }}>
+                      {macroPctVal}%
+                    </span>
+                  )}
+                </div>
                 <div className="nut-gauge-goal">/ {goal}{unit}</div>
               </div>
             )
@@ -275,6 +315,32 @@ export default function Nutrition() {
                 >×</button>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {weekAvg && (
+        <section className="card">
+          <div className="panel-head">
+            <div><h3>Promedio últimos 7 días</h3><p>Excluye el día actual (datos parciales).</p></div>
+          </div>
+          <div className="panel-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)', textAlign: 'center' }}>
+            {[
+              { label: 'Calorías', val: weekAvg.kcal, unit: 'kcal', goal: goals.kcal },
+              { label: 'Proteína', val: weekAvg.protein, unit: 'g', goal: goals.protein },
+              { label: 'Carbos',   val: weekAvg.carbs,   unit: 'g', goal: goals.carbs },
+              { label: 'Grasas',   val: weekAvg.fat,     unit: 'g', goal: goals.fat },
+            ].map(({ label, val, unit, goal }) => {
+              const ratio = Math.min(1, val / goal)
+              const color = ratio >= 0.9 ? 'var(--color-primary)' : ratio >= 0.7 ? 'var(--color-warning)' : 'var(--color-text-muted)'
+              return (
+                <div key={label}>
+                  <div style={{ fontWeight: 800, fontSize: 'var(--text-lg)', color }}>{val}<span style={{ fontSize: 'var(--text-xs)', fontWeight: 400, marginLeft: '2px' }}>{unit}</span></div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: '2px' }}>{label}</div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>meta {goal}{unit}</div>
+                </div>
+              )
+            })}
           </div>
         </section>
       )}

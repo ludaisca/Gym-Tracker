@@ -1,35 +1,53 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { authApi } from '../../api/auth'
-import { useAuthStore } from '../../store'
 
 const AVATARS = ['💪', '🏋️', '🔥', '⚡', '🎯', '🦁', '🐺', '🏆']
 
 export default function RegisterPage() {
-  const navigate = useNavigate()
-  const { setAuth } = useAuthStore()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [avatar, setAvatar] = useState('💪')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [registered, setRegistered] = useState(false)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      const data = await authApi.register({ name, email, password, avatar })
-      localStorage.setItem('gym-refresh-token', data.refreshToken)
-      setAuth(data.user, data.accessToken)
-      navigate('/dashboard')
+      await authApi.register({ name, email, password, avatar })
+      setRegistered(true)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Error al crear cuenta'
       setError(msg)
     } finally {
       setLoading(false)
     }
+  }
+
+  if (registered) {
+    return (
+      <div className="auth-page fade-in">
+        <div className="auth-card" style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem', marginBottom: 'var(--space-4)' }}>📬</div>
+          <h1 style={{ marginBottom: 'var(--space-2)' }}>Revisa tu correo</h1>
+          <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-6)', lineHeight: 1.6 }}>
+            Te enviamos un enlace de verificación a <strong style={{ color: 'var(--color-text)' }}>{email}</strong>.
+            Haz clic en él para activar tu cuenta.
+          </p>
+          <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
+            ¿No llegó? Revisa la carpeta de spam o{' '}
+            <Link to="/login" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
+              inicia sesión
+            </Link>{' '}
+            para reenviar el correo.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (

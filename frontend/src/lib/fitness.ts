@@ -37,6 +37,7 @@ export function getBestKgForWeek(
     if (!session) continue
     const dayExercises = routineDays[day]?.exercises ?? []
     session.exercises.forEach((ex, idx) => {
+      if (!ex.done) return
       if (dayExercises[idx]?.name === exName) {
         ex.sets.forEach((s) => {
           const kg = parseFloat(s.kg)
@@ -130,7 +131,9 @@ export function getDayIds(
 export function getTodayDayId(dayIds: string[]): string | null {
   const slots = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
   const today = slots[new Date().getDay()]
-  return dayIds.includes(today) ? today : null
+  if (dayIds.includes(today)) return today
+  // For custom routines with non-day-name IDs: no automatic match
+  return null
 }
 
 export function getLastRecordedSets(

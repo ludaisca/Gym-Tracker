@@ -1,12 +1,17 @@
 import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useAuthStore } from '../../store'
-import { useSessions } from '../../hooks/useSessions'
-import { getRoutineDays, getDayIds, calcStreak, calcWeekVolume, getBestKgForWeek } from '../../lib/fitness'
+import { useRoutines } from '../../hooks/useRoutines'
+import { sessionsApi } from '../../api/sessions'
+import { getRoutineDays, getDayIds, calcStreak, getBestKgForWeek } from '../../lib/fitness'
 import { bodyWeightApi, type BodyWeightEntry } from '../../api/bodyweight'
+import type { WorkoutSession } from '../../types/domain'
+
+type Sessions = WorkoutSession[]
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 function IconTarget({ className }: { className?: string }) {
@@ -43,7 +48,7 @@ function IconLock({ className }: { className?: string }) {
 // ── Achievements ─────────────────────────────────────────────────────────────
 interface Achievement {
   id: string; icon: React.ReactNode; title: string; desc: string
-  check: (sessions: ReturnType<typeof useSessions>['sessions'], streak: number, totalComplete: number) => boolean
+  check: (sessions: Sessions, streak: number, totalComplete: number) => boolean
 }
 
 const ACHIEVEMENTS: Achievement[] = [
@@ -176,13 +181,20 @@ function WeightTab() {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function Stats() {
+  const navigate = useNavigate()
   const { user } = useAuthStore()
   const weekNumber = user?.currentWeek ?? 1
   const activeRoutineId = user?.activeRoutineId ?? null
-  const routineDays = useMemo(() => getRoutineDays(activeRoutineId, []), [activeRoutineId])
-  const dayIds = useMemo(() => getDayIds(activeRoutineId, []), [activeRoutineId])
+  const customRoutines = useRoutines()
+  const routineDays = useMemo(() => getRoutineDays(activeRoutineId, customRoutines), [activeRoutineId, customRoutines])
+  const dayIds = useMemo(() => getDayIds(activeRoutineId, customRoutines), [activeRoutineId, customRoutines])
 
-  const { sessions } = useSessions(weekNumber)
+  const [allSessions, setAllSessions] = useState<WorkoutSession[]>([])
+  useEffect(() => {
+    sessionsApi.listAll().then(setAllSessions).catch(() => {})
+  }, [])
+
+  const sessions = allSessions
   const [tab, setTab] = useState<'progreso' | 'peso' | 'logros'>('progreso')
   const [selectedExercise, setSelectedExercise] = useState<string>('')
 
@@ -200,7 +212,7 @@ export default function Stats() {
 
   const allExercises = useMemo(() => [
     ...new Set(Object.values(routineDays).flatMap(d => d.exercises.map(e => e.name)))
-  ], [routineDays])
+  ].sort((a, b) => a.localeCompare(b, 'es')), [routineDays])
 
   useEffect(() => { if (allExercises.length && !selectedExercise) setSelectedExercise(allExercises[0]) }, [allExercises, selectedExercise])
 
@@ -214,13 +226,21 @@ export default function Stats() {
   }).filter(r => r.bestKg > 0), [sessions, dayIds, weekNumber, allExercises, routineDays])
 
   const volData = useMemo(() => {
-    const result = []
-    for (let w = 1; w <= weekNumber; w++) {
-      const vol = Math.round(calcWeekVolume(sessions, w, dayIds))
-      if (vol > 0) result.push({ week: `S${w}`, kg: vol })
+    const byWeek = new Map<number, number>()
+    for (const s of sessions) {
+      const vol = s.exercises.reduce((a, ex) =>
+        a + ex.sets.reduce((t, set) => {
+          const kg = parseFloat(set.kg)
+          const reps = parseFloat(set.reps)
+          return t + (isNaN(kg) || isNaN(reps) ? 0 : kg * reps)
+        }, 0), 0)
+      byWeek.set(s.weekNumber, (byWeek.get(s.weekNumber) ?? 0) + vol)
     }
-    return result
-  }, [sessions, weekNumber, dayIds])
+    return Array.from(byWeek.entries())
+      .sort(([a], [b]) => a - b)
+      .filter(([, vol]) => vol > 0)
+      .map(([w, vol]) => ({ week: `S${w}`, kg: Math.round(vol) }))
+  }, [sessions])
 
   const exerciseHistory = useMemo(() => {
     if (!selectedExercise) return []
@@ -236,6 +256,25 @@ export default function Stats() {
     () => ACHIEVEMENTS.filter(a => a.check(sessions, streak, totalCompleteSessions)),
     [sessions, streak, totalCompleteSessions]
   )
+
+  // Persistir fechas de desbloqueo en localStorage por userId
+  const [achievementDates, setAchievementDates] = useState<Record<string, string>>({})
+  useEffect(() => {
+    if (!user?.id) return
+    const stored = localStorage.getItem(`gym_achievements_${user.id}`)
+    const saved: Record<string, string> = stored ? JSON.parse(stored) : {}
+    let changed = false
+    for (const a of unlockedAchievements) {
+      if (!saved[a.id]) {
+        saved[a.id] = new Date().toISOString()
+        changed = true
+      }
+    }
+    if (changed) {
+      localStorage.setItem(`gym_achievements_${user.id}`, JSON.stringify(saved))
+    }
+    setAchievementDates(saved)
+  }, [unlockedAchievements, user?.id])
 
   return (
     <div className="fade-in">
@@ -332,7 +371,14 @@ export default function Stats() {
           {prRows.length > 0 && (
             <section className="card">
               <div className="panel-head">
-                <div><h3>Tabla de PRs</h3><p>Máximo kg por ejercicio.</p></div>
+                <div><h3>Tabla de PRs</h3><p>Máximo kg por ejercicio (ejercicios completados).</p></div>
+                <button
+                  className="ghost-btn"
+                  style={{ padding: '.4rem .8rem', fontSize: 'var(--text-xs)', flexShrink: 0 }}
+                  onClick={() => navigate('/historial')}
+                >
+                  Ver historial completo →
+                </button>
               </div>
               <div className="panel-body">
                 <div className="pr-table-wrap">
@@ -390,6 +436,10 @@ export default function Stats() {
               <div className="achievements-grid">
                 {ACHIEVEMENTS.map(a => {
                   const unlocked = unlockedAchievements.some(u => u.id === a.id)
+                  const unlockedAt = achievementDates[a.id]
+                  const unlockedLabel = unlockedAt
+                    ? new Date(unlockedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
+                    : null
                   return (
                     <div key={a.id} className={`achievement-card ${unlocked ? 'unlocked' : 'locked'}`}>
                       <div className={`achievement-icon ${unlocked ? 'unlocked' : ''}`}>
@@ -397,6 +447,11 @@ export default function Stats() {
                       </div>
                       <div className="achievement-title">{a.title}</div>
                       <div className="achievement-desc">{a.desc}</div>
+                      {unlocked && unlockedLabel && (
+                        <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                          {unlockedLabel}
+                        </div>
+                      )}
                     </div>
                   )
                 })}

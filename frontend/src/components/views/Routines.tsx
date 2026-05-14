@@ -7,6 +7,7 @@ import { api } from '../../api/client'
 import { PRESET_ROUTINES } from '../../lib/presetRoutines'
 import type { Routine } from '../../types/domain'
 import { IconTarget, IconTrash, IconEdit, IconCopy, IconEye, IconPlus, IconCheck } from '../ui/Icons'
+import { toast } from '../../lib/toast'
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
@@ -45,6 +46,9 @@ export default function Routines() {
       }
       await activate(pendingId)
       setPendingId(null)
+      toast('Rutina activada correctamente')
+    } catch {
+      toast('Error al activar la rutina', 'error')
     } finally {
       setActivating(false)
       setClearWeek(false)
@@ -64,8 +68,9 @@ export default function Routines() {
       await routinesApi.create({ name, description: r.description, days: r.days })
       await load()
       setTab('custom')
-    } catch (err) {
-      console.error('Error cloning:', err)
+      toast(`"${name}" creada en Mis Creaciones`)
+    } catch {
+      toast('Error al clonar la rutina', 'error')
     }
   }
 

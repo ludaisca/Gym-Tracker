@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore, useUIStore, useOfflineStore } from '../../store'
 import { usersApi } from '../../api/users'
@@ -8,6 +8,7 @@ import {
   IconSun, IconMoon, IconDownload, IconUpload, IconTrash, IconLogout,
   IconUser, IconMail, IconLock, IconCamera,
 } from '../ui/Icons'
+import { toast } from '../../lib/toast'
 
 const AVATARS = ['💪', '🏋️', '🔥', '⚡', '🎯', '🦁', '🐉', '🏆', '🧠', '🌊', '🦅', '🚀']
 
@@ -36,9 +37,11 @@ export default function Config() {
   // Account form state
   const [accountName, setAccountName] = useState(user?.name ?? '')
   const [accountEmail, setAccountEmail] = useState(user?.email ?? '')
+  const [accountCurrentPass, setAccountCurrentPass] = useState('')
   const [accountPass, setAccountPass] = useState('')
   const [updatingAccount, setUpdatingAccount] = useState(false)
   const [accountUpdated, setAccountUpdated] = useState(false)
+  const [accountError, setAccountError] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -64,32 +67,65 @@ export default function Config() {
   }
 
   async function handleAccountUpdate() {
+    setAccountError('')
+    const emailChanged = accountEmail !== (user?.email ?? '')
+    const passChanged = accountPass.trim().length >= 8
+    if ((emailChanged || passChanged) && !accountCurrentPass) {
+      setAccountError('Ingresa tu contraseña actual para guardar los cambios.')
+      return
+    }
     setUpdatingAccount(true)
     try {
       const payload: any = { name: accountName, email: accountEmail }
-      if (accountPass.trim().length >= 8) payload.password = accountPass.trim()
+      if (passChanged) payload.password = accountPass.trim()
+      if (emailChanged || passChanged) payload.currentPassword = accountCurrentPass
       const updated = await usersApi.update(payload)
       setAuth(updated, accessToken ?? '')
       setAccountPass('')
+      setAccountCurrentPass('')
       setAccountUpdated(true)
+      toast('Datos de cuenta actualizados')
       setTimeout(() => setAccountUpdated(false), 2000)
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? 'Error al actualizar la cuenta'
+      setAccountError(msg)
     } finally {
       setUpdatingAccount(false)
     }
   }
 
+  const compressImage = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const MAX = 256
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/jpeg', 0.82))
+      }
+      img.onerror = reject
+      img.src = url
+    })
+  }, [])
+
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-
-    const reader = new FileReader()
-    reader.onload = async (event) => {
-      const base64 = event.target?.result as string
+    try {
+      const base64 = await compressImage(file)
       const updated = await usersApi.update({ avatar: base64 })
       setAuth(updated, accessToken ?? '')
       setShowAvatarPicker(false)
+    } catch {
+      toast('Error al procesar la imagen', 'error')
     }
-    reader.readAsDataURL(file)
   }
 
   async function saveSettings() {
@@ -287,19 +323,35 @@ export default function Config() {
             <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
               <IconLock size={14} /> Nueva contraseña
             </label>
-            <input 
-              type="password" 
-              value={accountPass} 
-              onChange={e => setAccountPass(e.target.value)} 
+            <input
+              type="password"
+              value={accountPass}
+              onChange={e => setAccountPass(e.target.value)}
               placeholder="Dejar vacío para no cambiar"
               autoComplete="new-password"
             />
             <p className="tiny muted" style={{ marginTop: '.25rem' }}>Mínimo 8 caracteres si decides cambiarla.</p>
           </div>
-          
-          <button 
-            className="primary-btn" 
-            onClick={handleAccountUpdate} 
+          {(accountEmail !== (user?.email ?? '') || accountPass.trim().length >= 8) && (
+            <div className="field">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+                <IconLock size={14} /> Contraseña actual <span style={{ color: 'var(--danger)', marginLeft: '.2rem' }}>*</span>
+              </label>
+              <input
+                type="password"
+                value={accountCurrentPass}
+                onChange={e => setAccountCurrentPass(e.target.value)}
+                placeholder="Confirma tu contraseña actual"
+                autoComplete="current-password"
+              />
+            </div>
+          )}
+          {accountError && (
+            <p style={{ color: 'var(--danger)', fontSize: 'var(--text-sm)', margin: 0 }}>{accountError}</p>
+          )}
+          <button
+            className="primary-btn"
+            onClick={handleAccountUpdate}
             disabled={updatingAccount || !accountName || !accountEmail}
           >
             {updatingAccount ? 'Guardando…' : accountUpdated ? '¡Actualizado! ✓' : 'Guardar cambios de cuenta'}

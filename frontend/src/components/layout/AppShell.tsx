@@ -2,6 +2,8 @@ import { useMemo, useState, useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useUIStore, useAuthStore, useOfflineStore } from '../../store'
 import { getRoutineDays } from '../../lib/fitness'
+import { useRoutines } from '../../hooks/useRoutines'
+import Toaster from '../ui/Toaster'
 import {
   ModuleIcon,
   IconMenu, IconClose, IconSun, IconMoon,
@@ -212,7 +214,8 @@ export default function AppShell() {
   const [editingNav, setEditingNav] = useState(false)
   const [favorites, setFavorites]   = useState<string[]>(loadFavs)
 
-  const routineDays = useMemo(() => getRoutineDays(user?.activeRoutineId ?? null, []), [user?.activeRoutineId])
+  const customRoutines = useRoutines()
+  const routineDays = useMemo(() => getRoutineDays(user?.activeRoutineId ?? null, customRoutines), [user?.activeRoutineId, customRoutines])
 
   const pageTitle = useMemo(() => {
     if (pathname.startsWith('/entrenamiento/')) {
@@ -430,6 +433,8 @@ export default function AppShell() {
           onClose={() => setEditingNav(false)}
         />
       )}
+
+      <Toaster />
     </div>
   )
 }

@@ -1,10 +1,12 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store'
 import { useEnsuredSession } from '../../hooks/useSessions'
-import { useSessions } from '../../hooks/useSessions'
+import { useRoutines } from '../../hooks/useRoutines'
+import { sessionsApi } from '../../api/sessions'
 import { getRoutineDays, getDayIds } from '../../lib/fitness'
 import { PRESET_ROUTINES } from '../../lib/presetRoutines'
+import type { WorkoutSession } from '../../types/domain'
 import ExerciseCard from '../workout/ExerciseCard'
 import RestTimerModal from '../modals/RestTimerModal'
 import type { CardioData } from '../../types/domain'
@@ -20,11 +22,17 @@ export default function DayView() {
 
   const weekNumber = user?.currentWeek ?? 1
   const activeRoutineId = user?.activeRoutineId ?? null
-  const routineDays = useMemo(() => getRoutineDays(activeRoutineId, []), [activeRoutineId])
-  const dayIds = useMemo(() => getDayIds(activeRoutineId, []), [activeRoutineId])
+  const customRoutines = useRoutines()
+  const routineDays = useMemo(() => getRoutineDays(activeRoutineId, customRoutines), [activeRoutineId, customRoutines])
+  const dayIds = useMemo(() => getDayIds(activeRoutineId, customRoutines), [activeRoutineId, customRoutines])
 
-  const { sessions: allSessions } = useSessions(weekNumber)
-  const { session, update } = useEnsuredSession(weekNumber, dayId ?? '')
+  // Todas las sesiones (multi-semana) para historial y autofill de ExerciseCard
+  const [allSessions, setAllSessions] = useState<WorkoutSession[]>([])
+  useEffect(() => {
+    sessionsApi.listAll().then(setAllSessions).catch(() => {})
+  }, [])
+
+  const { session, update, saving } = useEnsuredSession(weekNumber, dayId ?? '', customRoutines)
 
   const [timer, setTimer] = useState<{ seconds: number; label: string } | null>(null)
 
@@ -81,7 +89,7 @@ export default function DayView() {
   }
 
   function updateCardio(field: keyof CardioData, value: string) {
-    const current: CardioData = session!.cardio ?? { machine: 'Caminadora inclinada', duration: '', intensity: '' }
+    const current: CardioData = session!.cardio ?? { machine: '', duration: user?.settings?.cardioDefault ?? '', intensity: '' }
     update({ cardio: { ...current, [field]: value } })
   }
 
@@ -100,11 +108,11 @@ export default function DayView() {
           <h3>{capitalize(dayId)} · {dayLabel}</h3>
           <p>{daySubtitle}</p>
         </div>
-        <div style={{ flexShrink: 0, minWidth: 120 }}>
-          <div className="tiny muted" style={{ marginBottom: '.45rem' }}>
-            Progreso {done}/{total}
-          </div>
-          <div className="progress">
+        <div style={{ flexShrink: 0, minWidth: 120, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '.3rem' }}>
+          {saving === 'pending' && <span className="save-indicator pending">Guardando…</span>}
+          {saving === 'saved'   && <span className="save-indicator saved">Guardado ✓</span>}
+          <div className="tiny muted">Progreso {done}/{total}</div>
+          <div className="progress" style={{ width: 120 }}>
             <span style={{ width: `${pct}%` }} />
           </div>
         </div>

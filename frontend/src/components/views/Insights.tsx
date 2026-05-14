@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useAuthStore } from '../../store'
 import { useSessions } from '../../hooks/useSessions'
+import { useRoutines } from '../../hooks/useRoutines'
 import { getDayIds, calcStreak, calcWeekVolume } from '../../lib/fitness'
 import { aiApi, type ChatMessage } from '../../api/ai'
 import { IconFire } from '../ui/Icons'
@@ -27,7 +28,8 @@ export default function Insights() {
   const { user } = useAuthStore()
   const weekNumber = user?.currentWeek ?? 1
   const activeRoutineId = user?.activeRoutineId ?? null
-  const dayIds = useMemo(() => getDayIds(activeRoutineId, []), [activeRoutineId])
+  const customRoutines = useRoutines()
+  const dayIds = useMemo(() => getDayIds(activeRoutineId, customRoutines), [activeRoutineId, customRoutines])
   const hasAI = !!(user?.settings?.aiProvider && user?.settings?.aiKeySet)
 
   const { sessions } = useSessions(weekNumber)
@@ -36,6 +38,7 @@ export default function Insights() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const streak = useMemo(() => calcStreak(sessions, dayIds, weekNumber), [sessions, dayIds, weekNumber])
@@ -73,9 +76,15 @@ export default function Insights() {
   }
 
   async function clearChat() {
+    if (!confirmClear) {
+      setConfirmClear(true)
+      setTimeout(() => setConfirmClear(false), 3000)
+      return
+    }
     await aiApi.clearChat().catch(() => {})
     setMessages([])
     setError('')
+    setConfirmClear(false)
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -116,10 +125,15 @@ export default function Insights() {
           {messages.length > 0 && (
             <button
               className="ghost-btn"
-              style={{ padding: '.4rem .8rem', fontSize: 'var(--text-xs)', flexShrink: 0 }}
+              style={{
+                padding: '.4rem .8rem',
+                fontSize: 'var(--text-xs)',
+                flexShrink: 0,
+                ...(confirmClear ? { color: 'var(--danger)', borderColor: 'var(--danger)' } : {}),
+              }}
               onClick={clearChat}
             >
-              Limpiar chat
+              {confirmClear ? '¿Confirmar?' : 'Limpiar chat'}
             </button>
           )}
         </div>

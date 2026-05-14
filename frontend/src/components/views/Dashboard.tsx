@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store'
 import { useSessions } from '../../hooks/useSessions'
 import { useUser } from '../../hooks/useUser'
+import { useRoutines } from '../../hooks/useRoutines'
 import { usersApi } from '../../api/users'
+import { sessionsApi } from '../../api/sessions'
 import { getRoutineDays, getDayIds, calcStreak, getTodayDayId } from '../../lib/fitness'
 import { PRESET_ROUTINES } from '../../lib/presetRoutines'
 import MigrationModal from '../modals/MigrationModal'
 import { IconFire, IconRocket, IconMoon, IconTarget } from '../ui/Icons'
+import type { WorkoutSession } from '../../types/domain'
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
@@ -20,13 +23,20 @@ export default function Dashboard() {
   const weekNumber = user?.currentWeek ?? 1
   const activeRoutineId = user?.activeRoutineId ?? null
 
-  const routineDays = useMemo(() => getRoutineDays(activeRoutineId, []), [activeRoutineId])
-  const dayIds = useMemo(() => getDayIds(activeRoutineId, []), [activeRoutineId])
+  const customRoutines = useRoutines()
+  const routineDays = useMemo(() => getRoutineDays(activeRoutineId, customRoutines), [activeRoutineId, customRoutines])
+  const dayIds = useMemo(() => getDayIds(activeRoutineId, customRoutines), [activeRoutineId, customRoutines])
   const routineName = activeRoutineId
     ? (PRESET_ROUTINES[activeRoutineId]?.name ?? 'Rutina custom')
     : 'Sin rutina'
 
+  // Sessions de la semana actual (para KPIs y cards del día)
   const { sessions, loading } = useSessions(weekNumber)
+  // Todas las sesiones para heatmap y racha (cargado en segundo plano)
+  const [allSessions, setAllSessions] = useState<WorkoutSession[]>([])
+  useEffect(() => {
+    sessionsApi.listAll().then(setAllSessions).catch(() => {})
+  }, [])
 
   // Hybrid logic: detect if week should advance
   const [showAdvanceBanner, setShowAdvanceBanner] = useState(false)
@@ -82,7 +92,7 @@ export default function Dashboard() {
   )
 
   const progress = totalExercises ? Math.round(doneExercises / totalExercises * 100) : 0
-  const streak = useMemo(() => calcStreak(sessions, dayIds, weekNumber), [sessions, dayIds, weekNumber])
+  const streak = useMemo(() => calcStreak(allSessions, dayIds, weekNumber), [allSessions, dayIds, weekNumber])
   const todayId = useMemo(() => getTodayDayId(dayIds), [dayIds])
 
   const [showMigration, setShowMigration] = useState(false)
@@ -97,7 +107,7 @@ export default function Dashboard() {
     const start = Math.max(1, weekNumber - 11)
     for (let w = start; w <= weekNumber; w++) {
       const cells = dayIds.map(d => {
-        const s = sessions.find(s => s.weekNumber === w && s.dayId === d)
+        const s = allSessions.find(s => s.weekNumber === w && s.dayId === d)
         if (!s) return 'empty'
         if (s.complete) return 'done'
         const hasDone = s.exercises.some(e => e.done)
@@ -106,7 +116,7 @@ export default function Dashboard() {
       weeks.push({ w, cells })
     }
     return weeks
-  }, [sessions, dayIds, weekNumber])
+  }, [allSessions, dayIds, weekNumber])
 
   if (loading && sessions.length === 0) {
     return <div className="content"><div className="spinner" /></div>

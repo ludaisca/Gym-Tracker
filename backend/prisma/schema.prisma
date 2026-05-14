@@ -18,6 +18,11 @@ model User {
   activeRoutineId String?
   routineStartDate DateTime?
   currentWeek     Int      @default(1)
+  emailVerified       Boolean   @default(false)
+  verificationToken   String?   @unique
+  verificationExpiry  DateTime?
+  resetToken          String?   @unique
+  resetExpiry         DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
