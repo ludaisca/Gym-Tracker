@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { sessionsApi } from '../api/sessions'
 import { useAuthStore } from '../store'
-import type { WorkoutSession, ExerciseSession, CardioData } from '../types/domain'
+import type { WorkoutSession, ExerciseSession, CardioData, Routine } from '../types/domain'
 import { getRoutineDays } from '../lib/fitness'
 
 export function useSessions(weekNumber: number) {
@@ -51,37 +51,39 @@ export function useSessions(weekNumber: number) {
   return { sessions, loading, upsert, getSession, reload: load }
 }
 
-export function useEnsuredSession(weekNumber: number, dayId: string) {
+export function useEnsuredSession(weekNumber: number, dayId: string, customRoutines: Routine[]) {
   const { user } = useAuthStore()
   const [session, setSession] = useState<WorkoutSession | null>(null)
+  const [saving, setSaving] = useState<'idle' | 'pending' | 'saved'>('idle')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const activeRoutineId = user?.activeRoutineId
-  const routineDays = getRoutineDays(activeRoutineId, [])
 
   useEffect(() => {
+    const routineDays = getRoutineDays(activeRoutineId, customRoutines)
     sessionsApi.list(weekNumber).then((all) => {
       const found = all.find((s) => s.dayId === dayId)
       if (found) {
         setSession(found)
       } else {
-        // Build a local session based on routine
         const dayDef = routineDays[dayId]
         const exercises: ExerciseSession[] = (dayDef?.exercises ?? []).map((ex) => ({
           done: false,
           sets: Array.from({ length: ex.sets }, () => ({ kg: '', reps: '' })),
         }))
+        const cardioDefault = user?.settings?.cardioDefault ?? ''
         setSession({
           id: '', userId: user?.id ?? '', weekNumber, dayId,
-          complete: false, notes: '', cardio: { machine: 'Caminadora inclinada', duration: '', intensity: '' },
+          complete: false, notes: '', cardio: { machine: '', duration: cardioDefault, intensity: '' },
           exercises, createdAt: '', updatedAt: '',
         })
       }
     }).catch(() => {})
-  }, [weekNumber, dayId])
+  }, [weekNumber, dayId, activeRoutineId, customRoutines])
 
   const flush = useCallback(async (current: WorkoutSession) => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
+    setSaving('pending')
     debounceRef.current = setTimeout(async () => {
       try {
         const result = await sessionsApi.upsert(current.weekNumber, current.dayId, {
@@ -91,8 +93,10 @@ export function useEnsuredSession(weekNumber: number, dayId: string) {
           cardio: current.cardio ?? null,
         })
         setSession(result)
+        setSaving('saved')
+        setTimeout(() => setSaving('idle'), 2000)
       } catch {
-        // offline — local state remains
+        setSaving('idle')
       }
     }, 800)
   }, [])
@@ -106,5 +110,5 @@ export function useEnsuredSession(weekNumber: number, dayId: string) {
     })
   }, [flush])
 
-  return { session, update }
+  return { session, update, saving }
 }

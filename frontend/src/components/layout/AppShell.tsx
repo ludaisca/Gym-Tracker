@@ -1,7 +1,14 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useUIStore, useAuthStore, useOfflineStore } from '../../store'
 import { getRoutineDays } from '../../lib/fitness'
+import { useRoutines } from '../../hooks/useRoutines'
+import Toaster from '../ui/Toaster'
+import {
+  ModuleIcon,
+  IconMenu, IconClose, IconSun, IconMoon,
+  IconStarFilled, IconStar, IconCheck, IconArrowUp, IconArrowDown,
+} from '../ui/Icons'
 
 function capitalize(s: string) { return s.charAt(0).toUpperCase() + s.slice(1) }
 
@@ -15,8 +22,187 @@ const PAGE_TITLES: Record<string, string> = {
   '/cardio': 'Cardio',
   '/notas': 'Notas',
   '/config': 'Configuración',
+  '/duelos': 'Duelos',
 }
 
+export const ALL_MODULES = [
+  { path: '/dashboard', label: 'Inicio',       desc: 'Panel principal',       group: 'Principal',    badge: '' },
+  { path: '/agenda',    label: 'Agenda',        desc: 'Vista semanal',         group: 'Principal',    badge: '' },
+  { path: '/nutricion', label: 'Nutrición',     desc: 'Calorías y macros',     group: 'Principal',    badge: '' },
+  { path: '/stats',     label: 'Estadísticas',  desc: 'Tu progreso',           group: 'Principal',    badge: '' },
+  { path: '/insights',  label: 'Insights IA',   desc: 'Análisis inteligente',  group: 'Principal',    badge: '' },
+  { path: '/duelos',    label: 'Duelos',        desc: 'Retos con amigos',      group: 'Social',       badge: 'Nuevo' },
+  { path: '/rutinas',   label: 'Mis Rutinas',   desc: 'Gestionar programas',   group: 'Herramientas', badge: '' },
+  { path: '/cardio',    label: 'Cardio',        desc: 'Sesiones de cardio',    group: 'Herramientas', badge: '' },
+  { path: '/notas',     label: 'Notas',         desc: 'Checklists y apuntes',  group: 'Herramientas', badge: '' },
+  { path: '/config',    label: 'Configuración', desc: 'Perfil y ajustes',      group: 'Herramientas', badge: '' },
+]
+
+const MIN_FAV = 3
+const MAX_FAV = 5
+const DEFAULT_FAVORITES = ['/dashboard', '/agenda', '/stats', '/duelos', '/config']
+const FAV_KEY = 'gym-bottom-nav-favs'
+
+function loadFavs(): string[] {
+  try {
+    const s = localStorage.getItem(FAV_KEY)
+    if (s) {
+      const a = JSON.parse(s)
+      if (Array.isArray(a) && a.length >= MIN_FAV && a.length <= MAX_FAV) return a
+    }
+  } catch {}
+  return DEFAULT_FAVORITES
+}
+
+// ── Nav editor component ─────────────────────────────────────────────────
+function NavEditor({
+  favorites,
+  onChange,
+  onClose,
+}: {
+  favorites: string[]
+  onChange: (next: string[]) => void
+  onClose: () => void
+}) {
+  const [draft, setDraft] = useState<string[]>(favorites)
+
+  const isSelected = (path: string) => draft.includes(path)
+
+  function toggle(path: string) {
+    if (isSelected(path)) {
+      if (draft.length <= MIN_FAV) return // enforce minimum
+      setDraft(draft.filter(p => p !== path))
+    } else {
+      if (draft.length >= MAX_FAV) return // enforce maximum
+      setDraft([...draft, path])
+    }
+  }
+
+  function moveUp(idx: number) {
+    if (idx === 0) return
+    const next = [...draft]
+    ;[next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]
+    setDraft(next)
+  }
+
+  function moveDown(idx: number) {
+    if (idx === draft.length - 1) return
+    const next = [...draft]
+    ;[next[idx], next[idx + 1]] = [next[idx + 1], next[idx]]
+    setDraft(next)
+  }
+
+  function save() {
+    onChange(draft)
+    onClose()
+  }
+
+  const groups = ['Principal', 'Social', 'Herramientas'] as const
+
+  return (
+    <div className="nav-editor-overlay">
+      <div className="nav-editor">
+        {/* Header */}
+        <div className="nav-editor-head">
+          <div>
+            <div className="nav-editor-title">Personalizar barra inferior</div>
+            <div className="nav-editor-sub">
+              {draft.length}/{MAX_FAV} seleccionados · mínimo {MIN_FAV}
+            </div>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Cancelar">
+            <IconClose size={18} />
+          </button>
+        </div>
+
+        <div className="nav-editor-body">
+          {/* Current order preview */}
+          <div className="nav-editor-section">
+            <div className="nav-editor-label">Orden en la barra</div>
+            <div className="nav-editor-order">
+              {draft.map((path, idx) => {
+                const mod = ALL_MODULES.find(m => m.path === path)!
+                return (
+                  <div key={path} className="nav-order-item">
+                    <span className="nav-order-index">{idx + 1}</span>
+                    <span className="nav-order-icon"><ModuleIcon path={path} size={18} /></span>
+                    <span className="nav-order-label">{mod?.label}</span>
+                    <div className="nav-order-arrows">
+                      <button
+                        className="nav-arrow-btn"
+                        onClick={() => moveUp(idx)}
+                        disabled={idx === 0}
+                        aria-label="Subir"
+                      >
+                        <IconArrowUp size={14} strokeWidth={2.5} />
+                      </button>
+                      <button
+                        className="nav-arrow-btn"
+                        onClick={() => moveDown(idx)}
+                        disabled={idx === draft.length - 1}
+                        aria-label="Bajar"
+                      >
+                        <IconArrowDown size={14} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Module picker */}
+          <div className="nav-editor-section">
+            <div className="nav-editor-label">Módulos disponibles</div>
+            {groups.map(group => (
+              <div key={group} className="nav-picker-group">
+                <div className="nav-picker-group-title">{group}</div>
+                <div className="nav-picker-grid">
+                  {ALL_MODULES.filter(m => m.group === group).map(mod => {
+                    const selected = isSelected(mod.path)
+                    const canAdd = draft.length < MAX_FAV
+                    const canRemove = draft.length > MIN_FAV
+                    const disabled = selected ? !canRemove : !canAdd
+                    return (
+                      <button
+                        key={mod.path}
+                        className={`nav-picker-item ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`}
+                        onClick={() => !disabled && toggle(mod.path)}
+                        disabled={disabled}
+                      >
+                        <span className="nav-picker-icon">
+                          <ModuleIcon path={mod.path} size={20} />
+                        </span>
+                        <span className="nav-picker-name">{mod.label}</span>
+                        <span className="nav-picker-check">
+                          {selected
+                            ? <IconStarFilled size={14} />
+                            : <IconStar size={14} />
+                          }
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="nav-editor-footer">
+          <button className="ghost-btn" onClick={onClose}>Cancelar</button>
+          <button className="primary-btn" onClick={save}>
+            <IconCheck size={15} strokeWidth={2.5} />
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main AppShell ─────────────────────────────────────────────────────────
 export default function AppShell() {
   const { theme, toggleTheme, isOffline } = useUIStore()
   const { user } = useAuthStore()
@@ -24,7 +210,12 @@ export default function AppShell() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
-  const routineDays = useMemo(() => getRoutineDays(user?.activeRoutineId ?? null, []), [user?.activeRoutineId])
+  const [menuOpen, setMenuOpen]     = useState(false)
+  const [editingNav, setEditingNav] = useState(false)
+  const [favorites, setFavorites]   = useState<string[]>(loadFavs)
+
+  const customRoutines = useRoutines()
+  const routineDays = useMemo(() => getRoutineDays(user?.activeRoutineId ?? null, customRoutines), [user?.activeRoutineId, customRoutines])
 
   const pageTitle = useMemo(() => {
     if (pathname.startsWith('/entrenamiento/')) {
@@ -37,11 +228,12 @@ export default function AppShell() {
   }, [pathname, routineDays])
 
   const navMain = [
-    { path: '/dashboard', label: 'Dashboard', short: 'home' },
-    { path: '/agenda', label: 'Agenda semanal', short: 'week' },
-    { path: '/nutricion', label: 'Nutrición', short: 'nut' },
-    { path: '/stats', label: 'Estadísticas', short: 'stats' },
-    { path: '/insights', label: 'Insights IA', short: 'ia' },
+    { path: '/dashboard', label: 'Inicio' },
+    { path: '/agenda',    label: 'Agenda' },
+    { path: '/nutricion', label: 'Nutrición' },
+    { path: '/stats',     label: 'Estadísticas' },
+    { path: '/insights',  label: 'Insights IA' },
+    { path: '/duelos',    label: 'Duelos', badge: 'Nuevo' },
   ]
   const navWorkout = useMemo(() =>
     Object.entries(routineDays).map(([dayId, day]) => ({
@@ -51,41 +243,54 @@ export default function AppShell() {
     })),
   [routineDays])
   const navControl = [
-    { path: '/rutinas', label: 'Mis Rutinas', short: 'rut' },
-    { path: '/cardio', label: 'Cardio tracker', short: 'io' },
-    { path: '/notas', label: 'Notas y checklists', short: 'txt' },
-    { path: '/config', label: 'Configuración', short: 'cfg' },
+    { path: '/rutinas', label: 'Mis Rutinas' },
+    { path: '/cardio',  label: 'Cardio' },
+    { path: '/notas',   label: 'Notas' },
+    { path: '/config',  label: 'Configuración' },
   ]
 
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/')
 
-  function goToday() {
-    const slots = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
-    const today = slots[new Date().getDay()]
-    const dayIds = Object.keys(routineDays)
-    const target = dayIds.includes(today) ? today : dayIds[0]
-    if (target) navigate(`/entrenamiento/${target}`)
-    else navigate('/dashboard')
+  function handleModuleNav(path: string) {
+    navigate(path)
+    setMenuOpen(false)
   }
+
+  function saveFavorites(next: string[]) {
+    setFavorites(next)
+    localStorage.setItem(FAV_KEY, JSON.stringify(next))
+  }
+
+  useEffect(() => { setMenuOpen(false) }, [pathname])
+  useEffect(() => {
+    function handler(e: KeyboardEvent) { if (e.key === 'Escape') setMenuOpen(false) }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
+
+  const groups = ['Principal', 'Social', 'Herramientas'] as const
+  const byGroup = (g: string) => ALL_MODULES.filter(m => m.group === g)
+  const favModules = favorites.map(f => ALL_MODULES.find(m => m.path === f)).filter(Boolean) as typeof ALL_MODULES
 
   return (
     <div className="app">
+      {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M3 10v4"/><path d="M21 10v4"/><path d="M7 7v10"/><path d="M17 7v10"/><path d="M3 12h18"/>
-            </svg>
+            <IconMenu size={18} strokeWidth={2} />
           </div>
-          <div><h1>Gym Tracker</h1><p>{user?.name} · App mode</p></div>
+          <div><h1>Gym Tracker</h1><p>{user?.name}</p></div>
         </div>
 
         <div>
           <div className="nav-group-title">Principal</div>
           <nav className="nav">
-            {navMain.map((item) => (
+            {navMain.map(item => (
               <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => navigate(item.path)}>
-                <span>{item.label}</span><small>{item.short}</small>
+                <span className="nav-icon"><ModuleIcon path={item.path} size={16} /></span>
+                <span>{item.label}</span>
+                {'badge' in item && item.badge && <small className="nav-badge">{item.badge}</small>}
               </button>
             ))}
           </nav>
@@ -95,7 +300,7 @@ export default function AppShell() {
           <div>
             <div className="nav-group-title">Entrenamiento</div>
             <nav className="nav">
-              {navWorkout.map((item) => (
+              {navWorkout.map(item => (
                 <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => navigate(item.path)}>
                   <span>{item.label}</span><small>{item.short}</small>
                 </button>
@@ -107,9 +312,10 @@ export default function AppShell() {
         <div>
           <div className="nav-group-title">Control</div>
           <nav className="nav">
-            {navControl.map((item) => (
+            {navControl.map(item => (
               <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => navigate(item.path)}>
-                <span>{item.label}</span><small>{item.short}</small>
+                <span className="nav-icon"><ModuleIcon path={item.path} size={16} /></span>
+                <span>{item.label}</span>
               </button>
             ))}
           </nav>
@@ -121,6 +327,7 @@ export default function AppShell() {
         </div>
       </aside>
 
+      {/* ── Main ─────────────────────────────────────────────── */}
       <main className="main">
         {isOffline && (
           <div className="offline-banner">
@@ -135,52 +342,99 @@ export default function AppShell() {
         )}
 
         <header className="topbar">
-          <div className="topbar-title">
-            <h2>{pageTitle}</h2>
-          </div>
+          <div className="topbar-title"><h2>{pageTitle}</h2></div>
           <div className="topbar-actions">
             <button className="icon-btn" onClick={toggleTheme} aria-label="Cambiar tema">
-              {theme === 'dark'
-                ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-                : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-              }
+              {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
             </button>
-            <button className="avatar-btn" onClick={() => navigate('/config')} aria-label="Mi perfil">
-              {user?.avatar ?? '💪'}
+            <button className="icon-btn menu-toggle-btn" onClick={() => setMenuOpen(v => !v)} aria-label="Menú de módulos" aria-expanded={menuOpen}>
+              {menuOpen ? <IconClose size={18} /> : <IconMenu size={18} />}
             </button>
           </div>
         </header>
 
-        <div className="content">
-          <Outlet />
-        </div>
+        <div className="content"><Outlet /></div>
 
+        {/* ── Bottom nav ── */}
         <nav className="bottom-nav" aria-label="Navegación principal">
-          <button className={`bottom-nav-btn ${isActive('/dashboard') ? 'active' : ''}`} onClick={() => navigate('/dashboard')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            Inicio
-          </button>
-          <button className={`bottom-nav-btn ${isActive('/agenda') ? 'active' : ''}`} onClick={() => navigate('/agenda')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            Agenda
-          </button>
-          <button
-            className={`bottom-nav-btn today-btn ${pathname.startsWith('/entrenamiento/') ? 'active' : ''}`}
-            onClick={goToday}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 10v4M21 10v4M7 7v10M17 7v10M3 12h18"/></svg>
-            Hoy
-          </button>
-          <button className={`bottom-nav-btn ${isActive('/nutricion') ? 'active' : ''}`} onClick={() => navigate('/nutricion')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M8 12h8M12 8v8"/></svg>
-            Nutrición
-          </button>
-          <button className={`bottom-nav-btn ${isActive('/stats') ? 'active' : ''}`} onClick={() => navigate('/stats')}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-            Stats
-          </button>
+          {favModules.map(mod => (
+            <button
+              key={mod.path}
+              className={`bottom-nav-btn ${isActive(mod.path) ? 'active' : ''}`}
+              onClick={() => navigate(mod.path)}
+            >
+              <ModuleIcon path={mod.path} size={22} strokeWidth={1.6} />
+              <span>{mod.label.split(' ')[0]}</span>
+            </button>
+          ))}
         </nav>
       </main>
+
+      {/* ── Full-screen menu ─────────────────────────────────── */}
+      {menuOpen && (
+        <div className="fullscreen-menu" role="dialog" aria-modal="true">
+          <div className="fsmenu-header">
+            <div>
+              <div className="fsmenu-user-name">{user?.name ?? 'Usuario'}</div>
+              <div className="fsmenu-user-meta">Semana {user?.currentWeek ?? 1} · {user?.settings?.goal ?? 'Sin objetivo'}</div>
+            </div>
+            <button className="icon-btn" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú">
+              <IconClose size={20} />
+            </button>
+          </div>
+
+          <div className="fsmenu-body">
+            {groups.map(group => (
+              <div key={group} className="fsmenu-group">
+                <div className="fsmenu-group-title">{group}</div>
+                <div className="fsmenu-grid">
+                  {byGroup(group).map(mod => (
+                    <button
+                      key={mod.path}
+                      className={`fsmenu-item ${isActive(mod.path) ? 'active' : ''}`}
+                      onClick={() => handleModuleNav(mod.path)}
+                    >
+                      <span className="fsmenu-item-icon">
+                        <ModuleIcon path={mod.path} size={26} strokeWidth={1.5} />
+                      </span>
+                      <span className="fsmenu-item-label">
+                        {mod.label}
+                        {mod.badge && <span className="app-menu-badge">{mod.badge}</span>}
+                      </span>
+                      <span className="fsmenu-item-desc">{mod.desc}</span>
+                      {isActive(mod.path) && (
+                        <span className="fsmenu-active-dot" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="fsmenu-footer">
+            <button
+              className="ghost-btn"
+              style={{ fontSize: 'var(--text-xs)', padding: '.55rem 1rem', display: 'flex', alignItems: 'center', gap: '.5rem' }}
+              onClick={() => { setMenuOpen(false); setEditingNav(true) }}
+            >
+              <IconStarFilled size={14} />
+              Personalizar barra inferior
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Nav editor ───────────────────────────────────────── */}
+      {editingNav && (
+        <NavEditor
+          favorites={favorites}
+          onChange={saveFavorites}
+          onClose={() => setEditingNav(false)}
+        />
+      )}
+
+      <Toaster />
     </div>
   )
 }

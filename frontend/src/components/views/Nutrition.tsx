@@ -1,14 +1,47 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useAuthStore } from '../../store'
 import { nutritionApi } from '../../api/nutrition'
+import { usersApi } from '../../api/users'
 import { aiApi, type FoodAnalysisResult } from '../../api/ai'
 import type { NutritionDay, FoodEntry, MealType, SavedFood } from '../../types/domain'
 
-const MEAL_DEFS: { id: MealType; label: string; icon: string }[] = [
-  { id: 'desayuno', label: 'Desayuno', icon: '🌅' },
-  { id: 'almuerzo', label: 'Almuerzo', icon: '☀️' },
-  { id: 'cena',     label: 'Cena',     icon: '🌙' },
-  { id: 'snack',    label: 'Snack',    icon: '🍎' },
+const MEAL_DEFS: { id: MealType; label: string; icon: ReactNode }[] = [
+  {
+    id: 'desayuno',
+    label: 'Desayuno',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'almuerzo',
+    label: 'Almuerzo',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'cena',
+    label: 'Cena',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'snack',
+    label: 'Snack',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 4v4"/><path d="M10 12h4"/>
+      </svg>
+    ),
+  },
 ]
 
 function todayISO(): string {
@@ -31,7 +64,7 @@ interface FoodSheet {
 }
 
 export default function Nutrition() {
-  const { user } = useAuthStore()
+  const { user, updateUser } = useAuthStore()
   const goals = {
     kcal:    user?.settings?.calorieGoal ?? 2500,
     protein: user?.settings?.proteinGoal ?? 150,
@@ -44,6 +77,8 @@ export default function Nutrition() {
   const [day, setDay] = useState<NutritionDay | null>(null)
   const [savedFoods, setSavedFoods] = useState<SavedFood[]>([])
   const [sheet, setSheet] = useState<FoodSheet | null>(null)
+  const [showGoalModal, setShowGoalModal] = useState(false)
+  const [weekAvg, setWeekAvg] = useState<{ kcal: number; protein: number; carbs: number; fat: number } | null>(null)
 
   const loadDay = useCallback(async (d: string) => {
     const data = await nutritionApi.getDay(d).catch(() => null)
@@ -52,6 +87,32 @@ export default function Nutrition() {
 
   useEffect(() => { loadDay(date) }, [date, loadDay])
   useEffect(() => { nutritionApi.getSavedFoods().then(setSavedFoods).catch(() => {}) }, [])
+
+  // Promedio últimos 7 días (excluye hoy para no sesgar con datos parciales)
+  useEffect(() => {
+    const dates: string[] = []
+    for (let i = 1; i <= 7; i++) dates.push(shiftDate(todayISO(), -i))
+    Promise.all(dates.map(d => nutritionApi.getDay(d).catch(() => null))).then(days => {
+      const valid = days.filter((d): d is NutritionDay => d !== null && !!d.meals)
+      if (valid.length === 0) { setWeekAvg(null); return }
+      const sum = valid.reduce((acc, d) => {
+        const ms = (d.meals ?? {}) as Partial<Record<MealType, FoodEntry[]>>
+        Object.values(ms).flat().forEach((e: FoodEntry) => {
+          acc.kcal    += Number(e.kcal)    || 0
+          acc.protein += Number(e.protein) || 0
+          acc.carbs   += Number(e.carbs)   || 0
+          acc.fat     += Number(e.fat)     || 0
+        })
+        return acc
+      }, { kcal: 0, protein: 0, carbs: 0, fat: 0 })
+      setWeekAvg({
+        kcal:    Math.round(sum.kcal    / valid.length),
+        protein: Math.round(sum.protein / valid.length),
+        carbs:   Math.round(sum.carbs   / valid.length),
+        fat:     Math.round(sum.fat     / valid.length),
+      })
+    })
+  }, [])
 
   const meals = (day?.meals ?? {}) as Partial<Record<MealType, FoodEntry[]>>
   const water = day?.water ?? 0
@@ -72,6 +133,12 @@ export default function Nutrition() {
   macros.carbs   = Math.round(macros.carbs)
   macros.fat     = Math.round(macros.fat)
 
+  const macroPct = macros.kcal > 0 ? {
+    protein: Math.round(macros.protein * 4 / macros.kcal * 100),
+    carbs:   Math.round(macros.carbs   * 4 / macros.kcal * 100),
+    fat:     Math.round(macros.fat     * 9 / macros.kcal * 100),
+  } : null
+
   async function updateWater(delta: number) {
     const newWater = Math.max(0, water + delta)
     const updated = await nutritionApi.updateDay(date, { water: newWater })
@@ -83,16 +150,29 @@ export default function Nutrition() {
     loadDay(date)
   }
 
-  const circum = 251
-  const calsPercent = Math.min(1, macros.kcal / goals.kcal)
-  const offset = circum - calsPercent * circum
   const over = macros.kcal > goals.kcal
-  const remaining = goals.kcal - macros.kcal
   const isToday = date === todayISO()
 
   return (
     <>
       <section className="card">
+        <div className="panel-head" style={{ paddingBottom: 0 }}>
+          <div>
+            <h3>Nutrición e Hidratación</h3>
+            <p>Registro diario y progreso.</p>
+          </div>
+          <button
+            className="icon-btn-subtle"
+            onClick={() => setShowGoalModal(true)}
+            title="Establecer metas propias"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2-2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+            </svg>
+          </button>
+        </div>
+
         <div className="nut-date-nav">
           <button className="nut-date-arrow" onClick={() => setDate(d => shiftDate(d, -1))}>‹</button>
           <div style={{ textAlign: 'center' }}>
@@ -112,45 +192,43 @@ export default function Nutrition() {
           </div>
         </div>
 
-        <div className="nut-summary">
-          <div className="nut-cal-ring">
-            <svg width="96" height="96" viewBox="0 0 96 96">
-              <circle className="nut-cal-ring-bg" cx="48" cy="48" r="40" />
-              <circle
-                className={`nut-cal-ring-prog${over ? ' over' : ''}`}
-                cx="48" cy="48" r="40"
-                strokeDasharray={circum}
-                strokeDashoffset={offset}
-              />
-            </svg>
-            <div className="nut-cal-center">
-              <div className="nut-cal-num">{macros.kcal}</div>
-              <div className="nut-cal-label">kcal</div>
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginBottom: 'var(--space-3)' }}>
-              {over
-                ? <span style={{ color: 'var(--color-warning)', fontWeight: 700 }}>+{Math.abs(remaining)} kcal sobre el objetivo</span>
-                : <><strong>{remaining}</strong> kcal restantes de {goals.kcal}</>
-              }
-            </div>
-            <div className="nut-macro-bars">
-              {[
-                { label: 'Proteínas', val: macros.protein, goal: goals.protein, cls: 'protein' },
-                { label: 'Carbos',    val: macros.carbs,   goal: goals.carbs,   cls: 'carbs' },
-                { label: 'Grasas',    val: macros.fat,     goal: goals.fat,     cls: 'fat' },
-              ].map(({ label, val, goal, cls }) => (
-                <div key={cls} className="nut-macro-row">
-                  <div className="nut-macro-name">{label}</div>
-                  <div className="nut-macro-bar-wrap">
-                    <div className={`nut-macro-bar ${cls}`} style={{ width: `${Math.min(100, Math.round(val / goal * 100))}%` }} />
-                  </div>
-                  <div className="nut-macro-val">{val}/{goal}g</div>
+        {/* ── Compact half-moon gauges (Slightly larger, 2x2 grid) ── */}
+        <div className="nut-gauges-row grid-2x2">
+          {[
+            { label: 'Calorías', val: macros.kcal, goal: goals.kcal, unit: 'kcal', over, pct: null as number | null },
+            { label: 'Proteína', val: macros.protein, goal: goals.protein, unit: 'g', over: false, pct: macroPct?.protein ?? null },
+            { label: 'Carbos',   val: macros.carbs,   goal: goals.carbs,   unit: 'g', over: false, pct: macroPct?.carbs   ?? null },
+            { label: 'Grasas',   val: macros.fat,     goal: goals.fat,     unit: 'g', over: false, pct: macroPct?.fat     ?? null },
+          ].map(({ label, val, goal, unit, over: isOver, pct: macroPctVal }) => {
+            const pct = Math.min(1, val / goal)
+            const r = 36, circ = Math.PI * r, dash = pct * circ
+            return (
+              <div key={label} className="nut-gauge-item">
+                <svg width="88" height="48" viewBox="0 0 88 48">
+                  <path d="M 8 44 A 36 36 0 0 1 80 44" fill="none" stroke="var(--color-divider)" strokeWidth="7" strokeLinecap="round" />
+                  <path
+                    d="M 8 44 A 36 36 0 0 1 80 44"
+                    fill="none"
+                    stroke={isOver ? 'var(--color-warning)' : 'var(--color-primary)'}
+                    strokeWidth="7"
+                    strokeLinecap="round"
+                    strokeDasharray={`${dash} ${circ}`}
+                    style={{ transition: 'stroke-dasharray 0.8s ease' }}
+                  />
+                </svg>
+                <div className="nut-gauge-val" style={{ fontSize: 'var(--text-base)', marginTop: '-2px' }}>{val}<span>{unit}</span></div>
+                <div className="nut-gauge-label" style={{ fontSize: '11px', marginTop: '2px' }}>
+                  {label}
+                  {macroPctVal !== null && macroPctVal > 0 && (
+                    <span style={{ marginLeft: '4px', color: 'var(--color-text-muted)', fontWeight: 400 }}>
+                      {macroPctVal}%
+                    </span>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
+                <div className="nut-gauge-goal">/ {goal}{unit}</div>
+              </div>
+            )
+          })}
         </div>
 
         <div className="nut-water">
@@ -162,7 +240,11 @@ export default function Nutrition() {
                   key={i}
                   className={`nut-glass${i < water ? ' filled' : ''}`}
                   onClick={() => updateWater(i < water ? -1 : 1)}
-                >💧</span>
+                >
+                  <svg width="12" height="14" viewBox="0 0 24 28" fill={i < water ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.75">
+                    <path d="M12 2C6 10 4 14 4 18a8 8 0 0 0 16 0c0-4-2-8-8-16Z"/>
+                  </svg>
+                </span>
               ))}
             </div>
           </div>
@@ -223,8 +305,9 @@ export default function Nutrition() {
           <div className="panel-body" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
             {savedFoods.map(f => (
               <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                <div className="nut-saved-chip" style={{ cursor: 'default' }}>
-                  ⭐ {f.name} <span style={{ opacity: .6 }}>{f.kcal}kcal</span>
+                <div className="nut-saved-chip" style={{ cursor: 'default', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                  {f.name} <span style={{ opacity: .6 }}>{f.kcal}kcal</span>
                 </div>
                 <button
                   className="nut-remove-btn"
@@ -232,6 +315,32 @@ export default function Nutrition() {
                 >×</button>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {weekAvg && (
+        <section className="card">
+          <div className="panel-head">
+            <div><h3>Promedio últimos 7 días</h3><p>Excluye el día actual (datos parciales).</p></div>
+          </div>
+          <div className="panel-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)', textAlign: 'center' }}>
+            {[
+              { label: 'Calorías', val: weekAvg.kcal, unit: 'kcal', goal: goals.kcal },
+              { label: 'Proteína', val: weekAvg.protein, unit: 'g', goal: goals.protein },
+              { label: 'Carbos',   val: weekAvg.carbs,   unit: 'g', goal: goals.carbs },
+              { label: 'Grasas',   val: weekAvg.fat,     unit: 'g', goal: goals.fat },
+            ].map(({ label, val, unit, goal }) => {
+              const ratio = Math.min(1, val / goal)
+              const color = ratio >= 0.9 ? 'var(--color-primary)' : ratio >= 0.7 ? 'var(--color-warning)' : 'var(--color-text-muted)'
+              return (
+                <div key={label}>
+                  <div style={{ fontWeight: 800, fontSize: 'var(--text-lg)', color }}>{val}<span style={{ fontSize: 'var(--text-xs)', fontWeight: 400, marginLeft: '2px' }}>{unit}</span></div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: '2px' }}>{label}</div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>meta {goal}{unit}</div>
+                </div>
+              )
+            })}
           </div>
         </section>
       )}
@@ -256,6 +365,28 @@ export default function Nutrition() {
             setSheet(null)
           }}
           onClose={() => setSheet(null)}
+        />
+      )}
+
+      {showGoalModal && (
+        <GoalModal
+          currentGoals={goals}
+          onSave={async (newGoals) => {
+            try {
+              const updatedSettings = await usersApi.updateSettings({
+                calorieGoal: newGoals.kcal,
+                proteinGoal: newGoals.protein,
+                carbGoal: newGoals.carbs,
+                fatGoal: newGoals.fat,
+                waterGoal: newGoals.water,
+              })
+              updateUser({ settings: { ...user?.settings, ...updatedSettings } })
+              setShowGoalModal(false)
+            } catch (err) {
+              alert('Error al guardar metas')
+            }
+          }}
+          onClose={() => setShowGoalModal(false)}
         />
       )}
     </>
@@ -449,6 +580,43 @@ function FoodSheetModal({ mealType, savedFoods, hasAI, onSave, onClose }: FoodSh
 
         <div className="confirm-sheet-actions">
           <button className="primary-btn" onClick={submit} disabled={!name.trim() || !kcal}>Agregar</button>
+          <button className="ghost-btn" onClick={onClose}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface GoalModalProps {
+  currentGoals: { kcal: number; protein: number; carbs: number; fat: number; water: number }
+  onSave: (g: { kcal: number; protein: number; carbs: number; fat: number; water: number }) => void
+  onClose: () => void
+}
+
+function GoalModal({ currentGoals, onSave, onClose }: GoalModalProps) {
+  const [kcal, setKcal] = useState(currentGoals.kcal)
+  const [protein, setProtein] = useState(currentGoals.protein)
+  const [carbs, setCarbs] = useState(currentGoals.carbs)
+  const [fat, setFat] = useState(currentGoals.fat)
+  const [water, setWater] = useState(currentGoals.water)
+
+  return (
+    <div className="confirm-overlay open" style={{ zIndex: 300 }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="confirm-sheet" style={{ maxWidth: 400 }}>
+        <div className="confirm-sheet-handle" />
+        <h3>Ajustar Metas Propias</h3>
+        <p className="tiny muted">Personaliza tus objetivos diarios de nutrición.</p>
+        <div className="panel-body" style={{ display: 'grid', gap: 'var(--space-3)', padding: 'var(--space-4) 0' }}>
+          <div className="field"><label>Calorías (kcal)</label><input type="number" value={kcal} onChange={e => setKcal(Number(e.target.value))} /></div>
+          <div className="food-macro-grid">
+            <div className="field"><label>Proteína (g)</label><input type="number" value={protein} onChange={e => setProtein(Number(e.target.value))} /></div>
+            <div className="field"><label>Carbos (g)</label><input type="number" value={carbs} onChange={e => setCarbs(Number(e.target.value))} /></div>
+            <div className="field"><label>Grasa (g)</label><input type="number" value={fat} onChange={e => setFat(Number(e.target.value))} /></div>
+          </div>
+          <div className="field"><label>Agua (vasos)</label><input type="number" value={water} onChange={e => setWater(Number(e.target.value))} /></div>
+        </div>
+        <div className="confirm-sheet-actions">
+          <button className="primary-btn" onClick={() => onSave({ kcal, protein, carbs, fat, water })}>Guardar cambios</button>
           <button className="ghost-btn" onClick={onClose}>Cancelar</button>
         </div>
       </div>

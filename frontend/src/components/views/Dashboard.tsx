@@ -3,9 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store'
 import { useSessions } from '../../hooks/useSessions'
 import { useUser } from '../../hooks/useUser'
+import { useRoutines } from '../../hooks/useRoutines'
+import { usersApi } from '../../api/users'
+import { sessionsApi } from '../../api/sessions'
 import { getRoutineDays, getDayIds, calcStreak, getTodayDayId } from '../../lib/fitness'
 import { PRESET_ROUTINES } from '../../lib/presetRoutines'
 import MigrationModal from '../modals/MigrationModal'
+import { IconFire, IconRocket, IconMoon, IconTarget } from '../ui/Icons'
+import type { WorkoutSession } from '../../types/domain'
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
@@ -14,17 +19,56 @@ function capitalize(s: string) {
 export default function Dashboard() {
   useUser()
   const navigate = useNavigate()
-  const { user } = useAuthStore()
+  const { user, setAuth, accessToken } = useAuthStore()
   const weekNumber = user?.currentWeek ?? 1
   const activeRoutineId = user?.activeRoutineId ?? null
 
-  const routineDays = useMemo(() => getRoutineDays(activeRoutineId, []), [activeRoutineId])
-  const dayIds = useMemo(() => getDayIds(activeRoutineId, []), [activeRoutineId])
+  const customRoutines = useRoutines()
+  const routineDays = useMemo(() => getRoutineDays(activeRoutineId, customRoutines), [activeRoutineId, customRoutines])
+  const dayIds = useMemo(() => getDayIds(activeRoutineId, customRoutines), [activeRoutineId, customRoutines])
   const routineName = activeRoutineId
     ? (PRESET_ROUTINES[activeRoutineId]?.name ?? 'Rutina custom')
     : 'Sin rutina'
 
+  // Sessions de la semana actual (para KPIs y cards del día)
   const { sessions, loading } = useSessions(weekNumber)
+  // Todas las sesiones para heatmap y racha (cargado en segundo plano)
+  const [allSessions, setAllSessions] = useState<WorkoutSession[]>([])
+  useEffect(() => {
+    sessionsApi.listAll().then(setAllSessions).catch(() => {})
+  }, [])
+
+  // Hybrid logic: detect if week should advance
+  const [showAdvanceBanner, setShowAdvanceBanner] = useState(false)
+  const [expectedWeek, setExpectedWeek] = useState(weekNumber)
+
+  useEffect(() => {
+    if (user?.routineStartDate) {
+      const start = new Date(user.routineStartDate)
+      const now = new Date()
+      // Calcular diferencia en días (redondeando hacia abajo)
+      const diffTime = now.getTime() - start.getTime()
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+      const calcWeek = Math.floor(diffDays / 7) + 1
+      
+      if (calcWeek > weekNumber) {
+        setExpectedWeek(calcWeek)
+        setShowAdvanceBanner(true)
+      } else {
+        setShowAdvanceBanner(false)
+      }
+    }
+  }, [user?.routineStartDate, weekNumber])
+
+  async function handleAdvanceWeek() {
+    try {
+      const updated = await usersApi.update({ currentWeek: expectedWeek })
+      setAuth(updated, accessToken ?? '')
+      setShowAdvanceBanner(false)
+    } catch (err) {
+      console.error('Error advancing week:', err)
+    }
+  }
 
   const completedSessions = useMemo(
     () => dayIds.filter(d => sessions.find(s => s.weekNumber === weekNumber && s.dayId === d)?.complete).length,
@@ -48,7 +92,7 @@ export default function Dashboard() {
   )
 
   const progress = totalExercises ? Math.round(doneExercises / totalExercises * 100) : 0
-  const streak = useMemo(() => calcStreak(sessions, dayIds, weekNumber), [sessions, dayIds, weekNumber])
+  const streak = useMemo(() => calcStreak(allSessions, dayIds, weekNumber), [allSessions, dayIds, weekNumber])
   const todayId = useMemo(() => getTodayDayId(dayIds), [dayIds])
 
   const [showMigration, setShowMigration] = useState(false)
@@ -63,7 +107,7 @@ export default function Dashboard() {
     const start = Math.max(1, weekNumber - 11)
     for (let w = start; w <= weekNumber; w++) {
       const cells = dayIds.map(d => {
-        const s = sessions.find(s => s.weekNumber === w && s.dayId === d)
+        const s = allSessions.find(s => s.weekNumber === w && s.dayId === d)
         if (!s) return 'empty'
         if (s.complete) return 'done'
         const hasDone = s.exercises.some(e => e.done)
@@ -72,15 +116,37 @@ export default function Dashboard() {
       weeks.push({ w, cells })
     }
     return weeks
-  }, [sessions, dayIds, weekNumber])
+  }, [allSessions, dayIds, weekNumber])
 
   if (loading && sessions.length === 0) {
     return <div className="content"><div className="spinner" /></div>
   }
 
   return (
-    <>
+    <div className="fade-in">
       {showMigration && <MigrationModal onDone={() => setShowMigration(false)} />}
+
+      {/* Banner de avance de semana (Híbrido) */}
+      {showAdvanceBanner && (
+        <div className="card advance-banner" style={{ border: '1px solid var(--color-primary)', background: 'rgba(var(--color-primary-rgb), 0.05)' }}>
+          <div className="panel-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
+            <div>
+              <h4 style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+                <IconRocket className="accent-primary" /> ¡Nueva semana detectada!
+              </h4>
+              <p className="tiny muted">Han pasado 7 días. ¿Quieres avanzar a la <strong>Semana {expectedWeek}</strong> para nuevos registros?</p>
+            </div>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              <button className="ghost-btn" style={{ fontSize: 'var(--text-xs)' }} onClick={() => setShowAdvanceBanner(false)}>Ahora no</button>
+              <button className="primary-btn" style={{ padding: '.4rem .8rem', fontSize: 'var(--text-xs)' }} onClick={handleAdvanceWeek}>
+                Avanzar a S{expectedWeek}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Widget de hoy */}
       {todayId ? (
         <div className="today-widget">
           <div>
@@ -103,35 +169,41 @@ export default function Dashboard() {
             <div className="today-widget-name">Día de descanso</div>
             <div className="today-widget-sub">Recupera bien para el próximo entreno</div>
           </div>
-          <span className="rest-day-tag">😴 Rest day</span>
+          <span className="rest-day-tag" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <IconMoon size={16} /> Rest day
+          </span>
         </div>
       )}
 
+      {/* KPIs */}
       <div className="kpis">
         <article className="card kpi">
-          <div className="kpi-label">Sesiones completadas</div>
+          <div className="kpi-label">Sesiones semana</div>
           <div className="kpi-value">{completedSessions}/{dayIds.length}</div>
           <div className="kpi-meta">Objetivo semanal</div>
         </article>
         <article className="card kpi">
-          <div className="kpi-label">Ejercicios marcados</div>
+          <div className="kpi-label">Ejercicios ✓</div>
           <div className="kpi-value">{doneExercises}</div>
           <div className="kpi-meta">De {totalExercises} totales</div>
         </article>
         <article className="card kpi">
-          <div className="kpi-label">Progreso semanal</div>
+          <div className="kpi-label">Progreso</div>
           <div className="kpi-value">{progress}%</div>
-          <div className="kpi-meta">Avance global</div>
+          <div className="kpi-meta">Avance global semana</div>
         </article>
         <article className="card kpi">
           <div className="kpi-label">Racha activa</div>
-          <div className="kpi-value">{streak > 0 ? '🔥 ' : ''}{streak}</div>
+          <div className="kpi-value" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            {streak > 0 && <IconFire className="accent-fire" />} {streak}
+          </div>
           <div className="kpi-meta">
             {streak >= 2 ? 'semanas consecutivas' : streak === 1 ? 'semana completada' : 'sin racha aún'}
           </div>
         </article>
       </div>
 
+      {/* Heatmap de actividad */}
       {heatmapWeeks.length > 1 && (
         <section className="card heatmap-card">
           <div className="panel-head">
@@ -167,61 +239,44 @@ export default function Dashboard() {
         </section>
       )}
 
-      <div className="layout">
-        <section className="card">
-          <div className="panel-head">
-            <div><h3>Módulos de la app</h3><p>Navegación estilo panel.</p></div>
-          </div>
-          <div className="panel-body day-grid">
-            {[
-              ['Insights IA', 'Análisis de progreso y recomendaciones.', '/insights'],
-              ['Agenda semanal', 'Vista operativa para revisar la semana completa.', '/agenda'],
-              ['Estadísticas', 'Resumen consolidado de avance y adherencia.', '/stats'],
-              ['Mis Rutinas', 'Gestionar y personalizar rutinas de entrenamiento.', '/rutinas'],
-            ].map(([title, desc, path]) => (
-              <article key={path} className="day-card">
+      {/* Semana actual — días de la rutina */}
+      <section className="card">
+        <div className="panel-head">
+          <div><h3>Semana {weekNumber}</h3><p>{routineName}</p></div>
+        </div>
+        <div className="panel-body day-grid">
+          {dayIds.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-icon"><IconTarget size={48} /></span>
+              <p>No tienes rutina activa.<br />Configura una en <strong>Mis Rutinas</strong>.</p>
+              <button className="primary-btn" onClick={() => navigate('/rutinas')}>Ir a Rutinas</button>
+            </div>
+          ) : dayIds.map(day => {
+            const s = sessions.find(s => s.weekNumber === weekNumber && s.dayId === day)
+            const total = s ? s.exercises.length : (routineDays[day]?.exercises.length ?? 0)
+            const done = s ? s.exercises.filter(e => e.done).length : 0
+            const pct = total ? Math.round(done / total * 100) : 0
+            const isToday = day === todayId
+            return (
+              <article key={day} className={`day-card ${isToday ? 'day-card-today' : ''}`}>
                 <header>
                   <div>
-                    <h4>{title}</h4>
-                    <div className="tiny muted">{desc}</div>
+                    <h4>
+                      {isToday && <span className="day-today-dot" />}
+                      {capitalize(day)} · {(routineDays[day] as { label?: string })?.label ?? day}
+                    </h4>
+                    <div className="tiny muted">{done}/{total} ejercicios · {s?.complete ? '✓ cerrada' : 'abierta'}</div>
                   </div>
-                  <button className="primary-btn" style={{ padding: '.55rem .9rem' }} onClick={() => navigate(path)}>
-                    Abrir
+                  <button className="ghost-btn" style={{ padding: '.45rem .8rem' }} onClick={() => navigate(`/entrenamiento/${day}`)}>
+                    Entrar
                   </button>
                 </header>
+                <div className="progress"><span style={{ width: `${pct}%` }} /></div>
               </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="card">
-          <div className="panel-head">
-            <div><h3>Semana {weekNumber}</h3><p>{routineName}</p></div>
-          </div>
-          <div className="panel-body day-grid">
-            {dayIds.map(day => {
-              const s = sessions.find(s => s.weekNumber === weekNumber && s.dayId === day)
-              const total = s ? s.exercises.length : (routineDays[day]?.exercises.length ?? 0)
-              const done = s ? s.exercises.filter(e => e.done).length : 0
-              const pct = total ? Math.round(done / total * 100) : 0
-              return (
-                <article key={day} className="day-card">
-                  <header>
-                    <div>
-                      <h4>{capitalize(day)} · {(routineDays[day] as { label?: string })?.label ?? day}</h4>
-                      <div className="tiny muted">{done}/{total} ejercicios · {s?.complete ? 'cerrada' : 'abierta'}</div>
-                    </div>
-                    <button className="ghost-btn" style={{ padding: '.45rem .8rem' }} onClick={() => navigate(`/entrenamiento/${day}`)}>
-                      Entrar
-                    </button>
-                  </header>
-                  <div className="progress"><span style={{ width: `${pct}%` }} /></div>
-                </article>
-              )
-            })}
-          </div>
-        </section>
-      </div>
-    </>
+            )
+          })}
+        </div>
+      </section>
+    </div>
   )
 }

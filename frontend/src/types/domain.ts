@@ -110,6 +110,7 @@ export interface User {
   theme: string
   accentTheme?: string
   activeRoutineId?: string | null
+  routineStartDate?: string | null
   currentWeek: number
   settings?: UserSettings | null
 }

@@ -76,11 +76,19 @@ python3 -m http.server 8080
 
 **Plugins** (`backend/src/plugins/`): `prismaPlugin` añade `fastify.prisma`; `authPlugin` añade `fastify.authenticate` (JWT verify) y decora `request.user`. El middleware de auth (`backend/src/middleware/auth.ts`) es el helper que usan las rutas protegidas para llamar a `fastify.authenticate`.
 
-**Validación**: Las rutas usan Zod para validar el body de las requests antes de llegar a Prisma.
+**`request.user`**: `{ sub: string, email: string }` — `sub` es el `userId` (string UUID).
 
-**Auth**: JWT de corta vida (access token) + refresh token persistido en DB (`RefreshToken`). El cliente guarda el refresh token en `localStorage` bajo `gym-refresh-token`.
+**Validación**: Las rutas usan Zod para validar el body de las requests antes de llegar a Prisma. Errores de validación se extraen de `body.error.issues[0].message`.
 
-**Variables de entorno requeridas**: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `PORT` (default 3001).
+**Auth**: Access token caduca en **15 min**; refresh token caduca en **30 días** y se persiste en DB (`RefreshToken`). El cliente guarda el refresh token en `localStorage` bajo `gym-refresh-token`.
+
+**Rate limiting**: Global 200 req/min. Rutas sensibles tienen límites propios (registro: 5/hora, login: 10/15 min). Mensajes de error en español.
+
+**Seguridad**: Helmet aplica security headers globalmente. CORS habilitado en dev (`origin: true`), deshabilitado en producción (`origin: false`). Body limit 5 MB (para uploads de imágenes base64).
+
+**Health check**: `GET /health` — sin auth, devuelve `{ status: 'ok' }`.
+
+**Variables de entorno requeridas**: `DATABASE_URL`, `JWT_SECRET`. Opcionales: `JWT_REFRESH_SECRET`, `PORT` (default 3001), `NODE_ENV`. El backend valida las vars obligatorias al arrancar y sale con error si faltan.
 
 **IA (vision + texto)**: Las rutas `/ai/*` leen `UserSettings.aiProvider` / `aiKey` / `aiModel` por usuario para hacer proxy a Google Gemini, OpenAI o Anthropic. Soportan los tres proveedores; el modelo por defecto varía según proveedor (e.g. `gemini-2.5-flash-lite`, `gpt-4o-mini`, `claude-haiku-4-5-20251001`). El endpoint de foto requiere `imageBase64` + `mimeType`.
 
@@ -118,13 +126,21 @@ python3 -m http.server 8080
 
 ## Esquema de datos (Prisma / PostgreSQL)
 
-Modelos principales: `User`, `UserSettings` (1:1), `Routine`, `WorkoutSession`, `NutritionDay`, `GlobalNote`, `SavedFood`, `RefreshToken`.
+Modelos principales: `User`, `UserSettings` (1:1), `Routine`, `WorkoutSession`, `NutritionDay`, `GlobalNote`, `SavedFood`, `RefreshToken`, `BodyWeight`, `AIChat`, `Challenge`, `CheckIn`.
 
 `UserSettings` contiene: preferencias de nutrición (`dailyKcal`, `dailyProtein`, etc.), tema (`accentTheme`), objetivo (`goal`), y credenciales de IA (`aiProvider`, `aiKey`, `aiModel`). La `aiKey` se almacena en texto plano en DB pero **nunca se devuelve al cliente** — solo se expone `aiKeySet: boolean`.
 
-Clave de unicidad en sesiones: `(userId, weekNumber, dayId)` — igual que la clave `week-${week}-${dayId}` del HTML legacy.
+Campos JSON por modelo:
+- `WorkoutSession.exercises` — array de ejercicios realizados; `WorkoutSession.cardio` — datos de cardio de la sesión
+- `NutritionDay.meals` — array de comidas del día
+- `AIChat.messages` — historial de mensajes del chat
+- `Routine.days` — mismo formato que `PRESET_ROUTINES` del legacy: `{ name, reps, rest, sets }[]`
 
-`Routine.days` es `Json` — mismo formato que `PRESET_ROUTINES` del legacy: array de días con sus ejercicios `{ name, reps, rest, sets }`.
+Claves de unicidad compuestas:
+- Sesiones: `(userId, weekNumber, dayId)` — igual que `week-${week}-${dayId}` del legacy
+- Nutrición y peso corporal: `(userId, date)`
+
+Todos los registros relacionados se eliminan en cascada al borrar el `User`.
 
 ---
 

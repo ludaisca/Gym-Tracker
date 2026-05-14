@@ -5,6 +5,9 @@ export const sessionsApi = {
   list: (week: number) =>
     api.get<WorkoutSession[]>('/sessions', { params: { week } }).then((r) => r.data),
 
+  listAll: () =>
+    api.get<WorkoutSession[]>('/sessions').then((r) => r.data),
+
   upsert: (
     weekNumber: number,
     dayId: string,

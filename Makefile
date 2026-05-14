@@ -6,7 +6,7 @@ dev:
 	@[ -f .env ] || (echo "❌ Falta .env — copia .env.example y ajusta los valores" && exit 1)
 	@trap 'kill 0' SIGINT; \
 	(cd frontend && npm run dev) & \
-	(cd backend && export $$(grep -v '^#' ../.env | xargs) && npm run dev) & \
+	(cd backend && set -a && . ../.env && set +a && npm run dev) & \
 	wait
 
 # Levanta solo la BD (para desarrollo local)
@@ -15,7 +15,7 @@ db-up:
 
 # Migraciones Prisma (desarrollo)
 db-migrate:
-	cd backend && export $$(grep -v '^#' ../.env | xargs) && npx prisma migrate dev
+	cd backend && set -a && . ../.env && set +a && npx prisma migrate dev
 
 # Prisma Studio
 db-studio:

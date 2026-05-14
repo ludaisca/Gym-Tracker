@@ -37,6 +37,7 @@ export function getBestKgForWeek(
     if (!session) continue
     const dayExercises = routineDays[day]?.exercises ?? []
     session.exercises.forEach((ex, idx) => {
+      if (!ex.done) return
       if (dayExercises[idx]?.name === exName) {
         ex.sets.forEach((s) => {
           const kg = parseFloat(s.kg)
@@ -130,5 +131,31 @@ export function getDayIds(
 export function getTodayDayId(dayIds: string[]): string | null {
   const slots = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
   const today = slots[new Date().getDay()]
-  return dayIds.includes(today) ? today : null
+  if (dayIds.includes(today)) return today
+  // For custom routines with non-day-name IDs: no automatic match
+  return null
+}
+
+export function getLastRecordedSets(
+  sessions: WorkoutSession[],
+  dayIds: string[],
+  exName: string,
+  currentWeek: number,
+  routineDays: Record<string, { exercises: ExerciseDef[] }>
+): { kg: string; reps: string }[] | null {
+  for (let w = currentWeek - 1; w >= 1; w--) {
+    for (const day of dayIds) {
+      const session = sessions.find((s) => s.weekNumber === w && s.dayId === day)
+      if (!session) continue
+      const dayExercises = routineDays[day]?.exercises ?? []
+      const exIdx = dayExercises.findIndex((e) => e.name === exName)
+      if (exIdx !== -1) {
+        const exState = session.exercises[exIdx]
+        if (exState && exState.sets && exState.sets.some((s) => parseFloat(s.kg) > 0 || parseFloat(s.reps) > 0)) {
+          return exState.sets.map((s) => ({ kg: s.kg, reps: s.reps }))
+        }
+      }
+    }
+  }
+  return null
 }
