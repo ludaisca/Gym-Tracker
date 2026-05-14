@@ -221,15 +221,35 @@ cd backend  && npx tsc
 
 ## 🔐 Variables de entorno
 
+### Obligatorias
+
+| Variable | Descripción | Cómo generarla |
+|---|---|---|
+| `DB_NAME` | Nombre de la base de datos | ej. `gymtracker` |
+| `DB_USER` | Usuario de PostgreSQL | ej. `gymuser` |
+| `DB_PASSWORD` | Contraseña de PostgreSQL | `openssl rand -base64 32` |
+| `JWT_SECRET` | Secret para access tokens | `openssl rand -base64 32` |
+| `JWT_REFRESH_SECRET` | Secret para refresh tokens | `openssl rand -base64 32` (diferente) |
+| `APP_URL` | URL pública del frontend | `https://tuapp.com` |
+
+### Solo desarrollo local
+
 | Variable | Descripción | Ejemplo |
 |---|---|---|
-| `APP_PORT` | Puerto del host donde nginx expone la app | `3000` |
-| `DB_NAME` | Nombre de la base de datos | `gymtracker` |
-| `DB_USER` | Usuario de PostgreSQL | `gymuser` |
-| `DB_PASSWORD` | Contraseña de PostgreSQL | *(openssl rand -base64 32)* |
-| `DATABASE_URL` | URL de conexión para Prisma en modo dev | `postgresql://user:pass@localhost:5432/db` |
-| `JWT_SECRET` | Secret para firmar access tokens | *(openssl rand -base64 32)* |
-| `JWT_REFRESH_SECRET` | Secret para firmar refresh tokens | *(diferente al anterior)* |
+| `DATABASE_URL` | URL directa para Prisma (`make dev`) | `postgresql://gymuser:pass@localhost:5432/gymtracker` |
+
+### SMTP — correos de verificación y reset (opcionales)
+
+Sin `SMTP_HOST` la app funciona igual, pero los correos se imprimen en los logs del contenedor.
+
+| Variable | Descripción | Ejemplo |
+|---|---|---|
+| `SMTP_HOST` | Servidor SMTP | `mail.tudominio.com` |
+| `SMTP_PORT` | Puerto SMTP | `465` (SSL) o `587` (STARTTLS) |
+| `SMTP_SECURE` | SSL directo en puerto | `true` para 465, `false` para 587 |
+| `SMTP_USER` | Email remitente | `no-reply@tudominio.com` |
+| `SMTP_PASS` | Contraseña / App Password SMTP | — |
+| `SMTP_FROM` | Nombre visible en el correo | `Gym Tracker <no-reply@tudominio.com>` |
 
 ---
 

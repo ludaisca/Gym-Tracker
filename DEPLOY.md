@@ -59,15 +59,32 @@ Hemos optimizado la arquitectura de contenedores para que sea **100% nativa y ro
    - **Docker Compose Location**: `/docker-compose.yml`
 
 4. **Configurar las Variables de Entorno**
-   Antes de desplegar, ve a la pestaña **Environment Variables** en Coolify y define los siguientes valores obligatorios (Coolify los inyectará automáticamente en los contenedores):
-   
+   Coolify detecta automáticamente las variables del `docker-compose.yml` y las muestra vacías en la pestaña **Environment Variables**. Solo tienes que rellenar los valores:
+
+   **Obligatorias** (la app no arranca sin estas):
+
+   | Variable | Descripción | Cómo generarla |
+   | :--- | :--- | :--- |
+   | `DB_USER` | Usuario de PostgreSQL | ej. `gymuser` |
+   | `DB_PASSWORD` | Contraseña de la BD | `openssl rand -base64 32` |
+   | `DB_NAME` | Nombre de la base de datos | ej. `gymtracker` |
+   | `JWT_SECRET` | Secret para tokens de acceso | `openssl rand -base64 32` |
+   | `JWT_REFRESH_SECRET` | Secret para refresh tokens | `openssl rand -base64 32` (diferente al anterior) |
+   | `APP_URL` | URL pública del frontend | `https://tuapp.com` |
+
+   **SMTP — correos de verificación y reset de contraseña** (opcionales, deja vacíos para desactivar):
+
    | Variable | Descripción | Ejemplo |
    | :--- | :--- | :--- |
-   | `DB_USER` | Usuario de PostgreSQL | `postgres` |
-   | `DB_PASSWORD` | Contraseña segura para la BD | `SuperSecretDBPass123!` |
-   | `DB_NAME` | Nombre de la base de datos | `gym_tracker_prod` |
-   | `JWT_SECRET` | Clave secreta para tokens de acceso | `CualquierCadenaLargaYSeguraAqui` |
-   | `JWT_REFRESH_SECRET` | Clave secreta para refrescar tokens | `OtraCadenaLargaYSeguraDiferente` |
+   | `SMTP_HOST` | Servidor SMTP | `mail.tudominio.com` |
+   | `SMTP_PORT` | Puerto SMTP | `465` (SSL) o `587` (STARTTLS) |
+   | `SMTP_SECURE` | SSL directo en el puerto | `true` para 465, `false` para 587 |
+   | `SMTP_USER` | Usuario / email remitente | `no-reply@tudominio.com` |
+   | `SMTP_PASS` | Contraseña SMTP | tu contraseña o App Password |
+   | `SMTP_FROM` | Nombre visible en correos | `Gym Tracker <no-reply@tudominio.com>` |
+
+   > [!NOTE]
+   > Sin `SMTP_HOST` la app funciona con normalidad, pero los correos de verificación y reset de contraseña se escriben en los **logs** del contenedor en lugar de enviarse. Útil para empezar sin configurar SMTP.
 
 5. **Exposición y Dominios**
    - En la configuración de servicios de Coolify, verás listados los servicios `nginx`, `api` y `db`.
