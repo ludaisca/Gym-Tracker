@@ -2,9 +2,17 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
+import compress from '@fastify/compress'
+import { ZodError } from 'zod'
+
+import { createBullBoard } from '@bull-board/api'
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
+import { FastifyAdapter } from '@bull-board/fastify'
 
 import prismaPlugin from './plugins/prisma'
+import redisPlugin from './plugins/redis'
 import authPlugin from './plugins/auth'
+import { initWorker, closeWorker, backgroundQueue } from './services/queue'
 
 import authRoutes from './routes/auth'
 import usersRoutes from './routes/users'
@@ -19,19 +27,25 @@ import challengesRoutes from './routes/challenges'
 export async function buildApp() {
   const fastify = Fastify({
     logger: process.env.NODE_ENV !== 'test',
-    bodyLimit: 5 * 1024 * 1024,  // 5 MB — para fotos base64 de check-in
+    trustProxy: true,            // Esencial para Nginx o Traefik (Coolify)
+    bodyLimit: 15 * 1024 * 1024,  // 15 MB — coherente con nginx
   })
 
   await fastify.register(cors, {
-    origin: process.env.NODE_ENV === 'production' ? false : true,
+    origin: process.env.NODE_ENV === 'production'
+      ? ['capacitor://localhost', 'https://localhost']
+      : ['http://localhost:5173', 'http://localhost:3000'],
     credentials: true,
   })
 
   await fastify.register(helmet)
+  await fastify.register(compress, { global: true })
+  await fastify.register(redisPlugin)
   await fastify.register(rateLimit, {
     global: true,
     max: 200,
     timeWindow: '1 minute',
+    redis: fastify.redis ? fastify.redis : undefined,
     errorResponseBuilder: () => ({ error: 'Demasiadas peticiones. Intenta en un momento.' }),
   })
 
@@ -47,6 +61,61 @@ export async function buildApp() {
   await fastify.register(aiRoutes,          { prefix: '/ai' })
   await fastify.register(migrateRoutes,     { prefix: '/migrate' })
   await fastify.register(challengesRoutes,  { prefix: '/' })
+
+  initWorker() // Arrancar worker de colas
+
+  // ── Global Error Handler ──────────────────────────────────────────────────
+  fastify.setErrorHandler((err: unknown, request, reply) => {
+    // Cast a un tipo manejable
+    const error = err as any
+
+    // Errores de validación de Zod
+    if (error instanceof ZodError) {
+      return reply.status(400).send({ error: error.issues[0].message })
+    }
+    // Errores de validación propios de Fastify
+    if (error.validation) {
+      return reply.status(400).send({ error: error.message })
+    }
+    // Errores de Prisma
+    if (error.code === 'P2002') {
+      return reply.status(409).send({ error: 'El registro ya existe (conflicto de datos).' })
+    }
+    if (error.code === 'P2025') {
+      return reply.status(404).send({ error: 'Registro no encontrado.' })
+    }
+    // Errores HTTP estándar (lanzados con statusCode)
+    if (error.statusCode) {
+      return reply.status(error.statusCode).send({ error: error.message })
+    }
+
+    request.log.error(error)
+    return reply.status(500).send({ error: 'Error interno del servidor.' })
+  })
+
+  // ── Bull Board (Dashboard visual de colas) ────────────────────────────────
+  // Protegido con ADMIN_TOKEN en producción. Sin token definido, el panel queda bloqueado.
+  fastify.addHook('onRequest', async (request, reply) => {
+    if (!request.url.startsWith('/admin/queues')) return
+    const adminToken = process.env.ADMIN_TOKEN
+    if (!adminToken) {
+      return reply.status(403).send({ error: 'Panel de administración no configurado.' })
+    }
+    if (request.headers.authorization !== `Bearer ${adminToken}`) {
+      return reply.status(401).send({ error: 'Unauthorized' })
+    }
+  })
+  const serverAdapter = new FastifyAdapter()
+  createBullBoard({
+    queues: [new BullMQAdapter(backgroundQueue)],
+    serverAdapter,
+  })
+  serverAdapter.setBasePath('/api/admin/queues')
+  await fastify.register(serverAdapter.registerPlugin(), { prefix: '/admin/queues' })
+
+  fastify.addHook('onClose', async () => {
+    await closeWorker()
+  })
 
   fastify.get('/health', async () => ({ status: 'ok' }))
 

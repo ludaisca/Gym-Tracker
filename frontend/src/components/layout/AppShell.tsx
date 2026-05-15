@@ -1,14 +1,19 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useOutlet } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
+import PageTransition from '../ui/PageTransition'
 import { useUIStore, useAuthStore, useOfflineStore } from '../../store'
 import { getRoutineDays } from '../../lib/fitness'
 import { useRoutines } from '../../hooks/useRoutines'
 import Toaster from '../ui/Toaster'
+import ReloadPrompt from '../ui/ReloadPrompt'
 import {
   ModuleIcon,
   IconMenu, IconClose, IconSun, IconMoon,
   IconStarFilled, IconStar, IconCheck, IconArrowUp, IconArrowDown,
 } from '../ui/Icons'
+
+import { hapticImpact } from '../../lib/haptics'
 
 function capitalize(s: string) { return s.charAt(0).toUpperCase() + s.slice(1) }
 
@@ -209,6 +214,7 @@ export default function AppShell() {
   const pendingSync = useOfflineStore(s => s.queue.length)
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const outlet = useOutlet()
 
   const [menuOpen, setMenuOpen]     = useState(false)
   const [editingNav, setEditingNav] = useState(false)
@@ -252,8 +258,14 @@ export default function AppShell() {
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/')
 
   function handleModuleNav(path: string) {
+    hapticImpact('light')
     navigate(path)
     setMenuOpen(false)
+  }
+
+  function handleNav(path: string) {
+    hapticImpact('light')
+    navigate(path)
   }
 
   function saveFavorites(next: string[]) {
@@ -287,7 +299,7 @@ export default function AppShell() {
           <div className="nav-group-title">Principal</div>
           <nav className="nav">
             {navMain.map(item => (
-              <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => navigate(item.path)}>
+              <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => handleNav(item.path)}>
                 <span className="nav-icon"><ModuleIcon path={item.path} size={16} /></span>
                 <span>{item.label}</span>
                 {'badge' in item && item.badge && <small className="nav-badge">{item.badge}</small>}
@@ -301,7 +313,7 @@ export default function AppShell() {
             <div className="nav-group-title">Entrenamiento</div>
             <nav className="nav">
               {navWorkout.map(item => (
-                <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => navigate(item.path)}>
+                <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => handleNav(item.path)}>
                   <span>{item.label}</span><small>{item.short}</small>
                 </button>
               ))}
@@ -313,7 +325,7 @@ export default function AppShell() {
           <div className="nav-group-title">Control</div>
           <nav className="nav">
             {navControl.map(item => (
-              <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => navigate(item.path)}>
+              <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => handleNav(item.path)}>
                 <span className="nav-icon"><ModuleIcon path={item.path} size={16} /></span>
                 <span>{item.label}</span>
               </button>
@@ -353,7 +365,13 @@ export default function AppShell() {
           </div>
         </header>
 
-        <div className="content"><Outlet /></div>
+        <div className="content" style={{ display: 'flex', flexDirection: 'column', flex: 1, position: 'relative' }}>
+          <AnimatePresence mode="wait">
+            <PageTransition key={pathname} pathKey={pathname}>
+              {outlet}
+            </PageTransition>
+          </AnimatePresence>
+        </div>
 
         {/* ── Bottom nav ── */}
         <nav className="bottom-nav" aria-label="Navegación principal">
@@ -361,7 +379,7 @@ export default function AppShell() {
             <button
               key={mod.path}
               className={`bottom-nav-btn ${isActive(mod.path) ? 'active' : ''}`}
-              onClick={() => navigate(mod.path)}
+              onClick={() => handleNav(mod.path)}
             >
               <ModuleIcon path={mod.path} size={22} strokeWidth={1.6} />
               <span>{mod.label.split(' ')[0]}</span>
@@ -434,6 +452,7 @@ export default function AppShell() {
         />
       )}
 
+      <ReloadPrompt />
       <Toaster />
     </div>
   )

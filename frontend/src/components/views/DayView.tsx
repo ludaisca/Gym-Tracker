@@ -11,6 +11,9 @@ import ExerciseCard from '../workout/ExerciseCard'
 import RestTimerModal from '../modals/RestTimerModal'
 import type { CardioData } from '../../types/domain'
 
+import { hapticImpact, hapticSuccess } from '../../lib/haptics'
+import { Check } from 'lucide-react'
+
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
@@ -60,6 +63,7 @@ export default function DayView() {
   const pct = total > 0 ? Math.round(done / total * 100) : 0
 
   function toggleDone(exIdx: number) {
+    hapticImpact('light')
     const updated = session!.exercises.map((ex, i) =>
       i === exIdx ? { ...ex, done: !ex.done } : ex
     )
@@ -94,6 +98,7 @@ export default function DayView() {
   }
 
   function toggleComplete() {
+    if (!session!.complete) hapticSuccess()
     update({ complete: !session!.complete })
   }
 
@@ -102,6 +107,7 @@ export default function DayView() {
   const exercises = dayDef.exercises ?? []
 
   return (
+    <div className="fade-in">
     <section className="card">
       <div className="panel-head">
         <div>
@@ -110,7 +116,7 @@ export default function DayView() {
         </div>
         <div style={{ flexShrink: 0, minWidth: 120, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '.3rem' }}>
           {saving === 'pending' && <span className="save-indicator pending">Guardando…</span>}
-          {saving === 'saved'   && <span className="save-indicator saved">Guardado ✓</span>}
+          {saving === 'saved'   && <span className="save-indicator saved" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>Guardado <Check size={12} /></span>}
           <div className="tiny muted">Progreso {done}/{total}</div>
           <div className="progress" style={{ width: 120 }}>
             <span style={{ width: `${pct}%` }} />
@@ -184,10 +190,11 @@ export default function DayView() {
                 onChange={(e) => update({ notes: e.target.value })}
               />
               <button
-                className={`complete-btn${session.complete ? ' is-complete' : ''}`}
+                className={`complete-btn${session.complete ? ' is-complete' : ''}${saving === 'pending' ? ' is-saving' : ''}`}
                 onClick={toggleComplete}
+                disabled={saving === 'pending'}
               >
-                {session.complete ? 'Sesión completada ✓' : 'Marcar sesión como completada'}
+                {saving === 'pending' ? <div className="spinner-small" /> : session.complete ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>Sesión completada <Check size={18} /></span> : 'Marcar sesión como completada'}
               </button>
             </div>
           </section>
@@ -202,5 +209,6 @@ export default function DayView() {
         />
       )}
     </section>
+    </div>
   )
 }

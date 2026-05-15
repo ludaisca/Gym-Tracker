@@ -12,20 +12,29 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Singleton para evitar múltiples refreshes en paralelo ante varios 401 simultáneos
+let refreshPromise: Promise<string> | null = null
+
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config
 
-    if (error.response?.status === 401 && !original._retry) {
+    if (error.response?.status === 401 && !original._retry && !original.url?.includes('/auth/')) {
       original._retry = true
       try {
-        const refreshToken = localStorage.getItem('gym-refresh-token')
-        if (!refreshToken) throw new Error('no refresh token')
-        const { data } = await axios.post('/api/auth/refresh', { refreshToken })
-        useAuthStore.getState().setAuth(useAuthStore.getState().user!, data.accessToken)
-        localStorage.setItem('gym-refresh-token', data.refreshToken ?? refreshToken)
-        original.headers.Authorization = `Bearer ${data.accessToken}`
+        if (!refreshPromise) {
+          refreshPromise = (async () => {
+            const refreshToken = localStorage.getItem('gym-refresh-token')
+            if (!refreshToken) throw new Error('no refresh token')
+            const { data } = await api.post('/auth/refresh', { refreshToken })
+            useAuthStore.getState().setAuth(useAuthStore.getState().user!, data.accessToken)
+            localStorage.setItem('gym-refresh-token', data.refreshToken ?? refreshToken)
+            return data.accessToken as string
+          })().finally(() => { refreshPromise = null })
+        }
+        const newToken = await refreshPromise
+        original.headers.Authorization = `Bearer ${newToken}`
         return api(original)
       } catch {
         useAuthStore.getState().clearAuth()

@@ -9,7 +9,7 @@ import { sessionsApi } from '../../api/sessions'
 import { getRoutineDays, getDayIds, calcStreak, getTodayDayId } from '../../lib/fitness'
 import { PRESET_ROUTINES } from '../../lib/presetRoutines'
 import MigrationModal from '../modals/MigrationModal'
-import { IconFire, IconRocket, IconMoon, IconTarget } from '../ui/Icons'
+import { IconFire, IconRocket, IconMoon, IconTarget, IconCheck } from '../ui/Icons'
 import type { WorkoutSession } from '../../types/domain'
 
 function capitalize(s: string) {
@@ -119,7 +119,18 @@ export default function Dashboard() {
   }, [allSessions, dayIds, weekNumber])
 
   if (loading && sessions.length === 0) {
-    return <div className="content"><div className="spinner" /></div>
+    return (
+      <div className="content fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <div className="skeleton" style={{ height: '120px', borderRadius: 'var(--radius-xl)' }} />
+        <div className="kpis">
+          <div className="skeleton" style={{ height: '90px', borderRadius: 'var(--radius-xl)' }} />
+          <div className="skeleton" style={{ height: '90px', borderRadius: 'var(--radius-xl)' }} />
+          <div className="skeleton" style={{ height: '90px', borderRadius: 'var(--radius-xl)' }} />
+          <div className="skeleton" style={{ height: '90px', borderRadius: 'var(--radius-xl)' }} />
+        </div>
+        <div className="skeleton" style={{ height: '250px', borderRadius: 'var(--radius-xl)' }} />
+      </div>
+    )
   }
 
   return (
@@ -154,8 +165,8 @@ export default function Dashboard() {
             <div className="today-widget-name">
               {capitalize(todayId)} · {(routineDays[todayId] as { label?: string })?.label ?? todayId}
             </div>
-            <div className="today-widget-sub">
-              {sessions.find(s => s.dayId === todayId)?.exercises.filter(e => e.done).length ?? 0}/{routineDays[todayId]?.exercises.length ?? 0} ejercicios · {sessions.find(s => s.dayId === todayId)?.complete ? '✓ completado' : 'pendiente'}
+            <div className="today-widget-sub" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {sessions.find(s => s.dayId === todayId)?.exercises.filter(e => e.done).length ?? 0}/{routineDays[todayId]?.exercises.length ?? 0} ejercicios · {sessions.find(s => s.dayId === todayId)?.complete ? <><IconCheck size={14} /> completado</> : 'pendiente'}
             </div>
           </div>
           <button className="primary-btn" onClick={() => navigate(`/entrenamiento/${todayId}`)}>
@@ -183,7 +194,7 @@ export default function Dashboard() {
           <div className="kpi-meta">Objetivo semanal</div>
         </article>
         <article className="card kpi">
-          <div className="kpi-label">Ejercicios ✓</div>
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>Ejercicios <IconCheck size={12} /></div>
           <div className="kpi-value">{doneExercises}</div>
           <div className="kpi-meta">De {totalExercises} totales</div>
         </article>
@@ -265,7 +276,7 @@ export default function Dashboard() {
                       {isToday && <span className="day-today-dot" />}
                       {capitalize(day)} · {(routineDays[day] as { label?: string })?.label ?? day}
                     </h4>
-                    <div className="tiny muted">{done}/{total} ejercicios · {s?.complete ? '✓ cerrada' : 'abierta'}</div>
+                    <div className="tiny muted" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>{done}/{total} ejercicios · {s?.complete ? <><IconCheck size={12} /> cerrada</> : 'abierta'}</div>
                   </div>
                   <button className="ghost-btn" style={{ padding: '.45rem .8rem' }} onClick={() => navigate(`/entrenamiento/${day}`)}>
                     Entrar

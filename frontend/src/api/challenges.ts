@@ -19,6 +19,9 @@ export interface Challenge {
   code: string
   type: 'checkin' | 'versus' | 'both'
   status: 'pending' | 'active' | 'finished'
+  durationDays: number
+  creatorId: string
+  opponentId: string | null
   startDate: string | null
   endDate: string | null
   creator: ChallengeUser
@@ -62,4 +65,7 @@ export const challengesApi = {
 
   versus: (id: string) =>
     api.get<VersusData>(`/challenges/${id}/versus`).then(r => r.data),
+
+  delete: (id: string) =>
+    api.delete(`/challenges/${id}`).then(r => r.data),
 }

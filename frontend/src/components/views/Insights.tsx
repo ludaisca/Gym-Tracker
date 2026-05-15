@@ -4,15 +4,19 @@ import { useSessions } from '../../hooks/useSessions'
 import { useRoutines } from '../../hooks/useRoutines'
 import { getDayIds, calcStreak, calcWeekVolume } from '../../lib/fitness'
 import { aiApi, type ChatMessage } from '../../api/ai'
-import { IconFire } from '../ui/Icons'
+import { IconFire, IconCheck } from '../ui/Icons'
 
 function renderLine(line: string): React.ReactNode {
   const parts = line.split(/\*\*(.*?)\*\*/g)
   return parts.map((p, i) => i % 2 === 1 ? <strong key={i}>{p}</strong> : p)
 }
 
+function stripHtml(text: string): string {
+  return text.replace(/<[^>]*>/g, '')
+}
+
 function renderContent(content: string) {
-  return content.split('\n').map((line, i) => {
+  return stripHtml(content).split('\n').map((line, i) => {
     if (!line.trim()) return <div key={i} style={{ height: '0.4em' }} />
     if (/^#+\s/.test(line)) {
       return <div key={i} style={{ fontWeight: 700, marginTop: '0.75rem', marginBottom: '0.2rem', color: 'var(--color-accent)' }}>{renderLine(line.replace(/^#+\s/, ''))}</div>
@@ -44,6 +48,12 @@ export default function Insights() {
   const streak = useMemo(() => calcStreak(sessions, dayIds, weekNumber), [sessions, dayIds, weekNumber])
   const weekVol = useMemo(() => Math.round(calcWeekVolume(sessions, weekNumber, dayIds)), [sessions, weekNumber, dayIds])
   const completedDays = dayIds.filter(d => sessions.find(s => s.weekNumber === weekNumber && s.dayId === d)?.complete).length
+  const doneExercises = useMemo(
+    () => sessions
+      .filter(s => s.weekNumber === weekNumber)
+      .reduce((acc, s) => acc + s.exercises.filter(e => e.done).length, 0),
+    [sessions, weekNumber]
+  )
 
   useEffect(() => {
     if (!hasAI) { setHistoryLoaded(true); return }
@@ -95,7 +105,7 @@ export default function Insights() {
   }
 
   return (
-    <>
+    <div className="fade-in">
       <div className="kpis">
         <article className="card kpi">
           <div className="kpi-label">Racha activa</div>
@@ -113,6 +123,13 @@ export default function Insights() {
           <div className="kpi-label">Sesiones cerradas</div>
           <div className="kpi-value">{completedDays}/{dayIds.length}</div>
           <div className="kpi-meta">esta semana</div>
+        </article>
+        <article className="card kpi">
+          <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <IconCheck size={12} /> Ejercicios
+          </div>
+          <div className="kpi-value">{doneExercises}</div>
+          <div className="kpi-meta">completados esta semana</div>
         </article>
       </div>
 
@@ -174,9 +191,9 @@ export default function Insights() {
         {hasAI && (
           <div style={{ display: 'flex', gap: 'var(--space-2)', padding: '0 var(--space-5) var(--space-3)', overflowX: 'auto', maxWidth: '100%', boxSizing: 'border-box' }}>
             {[
-              '📊 Analizar mi carga semanal',
-              '💪 Sugerir ajustes de técnica',
-              '🥗 Tips para mis macros y agua',
+              'Analizar mi carga semanal',
+              'Sugerir ajustes de técnica',
+              'Tips para mis macros y agua',
             ].map(prompt => (
               <button
                 key={prompt}
@@ -216,6 +233,6 @@ export default function Insights() {
           </div>
         )}
       </section>
-    </>
+    </div>
   )
 }

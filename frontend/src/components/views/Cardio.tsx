@@ -72,6 +72,11 @@ export default function Cardio() {
     sessions.reduce((a, s) => a + parseDurationMin(s.cardio?.duration), 0),
     [sessions])
 
+  // Total minutos histórico acumulado
+  const totalMinHistoric = useMemo(() =>
+    allSessions.reduce((a, s) => a + parseDurationMin(s.cardio?.duration), 0),
+    [allSessions])
+
   return (
     <div className="fade-in">
       {/* KPIs */}
@@ -90,6 +95,11 @@ export default function Cardio() {
           <div className="kpi-label">Semanas con cardio</div>
           <div className="kpi-value">{weeklyChart.length}</div>
           <div className="kpi-meta">de {weekNumber} total</div>
+        </article>
+        <article className="card kpi">
+          <div className="kpi-label">Total acumulado</div>
+          <div className="kpi-value">{totalMinHistoric}</div>
+          <div className="kpi-meta">minutos históricos</div>
         </article>
       </div>
 

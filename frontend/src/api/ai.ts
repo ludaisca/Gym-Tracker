@@ -35,8 +35,32 @@ export const aiApi = {
     return data.messages
   },
   sendMessage: async (content: string): Promise<ChatMessage> => {
-    const { data } = await api.post<{ message: ChatMessage }>('/ai/chat', { message: content })
-    return data.message
+    const { data } = await api.post<{ message?: ChatMessage, status?: string }>('/ai/chat', { message: content })
+    if (data.status === 'processing') {
+      // Poll for the new message
+      return new Promise((resolve, reject) => {
+        let attempts = 0
+        const interval = setInterval(async () => {
+          attempts++
+          if (attempts > 30) {
+            clearInterval(interval)
+            reject(new Error('Timeout esperando a la IA'))
+            return
+          }
+          try {
+            const msgs = await aiApi.getChat()
+            const lastMsg = msgs[msgs.length - 1]
+            if (lastMsg && lastMsg.role === 'assistant') {
+              clearInterval(interval)
+              resolve(lastMsg)
+            }
+          } catch (e) {
+            // ignore and retry
+          }
+        }, 2000)
+      })
+    }
+    return data.message!
   },
   clearChat: async (): Promise<void> => {
     await api.delete('/ai/chat')

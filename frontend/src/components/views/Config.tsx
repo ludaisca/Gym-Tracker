@@ -6,11 +6,21 @@ import { api } from '../../api/client'
 import type { UserSettings } from '../../types/domain'
 import {
   IconSun, IconMoon, IconDownload, IconUpload, IconTrash, IconLogout,
-  IconUser, IconMail, IconLock, IconCamera,
+  IconUser, IconMail, IconLock, IconCamera, IconCheck, IconAI
 } from '../ui/Icons'
 import { toast } from '../../lib/toast'
+import { Dumbbell, Zap, Flame, Target, Trophy, Brain, Waves, Rocket } from 'lucide-react'
 
-const AVATARS = ['💪', '🏋️', '🔥', '⚡', '🎯', '🦁', '🐉', '🏆', '🧠', '🌊', '🦅', '🚀']
+const AVATARS = [
+  { id: '1', icon: Dumbbell },
+  { id: '2', icon: Zap },
+  { id: '3', icon: Flame },
+  { id: '4', icon: Target },
+  { id: '5', icon: Trophy },
+  { id: '6', icon: Brain },
+  { id: '7', icon: Waves },
+  { id: '8', icon: Rocket }
+]
 
 const ACCENT_THEMES = [
   { id: 'teal',   label: 'Teal',   lightColor: '#01696f', darkColor: '#4f98a3' },
@@ -233,16 +243,18 @@ export default function Config() {
   const isDataUrl = (s?: string) => s?.startsWith('data:image')
 
   return (
-    <>
+    <div className="fade-in">
       {/* ── Perfil header ─────────────────────────────────────── */}
       <section className="card">
         <div className="profile-header-main">
           <button className="profile-avatar-large" onClick={() => setShowAvatarPicker(v => !v)} aria-label="Cambiar avatar">
             {isDataUrl(user?.avatar) ? (
               <img src={user?.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-            ) : (
-              user?.avatar ?? '💪'
-            )}
+            ) : (() => {
+              const matched = AVATARS.find(a => a.id === user?.avatar)
+              const IconToRender = matched ? matched.icon : Dumbbell
+              return <IconToRender size={32} strokeWidth={2} />
+            })()}
           </button>
           <div className="profile-info">
             <h3>{user?.name ?? 'Usuario'}</h3>
@@ -268,15 +280,25 @@ export default function Config() {
                <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handlePhotoUpload} />
              </div>
             <div className="avatar-picker">
-              {AVATARS.map(a => (
-                <button
-                  key={a}
-                  className={`avatar-option${user?.avatar === a ? ' selected' : ''}`}
-                  onClick={() => handleAvatarSelect(a)}
-                >
-                  {a}
-                </button>
-              ))}
+              {AVATARS.map(a => {
+                const Icon = a.icon
+                const isSelected = user?.avatar === a.id
+                return (
+                  <button
+                    key={a.id}
+                    className={`avatar-option${isSelected ? ' selected' : ''}`}
+                    onClick={() => handleAvatarSelect(a.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: isSelected ? 'var(--color-primary-highlight)' : 'transparent',
+                      borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-divider)',
+                      color: isSelected ? 'var(--color-primary)' : 'var(--color-text-muted)'
+                    }}
+                  >
+                    <Icon size={24} strokeWidth={isSelected ? 2.5 : 1.5} />
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
@@ -354,7 +376,7 @@ export default function Config() {
             onClick={handleAccountUpdate}
             disabled={updatingAccount || !accountName || !accountEmail}
           >
-            {updatingAccount ? 'Guardando…' : accountUpdated ? '¡Actualizado! ✓' : 'Guardar cambios de cuenta'}
+            {updatingAccount ? 'Guardando…' : accountUpdated ? <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><IconCheck size={16} /> ¡Actualizado!</span> : 'Guardar cambios de cuenta'}
           </button>
         </div>
       </section>
@@ -390,7 +412,7 @@ export default function Config() {
                 >
                   <div className="theme-card-dot-large" style={{ background: swatchColor(t) }} />
                   <span className="theme-swatch-label">{t.label}</span>
-                  {accentTheme === t.id && <div className="theme-card-check">✓</div>}
+                  {accentTheme === t.id && <div className="theme-card-check"><IconCheck size={14} /></div>}
                 </button>
               ))}
             </div>
@@ -440,7 +462,7 @@ export default function Config() {
         </div>
         <div className="panel-body" style={{ paddingTop: 0 }}>
           <button className="primary-btn" onClick={saveSettings} disabled={saving}>
-            {saving ? 'Guardando…' : saved ? 'Guardado ✓' : 'Guardar preferencias'}
+            {saving ? 'Guardando…' : saved ? <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><IconCheck size={16} /> Guardado</span> : 'Guardar preferencias'}
           </button>
         </div>
       </section>
@@ -459,7 +481,7 @@ export default function Config() {
               <span>Google Gemini API Key</span>
               {user?.settings?.aiKeySet && (
                 <span style={{ color: 'var(--color-success)', fontSize: 'var(--text-xs)', fontWeight: 700 }}>
-                  ● Conectado
+                  <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor', marginRight: '6px' }}></span> Conectado
                 </span>
               )}
             </label>
@@ -477,7 +499,7 @@ export default function Config() {
         </div>
         <div className="panel-body" style={{ paddingTop: 0, display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
           <button className="primary-btn" onClick={saveAiSettings} disabled={savingAi}>
-            {savingAi ? 'Guardando…' : savedAi ? 'Guardado ✓' : 'Guardar API Key'}
+            {savingAi ? 'Guardando…' : savedAi ? <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><IconCheck size={16} /> Guardado</span> : 'Guardar API Key'}
           </button>
           {user?.settings?.aiKeySet && (
             <button
@@ -534,7 +556,7 @@ export default function Config() {
         <div className="panel-body">
           {queue.length === 0 ? (
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-              ✓ Todas las acciones están sincronizadas con el servidor.
+              <IconCheck size={14} style={{ color: 'var(--color-success)', flexShrink: 0, marginTop: '2px' }} /> Todas las acciones están sincronizadas con el servidor.
             </div>
           ) : (
             <div>
@@ -598,6 +620,6 @@ export default function Config() {
           </div>
         </div>
       </section>
-    </>
+    </div>
   )
 }

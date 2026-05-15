@@ -45,7 +45,8 @@ export const useAuthStore = create<AuthState>()(
       updateUser: (updates) => set((s) => ({ user: s.user ? { ...s.user, ...updates } : null })),
       clearAuth: () => set({ user: null, accessToken: null, isAuthenticated: false }),
     }),
-    { name: 'gym-auth', partialize: (s) => ({ user: s.user, accessToken: s.accessToken, isAuthenticated: s.isAuthenticated }) }
+    // accessToken no se persiste: se renueva en memoria tras cada recarga usando el refresh token
+    { name: 'gym-auth', partialize: (s) => ({ user: s.user, isAuthenticated: s.isAuthenticated }) }
   )
 )
 
@@ -71,12 +72,17 @@ export const useUIStore = create<UIState>()(
   )
 )
 
-export const useOfflineStore = create<OfflineState>()((set) => ({
-  queue: [],
-  enqueue: (action) =>
-    set((s) => ({
-      queue: [...s.queue, { ...action, id: crypto.randomUUID(), timestamp: Date.now() }],
-    })),
-  dequeue: (id) => set((s) => ({ queue: s.queue.filter((a) => a.id !== id) })),
-  clearQueue: () => set({ queue: [] }),
-}))
+export const useOfflineStore = create<OfflineState>()(
+  persist(
+    (set) => ({
+      queue: [],
+      enqueue: (action) =>
+        set((s) => ({
+          queue: [...s.queue, { ...action, id: crypto.randomUUID(), timestamp: Date.now() }],
+        })),
+      dequeue: (id) => set((s) => ({ queue: s.queue.filter((a) => a.id !== id) })),
+      clearQueue: () => set({ queue: [] }),
+    }),
+    { name: 'gym-offline-queue' }
+  )
+)

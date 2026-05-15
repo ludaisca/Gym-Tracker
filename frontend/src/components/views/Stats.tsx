@@ -14,6 +14,8 @@ import type { WorkoutSession } from '../../types/domain'
 type Sessions = WorkoutSession[]
 
 // ── Icons ────────────────────────────────────────────────────────────────────
+import { IconCheck } from '../ui/Icons'
+
 function IconTarget({ className }: { className?: string }) {
   return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
 }
@@ -414,7 +416,9 @@ export default function Stats() {
                         <h4>{capitalize(day)} · {dayLabel}</h4>
                         <div className="tiny muted">{s ? s.exercises.filter(e => e.done).length : 0} ejercicios marcados</div>
                       </div>
-                      <span className="pill">{s?.complete ? '✓ done' : 'open'}</span>
+                      <span className="pill" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {s?.complete ? <><IconCheck size={10} strokeWidth={3} /> done</> : 'open'}
+                      </span>
                     </header>
                   </article>
                 )

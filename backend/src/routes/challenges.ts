@@ -1,9 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import crypto from 'crypto'
-import { createWriteStream, mkdirSync } from 'fs'
+import { mkdirSync } from 'fs'
 import { join } from 'path'
-import { pipeline } from 'stream/promises'
 
 // ── helpers ──────────────────────────────────────────────────────────────
 function randomCode(len = 6) {
@@ -27,7 +26,7 @@ const joinSchema = z.object({ code: z.string().length(6) })
 
 const checkinSchema = z.object({
   challengeId: z.string(),
-  photoBase64: z.string().min(100),   // base64 data URL
+  photoBase64: z.string().min(100),
   lat: z.number().optional(),
   lng: z.number().optional(),
 })
@@ -37,17 +36,22 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
   const { prisma } = fastify
   fastify.addHook('onRequest', fastify.authenticate)
 
-  // Upload dir (create if needed)
   const uploadDir = join(process.cwd(), 'uploads', 'checkins')
   try { mkdirSync(uploadDir, { recursive: true }) } catch {}
 
-  // ── GET /challenges — list my active challenges ───────────────────────
+  // ── GET /challenges — list my challenges (active + pending + finished) ─
   fastify.get('/challenges', async (req) => {
     const userId = (req.user as { sub: string }).sub
+
+    // Auto-finish expired active challenges
+    await prisma.challenge.updateMany({
+      where: { status: 'active', endDate: { lt: new Date() } },
+      data: { status: 'finished' },
+    })
+
     const challenges = await prisma.challenge.findMany({
       where: {
         OR: [{ creatorId: userId }, { opponentId: userId }],
-        status: { not: 'finished' },
       },
       include: {
         creator:  { select: { id: true, name: true, avatar: true } },
@@ -83,6 +87,7 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
         code,
         creatorId: userId,
         type: body.type,
+        durationDays: body.durationDays,
         status: 'pending',
       },
     })
@@ -102,7 +107,7 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
 
     const now = new Date()
     const end = new Date(now)
-    end.setDate(end.getDate() + 30)
+    end.setDate(end.getDate() + (challenge.durationDays ?? 30))
 
     const updated = await prisma.challenge.update({
       where: { id: challenge.id },
@@ -120,7 +125,7 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.code(200).send(updated)
   })
 
-  // ── GET /challenges/:id — detail + versus stats ───────────────────────
+  // ── GET /challenges/:id — detail + check-in stats ────────────────────
   fastify.get<{ Params: { id: string } }>('/challenges/:id', async (req, reply) => {
     const userId = (req.user as { sub: string }).sub
     const challenge = await prisma.challenge.findUnique({
@@ -138,7 +143,6 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
     if (challenge.creatorId !== userId && challenge.opponentId !== userId)
       return reply.code(403).send({ error: 'No tienes acceso a este reto.' })
 
-    // Compute check-in stats per user
     const days = (dt: Date) => dateStr(dt)
     const creatorDays  = new Set(challenge.checkIns.filter(c => c.userId === challenge.creatorId).map(c => days(c.serverTime)))
     const opponentDays = challenge.opponentId
@@ -154,6 +158,21 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // ── DELETE /challenges/:id — cancel/abandon a challenge ──────────────
+  fastify.delete<{ Params: { id: string } }>('/challenges/:id', async (req, reply) => {
+    const userId = (req.user as { sub: string }).sub
+    const challenge = await prisma.challenge.findFirst({
+      where: {
+        id: req.params.id,
+        creatorId: userId,
+        status: { in: ['pending', 'active'] },
+      },
+    })
+    if (!challenge) return reply.code(404).send({ error: 'Reto no encontrado o ya finalizado.' })
+    await prisma.challenge.delete({ where: { id: req.params.id } })
+    return reply.code(204).send()
+  })
+
   // ── POST /challenges/:id/checkin — register gym visit ────────────────
   fastify.post<{ Params: { id: string } }>('/challenges/:id/checkin', async (req, reply) => {
     const userId = (req.user as { sub: string }).sub
@@ -164,6 +183,13 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
     if (challenge.status !== 'active') return reply.code(400).send({ error: 'El reto no está activo.' })
     if (challenge.creatorId !== userId && challenge.opponentId !== userId)
       return reply.code(403).send({ error: 'No participas en este reto.' })
+
+    // Validate magic bytes (JPEG or PNG only)
+    const b64 = photoBase64.replace(/^data:image\/\w+;base64,/, '')
+    const buf = Buffer.from(b64, 'base64')
+    const isJpeg = buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF
+    const isPng  = buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E
+    if (!isJpeg && !isPng) return reply.code(400).send({ error: 'Solo se aceptan imágenes JPEG o PNG.' })
 
     // One check-in per calendar day per challenge
     const todayStr = dateStr(new Date())
@@ -179,15 +205,11 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
     })
     if (existing) return reply.code(409).send({ error: 'Ya registraste tu asistencia hoy.' })
 
-    // Save photo (strip data URL prefix, write to disk)
-    const b64 = photoBase64.replace(/^data:image\/\w+;base64,/, '')
     const fileName = `${userId}-${Date.now()}.jpg`
     const filePath = join(uploadDir, fileName)
-    const buf = Buffer.from(b64, 'base64')
     const { writeFile } = await import('fs/promises')
     await writeFile(filePath, buf)
 
-    // Generate tamper-evident hash: userId + challengeId + serverTime + secret
     const serverTime = new Date()
     const hashInput = `${userId}:${challenge.id}:${serverTime.toISOString()}:${process.env.JWT_SECRET ?? 'secret'}`
     const hash = crypto.createHash('sha256').update(hashInput).digest('hex').slice(0, 12)
@@ -215,7 +237,6 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
     if (challenge.creatorId !== userId && challenge.opponentId !== userId)
       return reply.code(403).send({ error: 'No tienes acceso a este reto.' })
 
-    // Fetch sessions for both users during challenge period
     const dateFilter = challenge.startDate
       ? { gte: challenge.startDate, lte: challenge.endDate ?? new Date() }
       : undefined
@@ -231,12 +252,11 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
         : Promise.resolve([]),
     ])
 
-    // Build per-exercise best marks (max weight × reps = 1RM approx via Epley)
     type ExerciseMark = { name: string; weight: number; reps: number; oneRM: number }
     function extractBests(sessions: typeof creatorSessions): Record<string, ExerciseMark> {
       const bests: Record<string, ExerciseMark> = {}
       for (const session of sessions) {
-        let exercises: Array<{ name?: string; sets?: Array<{ weight?: number; reps?: number }> }> = []
+        let exercises: Array<{ name?: string; done?: boolean; sets?: Array<{ kg?: string; weight?: number; reps?: string | number }> }> = []
         if (typeof session.exercises === 'string') {
           try { exercises = JSON.parse(session.exercises) } catch {}
         } else if (Array.isArray(session.exercises)) {
@@ -246,9 +266,10 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
         for (const ex of exercises) {
           if (!ex?.name || !Array.isArray(ex.sets)) continue
           for (const set of ex.sets) {
-            const w = set?.weight ?? 0
-            const r = set?.reps ?? 0
-            if (w <= 0 || r <= 0) continue
+            // Frontend stores { kg: string, reps: string }; support legacy { weight: number, reps: number }
+            const w = parseFloat((set.kg as string | undefined) ?? String(set.weight ?? 0))
+            const r = parseFloat(String(set.reps ?? 0))
+            if (!(w > 0) || !(r > 0)) continue
             const oneRM = Math.round(w * (1 + r / 30))
             const key = ex.name.toLowerCase()
             if (!bests[key] || oneRM > bests[key].oneRM) {
@@ -263,7 +284,6 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
     const creatorBests  = extractBests(creatorSessions)
     const opponentBests = extractBests(opponentSessions)
 
-    // Intersect on common exercises
     const commonKeys = [...new Set([...Object.keys(creatorBests), ...Object.keys(opponentBests)])]
     const versus = commonKeys.map(key => ({
       exercise: creatorBests[key]?.name ?? opponentBests[key]?.name ?? key,

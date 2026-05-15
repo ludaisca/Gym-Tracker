@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
-import { randomBytes } from 'crypto'
+import { randomBytes, randomUUID } from 'crypto'
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/email'
 
 const registerSchema = z.object({
@@ -120,7 +120,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(403).send({ error: 'Debes verificar tu correo antes de iniciar sesión', code: 'EMAIL_NOT_VERIFIED' })
     }
 
-    const accessToken = fastify.jwt.sign({ sub: user.id, email: user.email })
+    const accessToken = fastify.jwt.sign({ sub: user.id, email: user.email, jti: randomUUID() })
     const refreshToken = randomBytes(40).toString('hex')
     await prisma.refreshToken.create({
       data: {
@@ -212,13 +212,23 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       },
     })
 
-    const accessToken = fastify.jwt.sign({ sub: stored.userId, email: stored.user.email })
+    const accessToken = fastify.jwt.sign({ sub: stored.userId, email: stored.user.email, jti: randomUUID() })
     return { accessToken, refreshToken: newRefreshToken }
   })
 
   // ── Logout ─────────────────────────────────────────────────────────────
-  fastify.post('/logout', async (request, reply) => {
+  fastify.post('/logout', { onRequest: fastify.authenticate }, async (request, reply) => {
     const { refreshToken } = request.body as { refreshToken?: string }
+
+    // Invalidar el access token actual en Redis (blacklist por jti)
+    const payload = request.user as { jti?: string; exp?: number }
+    if (payload.jti && fastify.redis) {
+      const ttl = payload.exp
+        ? Math.max(1, payload.exp - Math.floor(Date.now() / 1000))
+        : 900 // 15 min como máximo
+      await fastify.redis.setex(`jwt:bl:${payload.jti}`, ttl, '1').catch(() => {})
+    }
+
     if (refreshToken) {
       await prisma.refreshToken.deleteMany({ where: { token: refreshToken } }).catch(() => {})
     }

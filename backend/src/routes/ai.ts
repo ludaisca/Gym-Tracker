@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { getRoutineDays, PRESET_ROUTINES } from '../lib/presetRoutines'
+import { decryptValue } from '../lib/crypto'
 
 const analyzeFoodSchema = z.object({
   imageBase64: z.string().min(1).max(2_000_000),
@@ -10,6 +11,8 @@ const analyzeFoodSchema = z.object({
 const chatSchema = z.object({
   message: z.string().min(1).max(4000),
 })
+
+const AI_TIMEOUT_MS = 30_000
 
 interface ChatMessage { role: 'user' | 'assistant'; content: string; ts: string }
 interface SetData { kg: string; reps: string }
@@ -160,6 +163,8 @@ const FOOD_PROMPT = `Analiza esta imagen de comida. Devuelve ÚNICAMENTE un JSON
 }
 Estimá porciones visualmente. Valores numéricos enteros o 1 decimal. Responde SOLO el JSON.`
 
+const ERR_AI_UNAVAILABLE = 'El servicio de IA no está disponible. Intenta más tarde.'
+
 const aiRoutes: FastifyPluginAsync = async (fastify) => {
   const { prisma } = fastify
 
@@ -179,7 +184,8 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: 'Configura tu proveedor de IA y API key en Configuración' })
     }
 
-    const { aiProvider, aiKey, aiModel } = settings
+    const { aiProvider, aiKey: encKey, aiModel } = settings
+    const aiKey = decryptValue(encKey) ?? encKey ?? ''
 
     try {
       let raw = ''
@@ -194,10 +200,14 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
             body: JSON.stringify({
               contents: [{ parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: FOOD_PROMPT }] }]
             }),
+            signal: AbortSignal.timeout(AI_TIMEOUT_MS),
           }
         )
         const data = await res.json() as { candidates?: { content?: { parts?: { text: string }[] } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Gemini: ${data.error.message}` })
+        if (data.error) {
+          request.log.warn({ provider: 'google', err: data.error.message }, 'AI analyze-food error')
+          return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
+        }
         raw = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
       } else if (aiProvider === 'openai') {
         const model = aiModel ?? 'gpt-4o-mini'
@@ -212,9 +222,13 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
               { type: 'text', text: FOOD_PROMPT },
             ]}],
           }),
+          signal: AbortSignal.timeout(AI_TIMEOUT_MS),
         })
         const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de OpenAI: ${data.error.message}` })
+        if (data.error) {
+          request.log.warn({ provider: 'openai', err: data.error.message }, 'AI analyze-food error')
+          return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
+        }
         raw = data.choices?.[0]?.message?.content ?? ''
       } else if (aiProvider === 'anthropic') {
         const model = aiModel ?? 'claude-haiku-4-5-20251001'
@@ -229,9 +243,13 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
               { type: 'text', text: FOOD_PROMPT },
             ]}],
           }),
+          signal: AbortSignal.timeout(AI_TIMEOUT_MS),
         })
         const data = await res.json() as { content?: { text: string }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Anthropic: ${data.error.message}` })
+        if (data.error) {
+          request.log.warn({ provider: 'anthropic', err: data.error.message }, 'AI analyze-food error')
+          return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
+        }
         raw = data.content?.[0]?.text ?? ''
       } else {
         return reply.status(400).send({ error: `Proveedor desconocido: ${aiProvider}` })
@@ -243,8 +261,9 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       } catch {
         return reply.status(502).send({ error: 'La IA no devolvió JSON válido. Intenta de nuevo.' })
       }
-    } catch {
-      return reply.status(502).send({ error: 'Error al contactar la API de IA.' })
+    } catch (err) {
+      request.log.warn({ err }, 'AI analyze-food fetch error')
+      return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
     }
   })
 
@@ -262,7 +281,8 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: 'Configura tu proveedor de IA y API key en Configuración' })
     }
 
-    const { aiProvider, aiKey, aiModel } = settings
+    const { aiProvider, aiKey: encKey, aiModel } = settings
+    const aiKey = decryptValue(encKey) ?? encKey ?? ''
     const routineDays = getRoutineDays(user.activeRoutineId, customRoutines)
     const dayIds = Object.keys(routineDays)
 
@@ -290,37 +310,53 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
         const model = aiModel ?? 'gemini-2.5-flash-lite'
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${aiKey}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
+          {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+            signal: AbortSignal.timeout(AI_TIMEOUT_MS),
+          }
         )
         const data = await res.json() as { candidates?: { content?: { parts?: { text: string }[] } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Gemini: ${data.error.message}` })
+        if (data.error) {
+          request.log.warn({ provider: 'google', err: data.error.message }, 'AI analyze error')
+          return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
+        }
         result = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
       } else if (aiProvider === 'openai') {
         const res = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
           body: JSON.stringify({ model: aiModel ?? 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }] }),
+          signal: AbortSignal.timeout(AI_TIMEOUT_MS),
         })
         const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de OpenAI: ${data.error.message}` })
+        if (data.error) {
+          request.log.warn({ provider: 'openai', err: data.error.message }, 'AI analyze error')
+          return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
+        }
         result = data.choices?.[0]?.message?.content ?? ''
       } else if (aiProvider === 'anthropic') {
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': aiKey, 'anthropic-version': '2023-06-01' },
           body: JSON.stringify({ model: aiModel ?? 'claude-haiku-4-5-20251001', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }),
+          signal: AbortSignal.timeout(AI_TIMEOUT_MS),
         })
         const data = await res.json() as { content?: { text: string }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Anthropic: ${data.error.message}` })
+        if (data.error) {
+          request.log.warn({ provider: 'anthropic', err: data.error.message }, 'AI analyze error')
+          return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
+        }
         result = data.content?.[0]?.text ?? ''
       } else {
         return reply.status(400).send({ error: `Proveedor desconocido: ${aiProvider}` })
       }
 
-      if (!result) return reply.status(502).send({ error: 'La IA no devolvió texto. Verifica tu API key.' })
+      if (!result) return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
       return { result }
-    } catch {
-      return reply.status(502).send({ error: 'Error al contactar la API de IA. Verifica tu conexión y API key.' })
+    } catch (err) {
+      request.log.warn({ err }, 'AI analyze fetch error')
+      return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
     }
   })
 
@@ -338,7 +374,7 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   fastify.post('/chat', {
-    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
   }, async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const parsed = chatSchema.safeParse(request.body)
@@ -356,7 +392,8 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: 'Configura tu proveedor de IA y API key en Configuración' })
     }
 
-    const { aiProvider, aiKey, aiModel } = settings
+    const { aiProvider, aiKey: encKey, aiModel } = settings
+    const aiKey = decryptValue(encKey) ?? encKey ?? ''
     const routineDays = getRoutineDays(user.activeRoutineId, customRoutines)
     const dayIds = Object.keys(routineDays)
     const routineName = user.activeRoutineId
@@ -386,10 +423,17 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
         ]
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${aiKey}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ system_instruction: { parts: [{ text: systemPrompt }] }, contents }) }
+          {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ system_instruction: { parts: [{ text: systemPrompt }] }, contents }),
+            signal: AbortSignal.timeout(AI_TIMEOUT_MS),
+          }
         )
         const data = await res.json() as { candidates?: { content?: { parts?: { text: string }[] } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Gemini: ${data.error.message}` })
+        if (data.error) {
+          request.log.warn({ provider: 'google', err: data.error.message }, 'AI chat error')
+          return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
+        }
         reply_text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
       } else if (aiProvider === 'openai') {
         const messages = [
@@ -401,9 +445,13 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
           body: JSON.stringify({ model: aiModel ?? 'gpt-4o-mini', messages }),
+          signal: AbortSignal.timeout(AI_TIMEOUT_MS),
         })
         const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de OpenAI: ${data.error.message}` })
+        if (data.error) {
+          request.log.warn({ provider: 'openai', err: data.error.message }, 'AI chat error')
+          return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
+        }
         reply_text = data.choices?.[0]?.message?.content ?? ''
       } else if (aiProvider === 'anthropic') {
         const messages = [
@@ -414,15 +462,19 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-key': aiKey, 'anthropic-version': '2023-06-01' },
           body: JSON.stringify({ model: aiModel ?? 'claude-haiku-4-5-20251001', max_tokens: 1024, system: systemPrompt, messages }),
+          signal: AbortSignal.timeout(AI_TIMEOUT_MS),
         })
         const data = await res.json() as { content?: { text: string }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Anthropic: ${data.error.message}` })
+        if (data.error) {
+          request.log.warn({ provider: 'anthropic', err: data.error.message }, 'AI chat error')
+          return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
+        }
         reply_text = data.content?.[0]?.text ?? ''
       } else {
         return reply.status(400).send({ error: `Proveedor desconocido: ${aiProvider}` })
       }
 
-      if (!reply_text) return reply.status(502).send({ error: 'La IA no devolvió respuesta.' })
+      if (!reply_text) return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
 
       const assistantMsg: ChatMessage = { role: 'assistant', content: reply_text, ts: new Date().toISOString() }
       const updatedMessages = [...history, newUserMsg, assistantMsg]
@@ -434,8 +486,9 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       })
 
       return { message: assistantMsg }
-    } catch {
-      return reply.status(502).send({ error: 'Error al contactar la API de IA.' })
+    } catch (err) {
+      request.log.warn({ err }, 'AI chat fetch error')
+      return reply.status(502).send({ error: ERR_AI_UNAVAILABLE })
     }
   })
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { notesApi } from '../../api/notes'
 import type { GlobalNote } from '../../types/domain'
+import { Check, Trash2 } from 'lucide-react'
 
 export default function Notes() {
   const [notes, setNotes] = useState<GlobalNote[]>([])
@@ -39,7 +40,7 @@ export default function Notes() {
   if (loading) return <div className="content"><div className="spinner" /></div>
 
   return (
-    <div className="layout">
+    <div className="fade-in layout">
       <section className="card">
         <div className="panel-head">
           <div><h3>Checklist global</h3><p>Tareas repetibles para no perder consistencia.</p></div>
@@ -49,7 +50,7 @@ export default function Notes() {
             <article key={note.id} className="task-card">
               <div className="exercise-top">
                 <button className="task-check" onClick={() => toggleNote(note)}>
-                  {note.done ? '✓' : ''}
+                  {note.done ? <Check size={16} /> : ''}
                 </button>
                 <div style={{ flex: 1 }}>
                   <div className={`exercise-name${note.done ? ' muted' : ''}`} style={note.done ? { textDecoration: 'line-through' } : {}}>
@@ -60,11 +61,11 @@ export default function Notes() {
                 {pendingDelete === note.id ? (
                   <button
                     className="icon-btn"
-                    style={{ width: 28, height: 28, color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                    style={{ width: 28, height: 28, color: 'var(--color-warning)', borderColor: 'var(--color-warning)' }}
                     onClick={() => deleteNote(note.id)}
                     title="Confirmar eliminación"
                   >
-                    ✓
+                    <Check size={14} />
                   </button>
                 ) : (
                   <button

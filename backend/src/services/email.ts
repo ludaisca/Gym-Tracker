@@ -27,7 +27,7 @@ const FROM = () => process.env.SMTP_FROM ?? 'Gym Tracker <no-reply@gymtracker.ap
 const APP_URL = () => (process.env.APP_URL ?? process.env.CLIENT_URL ?? 'http://localhost:5173').replace(/\/$/, '')
 
 // En desarrollo (SMTP_HOST vacío) imprime el correo en consola en lugar de enviarlo
-async function sendMail(options: nodemailer.SendMailOptions) {
+export async function sendMail(options: nodemailer.SendMailOptions) {
   if (!process.env.SMTP_HOST) {
     console.log('\n📧 [DEV EMAIL — no se envía, SMTP_HOST vacío]')
     console.log(`   To:      ${options.to}`)
@@ -116,12 +116,14 @@ function resetTemplate(link: string, name: string) {
   `)
 }
 
+import { backgroundQueue } from './queue'
+
 // ── Funciones públicas ─────────────────────────────────────────────────────
 
 export async function sendVerificationEmail(email: string, name: string, token: string) {
   const link = `${APP_URL()}/verificar-email?token=${token}`
-  await sendMail({
-    from: FROM(),
+  await backgroundQueue.add('send-verification-email', {
+    type: 'email',
     to: email,
     subject: 'Verifica tu cuenta en Gym Tracker',
     html: verificationTemplate(link, name),
@@ -130,8 +132,8 @@ export async function sendVerificationEmail(email: string, name: string, token: 
 
 export async function sendPasswordResetEmail(email: string, name: string, token: string) {
   const link = `${APP_URL()}/restablecer-contrasena?token=${token}`
-  await sendMail({
-    from: FROM(),
+  await backgroundQueue.add('send-reset-email', {
+    type: 'email',
     to: email,
     subject: 'Restablecer contraseña — Gym Tracker',
     html: resetTemplate(link, name),

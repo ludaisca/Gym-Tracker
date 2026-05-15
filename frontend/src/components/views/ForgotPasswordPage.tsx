@@ -1,76 +1,124 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { authApi } from '../../api/auth'
+import { Mail, Send, AlertCircle } from 'lucide-react'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
+import { hapticImpact } from '../../lib/haptics'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
-  const [error, setError] = useState('')
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    hapticImpact('light')
     setError('')
     setLoading(true)
     try {
       await authApi.forgotPassword(email)
       setSent(true)
-    } catch {
-      setError('Ocurrió un error. Intenta más tarde.')
+    } catch (err: unknown) {
+      hapticImpact('heavy')
+      setError((err as any)?.response?.data?.error ?? 'Error al procesar solicitud')
     } finally {
       setLoading(false)
     }
   }
 
-  if (sent) {
-    return (
-      <div className="auth-page fade-in">
-        <div className="auth-card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '3rem', marginBottom: 'var(--space-4)' }}>📬</div>
-          <h1 style={{ marginBottom: 'var(--space-2)' }}>Revisa tu correo</h1>
-          <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-6)', lineHeight: 1.6 }}>
-            Si existe una cuenta con ese correo, recibirás un enlace para restablecer tu contraseña. El enlace expira en 1 hora.
-          </p>
-          <Link to="/login" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
-            Volver al inicio de sesión
-          </Link>
-        </div>
-      </div>
-    )
+  const containerVariants: Variants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
+    exit: { opacity: 0, scale: 0.98, transition: { duration: 0.2 } }
+  }
+
+  const itemVariants: Variants = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } }
   }
 
   return (
-    <div className="auth-page fade-in">
-      <div className="auth-card">
-        <div style={{ marginBottom: 'var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div className="brand-mark">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M3 10v4"/><path d="M21 10v4"/><path d="M7 7v10"/><path d="M17 7v10"/><path d="M3 12h18"/>
-            </svg>
-          </div>
-          <div><h1 style={{ fontSize: 'var(--text-lg)', marginBottom: 0 }}>Gym Tracker</h1></div>
-        </div>
+    <div className="auth-page">
+      <div className="auth-bg-blob b1" />
+      <div className="auth-bg-blob b2" />
 
-        <h1>¿Olvidaste tu contraseña?</h1>
-        <p>Ingresa tu correo y te enviaremos un enlace para restablecerla.</p>
+      <AnimatePresence mode="wait">
+        <motion.div 
+          key={sent ? 'sent' : 'form'}
+          className="auth-card"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+        >
+          {sent ? (
+            <div style={{ textAlign: 'center' }}>
+              <motion.div variants={itemVariants} style={{ display: 'inline-flex', padding: '1rem', background: 'color-mix(in srgb, var(--color-primary) 15%, transparent)', borderRadius: '50%', color: 'var(--color-primary)', marginBottom: 'var(--space-4)' }}>
+                <Send size={48} strokeWidth={1.5} />
+              </motion.div>
+              
+              <motion.h1 variants={itemVariants}>Revisa tu correo</motion.h1>
+              
+              <motion.p variants={itemVariants} className="subtitle" style={{ lineHeight: 1.6 }}>
+                Si existe una cuenta con ese correo, recibirás un enlace para restablecer tu contraseña. El enlace expira en 1 hora.
+              </motion.p>
+              
+              <motion.div variants={itemVariants} style={{ marginTop: 'var(--space-6)' }}>
+                <Link to="/login" style={{ textDecoration: 'none' }}>
+                  <button className="ghost-btn" style={{ width: '100%', padding: '1rem' }} onClick={() => hapticImpact('light')}>
+                    Volver a Inicio de sesión
+                  </button>
+                </Link>
+              </motion.div>
+            </div>
+          ) : (
+            <>
+              <motion.div variants={itemVariants} style={{ marginBottom: 'var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', justifyContent: 'center' }}>
+                <div className="brand-mark" style={{ boxShadow: '0 8px 24px color-mix(in srgb, var(--color-primary) 40%, transparent)' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <path d="M3 10v4"/><path d="M21 10v4"/><path d="M7 7v10"/><path d="M17 7v10"/><path d="M3 12h18"/>
+                  </svg>
+                </div>
+              </motion.div>
 
-        {error && <div className="auth-error">{error}</div>}
+              <motion.div variants={itemVariants} style={{ textAlign: 'center' }}>
+                <h1>¿Olvidaste tu contraseña?</h1>
+                <p className="subtitle">Te enviaremos instrucciones para recuperarla</p>
+              </motion.div>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <div className="auth-field">
-            <label>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu@email.com" required autoComplete="email" />
-          </div>
-          <button type="submit" className="primary-btn auth-submit" disabled={loading}>
-            {loading ? 'Enviando…' : 'Enviar enlace'}
-          </button>
-        </form>
+              <motion.div variants={itemVariants}>
+                {error && <div className="auth-error"><AlertCircle size={16} /> {error}</div>}
+              </motion.div>
 
-        <p className="auth-link">
-          <Link to="/login" style={{ color: 'var(--color-text-muted)' }}>← Volver al inicio de sesión</Link>
-        </p>
-      </div>
+              <motion.form variants={itemVariants} className="auth-form" onSubmit={handleSubmit}>
+                <div className="auth-field">
+                  <label>Correo Electrónico</label>
+                  <div className="auth-input-wrap">
+                    <div className="auth-input-icon"><Mail size={18} /></div>
+                    <input 
+                      type="email" 
+                      value={email} 
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="tu@email.com" 
+                      required 
+                      autoComplete="email" 
+                    />
+                  </div>
+                </div>
+
+                <button type="submit" className="auth-submit" disabled={loading}>
+                  {loading ? 'Enviando...' : 'Enviar enlace'}
+                </button>
+              </motion.form>
+
+              <motion.p variants={itemVariants} className="auth-link">
+                <Link to="/login" onClick={() => hapticImpact('light')} style={{ color: 'var(--color-text-muted)', borderBottom: 'none' }}>← Volver al inicio de sesión</Link>
+              </motion.p>
+            </>
+          )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   )
 }

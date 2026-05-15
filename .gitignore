@@ -9,6 +9,7 @@ backend/dist/
 .env
 .env.*
 !.env.example
+!frontend/.env.android
 
 # Android / Capacitor (descartado)
 frontend/android/

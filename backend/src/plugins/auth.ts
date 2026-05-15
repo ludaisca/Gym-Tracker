@@ -11,6 +11,15 @@ const authPlugin: FastifyPluginAsync = fp(async (fastify) => {
   fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify()
+
+      // Verificar blacklist de tokens revocados (logout)
+      const payload = request.user as { jti?: string }
+      if (payload.jti && fastify.redis) {
+        const revoked = await fastify.redis.get(`jwt:bl:${payload.jti}`)
+        if (revoked) {
+          return reply.status(401).send({ error: 'Token revocado. Inicia sesión de nuevo.' })
+        }
+      }
     } catch {
       reply.status(401).send({ error: 'Unauthorized' })
     }

@@ -5,6 +5,7 @@ import { sessionsApi } from '../../api/sessions'
 import { useRoutines } from '../../hooks/useRoutines'
 import { getRoutineDays } from '../../lib/fitness'
 import type { WorkoutSession } from '../../types/domain'
+import { Check, FileText, Circle } from 'lucide-react'
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
@@ -24,6 +25,7 @@ export default function SessionHistory() {
   const [loading, setLoading] = useState(true)
   const [expandedWeek, setExpandedWeek] = useState<number | null>(null)
   const [expandedSession, setExpandedSession] = useState<string | null>(null)
+  const [visibleWeeks, setVisibleWeeks] = useState(15)
 
   useEffect(() => {
     sessionsApi.listAll()
@@ -72,6 +74,9 @@ export default function SessionHistory() {
     )
   }
 
+  const visibleByWeek = byWeek.slice(0, visibleWeeks)
+  const hasMoreWeeks = byWeek.length > visibleWeeks
+
   return (
     <div className="fade-in">
       <div className="panel-head" style={{ padding: '0 0 var(--space-6)' }}>
@@ -83,7 +88,7 @@ export default function SessionHistory() {
       </div>
 
       <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-        {byWeek.map(({ week, sessions: weekSessions, completed, total }) => {
+        {visibleByWeek.map(({ week, sessions: weekSessions, completed, total }) => {
           const isOpen = expandedWeek === week
           const isCurrent = week === (user?.currentWeek ?? 1)
           return (
@@ -147,8 +152,8 @@ export default function SessionHistory() {
                             </div>
                             <div className="tiny muted">
                               {doneCount}/{totalEx} ejercicios
-                              {session.complete && ' · ✓ Completada'}
-                              {session.notes && ' · 📝'}
+                              {session.complete && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginLeft: '4px' }}><Check size={12} /> Completada</span>}
+                              {session.notes && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginLeft: '4px' }}><FileText size={12} /></span>}
                             </div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -186,8 +191,8 @@ export default function SessionHistory() {
                                   opacity: ex.done ? 1 : 0.45,
                                 }}>
                                   <div>
-                                    <span style={{ fontWeight: ex.done ? 600 : 400, fontSize: 'var(--text-sm)' }}>
-                                      {ex.done ? '✓ ' : '○ '}{name}
+                                    <span style={{ fontWeight: ex.done ? 600 : 400, fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                      {ex.done ? <Check size={14} color="var(--color-success)" /> : <Circle size={14} color="var(--color-text-faint)" />}{name}
                                     </span>
                                   </div>
                                   <div className="tiny muted">
@@ -203,8 +208,8 @@ export default function SessionHistory() {
                               </div>
                             )}
                             {session.notes && (
-                              <div className="tiny muted" style={{ marginTop: 'var(--space-2)', fontStyle: 'italic' }}>
-                                📝 {session.notes}
+                              <div className="tiny muted" style={{ marginTop: 'var(--space-2)', fontStyle: 'italic', display: 'flex', gap: '4px' }}>
+                                <FileText size={14} style={{ flexShrink: 0, marginTop: '2px' }} /> <span>{session.notes}</span>
                               </div>
                             )}
                           </div>
@@ -218,6 +223,16 @@ export default function SessionHistory() {
           )
         })}
       </div>
+
+      {hasMoreWeeks && (
+        <button
+          className="ghost-btn"
+          style={{ width: '100%', marginTop: 'var(--space-4)', padding: 'var(--space-3)' }}
+          onClick={() => setVisibleWeeks(v => v + 15)}
+        >
+          Cargar {Math.min(byWeek.length - visibleWeeks, 15)} semanas anteriores
+        </button>
+      )}
     </div>
   )
 }

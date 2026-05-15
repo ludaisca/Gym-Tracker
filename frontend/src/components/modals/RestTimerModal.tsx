@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 
 interface Props {
   seconds: number
@@ -68,7 +69,7 @@ export default function RestTimerModal({ seconds, label, onClose }: Props) {
 
   const urgent = remaining <= 5 && remaining > 0
 
-  return (
+  return createPortal(
     <div className="timer-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="timer-modal">
         <div className="timer-label">Descanso</div>
@@ -96,6 +97,7 @@ export default function RestTimerModal({ seconds, label, onClose }: Props) {
           <button className="timer-btn skip" onClick={onClose}>Saltar</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

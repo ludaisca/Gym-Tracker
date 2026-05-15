@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { useAuthStore, useUIStore } from './store'
 import { useOfflineSync } from './hooks/useOfflineSync'
@@ -10,24 +10,46 @@ import ForgotPasswordPage from './components/views/ForgotPasswordPage'
 import ResetPasswordPage from './components/views/ResetPasswordPage'
 import AppShell from './components/layout/AppShell'
 
-import Dashboard from './components/views/Dashboard'
-import Agenda from './components/views/Agenda'
-import DayView from './components/views/DayView'
-import Stats from './components/views/Stats'
-import Insights from './components/views/Insights'
-import Routines from './components/views/Routines'
-import RoutineEditor from './components/views/RoutineEditor'
-import Cardio from './components/views/Cardio'
-import Notes from './components/views/Notes'
-import Nutrition from './components/views/Nutrition'
-import Config from './components/views/Config'
-import Duelos from './components/views/Duelos'
-import SessionHistory from './components/views/SessionHistory'
+// ── Vistas Protegidas (Carga Perezosa / Code Splitting) ───────────
+const Dashboard = lazy(() => import('./components/views/Dashboard'))
+const Agenda = lazy(() => import('./components/views/Agenda'))
+const DayView = lazy(() => import('./components/views/DayView'))
+const Stats = lazy(() => import('./components/views/Stats'))
+const Insights = lazy(() => import('./components/views/Insights'))
+const Routines = lazy(() => import('./components/views/Routines'))
+const RoutineEditor = lazy(() => import('./components/views/RoutineEditor'))
+const Cardio = lazy(() => import('./components/views/Cardio'))
+const Notes = lazy(() => import('./components/views/Notes'))
+const Nutrition = lazy(() => import('./components/views/Nutrition'))
+const Config = lazy(() => import('./components/views/Config'))
+const Duelos = lazy(() => import('./components/views/Duelos'))
+const SessionHistory = lazy(() => import('./components/views/SessionHistory'))
+
+// Componente simple de carga (Skeleton o Spinner)
+function SuspenseLoader() {
+  return (
+    <div className="content fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div className="skeleton" style={{ height: '120px', borderRadius: 'var(--radius-xl)' }} />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+        <div className="skeleton" style={{ height: '80px', borderRadius: 'var(--radius-xl)' }} />
+        <div className="skeleton" style={{ height: '80px', borderRadius: 'var(--radius-xl)' }} />
+        <div className="skeleton" style={{ height: '80px', borderRadius: 'var(--radius-xl)' }} />
+        <div className="skeleton" style={{ height: '80px', borderRadius: 'var(--radius-xl)' }} />
+      </div>
+      <div className="skeleton" style={{ height: '200px', borderRadius: 'var(--radius-xl)' }} />
+    </div>
+  )
+}
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
   if (!isAuthenticated) return <Navigate to="/login" replace />
   return <>{children}</>
+}
+
+// Wrapper para inyectar suspense en cada ruta perezosa
+function LazyRoute({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<SuspenseLoader />}>{children}</Suspense>
 }
 
 const router = createBrowserRouter([
@@ -41,20 +63,20 @@ const router = createBrowserRouter([
     element: <AuthGuard><AppShell /></AuthGuard>,
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
-      { path: 'dashboard',          element: <Dashboard /> },
-      { path: 'agenda',             element: <Agenda /> },
-      { path: 'nutricion',          element: <Nutrition /> },
-      { path: 'stats',              element: <Stats /> },
-      { path: 'insights',           element: <Insights /> },
-      { path: 'rutinas',            element: <Routines /> },
-      { path: 'rutinas/nueva',      element: <RoutineEditor /> },
-      { path: 'rutinas/:routineId', element: <RoutineEditor /> },
-      { path: 'cardio',             element: <Cardio /> },
-      { path: 'notas',              element: <Notes /> },
-      { path: 'config',             element: <Config /> },
-      { path: 'duelos',             element: <Duelos /> },
-      { path: 'entrenamiento/:dayId', element: <DayView /> },
-      { path: 'historial',            element: <SessionHistory /> },
+      { path: 'dashboard',          element: <LazyRoute><Dashboard /></LazyRoute> },
+      { path: 'agenda',             element: <LazyRoute><Agenda /></LazyRoute> },
+      { path: 'nutricion',          element: <LazyRoute><Nutrition /></LazyRoute> },
+      { path: 'stats',              element: <LazyRoute><Stats /></LazyRoute> },
+      { path: 'insights',           element: <LazyRoute><Insights /></LazyRoute> },
+      { path: 'rutinas',            element: <LazyRoute><Routines /></LazyRoute> },
+      { path: 'rutinas/nueva',      element: <LazyRoute><RoutineEditor /></LazyRoute> },
+      { path: 'rutinas/:routineId', element: <LazyRoute><RoutineEditor /></LazyRoute> },
+      { path: 'cardio',             element: <LazyRoute><Cardio /></LazyRoute> },
+      { path: 'notas',              element: <LazyRoute><Notes /></LazyRoute> },
+      { path: 'config',             element: <LazyRoute><Config /></LazyRoute> },
+      { path: 'duelos',             element: <LazyRoute><Duelos /></LazyRoute> },
+      { path: 'entrenamiento/:dayId', element: <LazyRoute><DayView /></LazyRoute> },
+      { path: 'historial',            element: <LazyRoute><SessionHistory /></LazyRoute> },
     ],
   },
 ])

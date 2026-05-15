@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuthStore } from '../../store'
 import { nutritionApi } from '../../api/nutrition'
 import { usersApi } from '../../api/users'
@@ -154,7 +155,7 @@ export default function Nutrition() {
   const isToday = date === todayISO()
 
   return (
-    <>
+    <div className="fade-in">
       <section className="card">
         <div className="panel-head" style={{ paddingBottom: 0 }}>
           <div>
@@ -389,7 +390,7 @@ export default function Nutrition() {
           onClose={() => setShowGoalModal(false)}
         />
       )}
-    </>
+    </div>
   )
 }
 
@@ -480,7 +481,7 @@ function FoodSheetModal({ mealType, savedFoods, hasAI, onSave, onClose }: FoodSh
   const confLevel = aiResult ? confidenceLevel(aiResult.confidence_overall) : null
   const confPct = aiResult ? Math.round(aiResult.confidence_overall * 100) : 0
 
-  return (
+  return createPortal(
     <div className="confirm-overlay open" style={{ zIndex: 200 }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
       <div className="confirm-sheet" style={{ maxWidth: 480 }}>
         <div className="confirm-sheet-handle" />
@@ -490,7 +491,8 @@ function FoodSheetModal({ mealType, savedFoods, hasAI, onSave, onClose }: FoodSh
           <div className="nut-saved-chips">
             {savedFoods.map(f => (
               <button key={f.id} className="nut-saved-chip" onClick={() => selectSaved(f)}>
-                ⭐ {f.name} <span style={{ opacity: .6 }}>{f.kcal}kcal</span>
+                <span style={{ display: 'inline-flex', marginRight: '4px', color: 'var(--color-primary)' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+                {f.name} <span style={{ opacity: .6, marginLeft: '4px' }}>{f.kcal}kcal</span>
               </button>
             ))}
           </div>
@@ -579,11 +581,14 @@ function FoodSheetModal({ mealType, savedFoods, hasAI, onSave, onClose }: FoodSh
         </div>
 
         <div className="confirm-sheet-actions">
-          <button className="primary-btn" onClick={submit} disabled={!name.trim() || !kcal}>Agregar</button>
+          <button className="primary-btn" onClick={submit} disabled={!name || !kcal}>
+            Añadir a {mealLabel}
+          </button>
           <button className="ghost-btn" onClick={onClose}>Cancelar</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -600,7 +605,7 @@ function GoalModal({ currentGoals, onSave, onClose }: GoalModalProps) {
   const [fat, setFat] = useState(currentGoals.fat)
   const [water, setWater] = useState(currentGoals.water)
 
-  return (
+  return createPortal(
     <div className="confirm-overlay open" style={{ zIndex: 300 }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="confirm-sheet" style={{ maxWidth: 400 }}>
         <div className="confirm-sheet-handle" />
@@ -620,6 +625,7 @@ function GoalModal({ currentGoals, onSave, onClose }: GoalModalProps) {
           <button className="ghost-btn" onClick={onClose}>Cancelar</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { motion } from 'framer-motion'
 import type { ExerciseDef } from '../../types/domain'
 import type { ExerciseSession } from '../../types/domain'
 import { isPR, getExerciseHistory, getLastRecordedSets, calc1RM } from '../../lib/fitness'
@@ -61,7 +62,7 @@ export default function ExerciseCard({
   }, [exState.sets])
 
   return (
-    <article className={`exercise-item${exState.done ? ' done' : ''}`}>
+    <motion.article layout className={`exercise-item${exState.done ? ' done' : ''}`} transition={{ type: 'spring', stiffness: 350, damping: 25 }}>
       <div className="exercise-top">
         <button className="exercise-check" type="button" onClick={onToggleDone}>
           {exState.done ? '✓' : ''}
@@ -116,6 +117,6 @@ export default function ExerciseCard({
       </div>
 
       {history.length >= 2 && <ExerciseLineChart history={history} />}
-    </article>
+    </motion.article>
   )
 }

@@ -16,6 +16,11 @@ function publish() {
   _listeners.forEach(l => l(snapshot))
 }
 
+export function dismissToast(id: string) {
+  _items = _items.filter(t => t.id !== id)
+  publish()
+}
+
 export function toast(message: string, type: ToastType = 'success', duration = 3000) {
   const id = Math.random().toString(36).slice(2)
   _items = [..._items, { id, message, type }]

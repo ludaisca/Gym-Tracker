@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useParams } from 'react-router-dom'
 import { routinesApi } from '../../api/routines'
 import { aiApi } from '../../api/ai'
 import { useAuthStore } from '../../store'
 import type { Routine, DayDef, ExerciseDef } from '../../types/domain'
 import { 
-  IconTrash, IconArrowUp, IconArrowDown, IconPlus, 
-  IconCheck, IconAI, IconDumbbell 
+  IconTrash, IconPlus, 
+  IconCheck, IconAI, IconDumbbell, IconClose
 } from '../ui/Icons'
+import { Reorder, AnimatePresence, motion } from 'framer-motion'
+import { hapticImpact } from '../../lib/haptics'
 
 const EMPTY_EX: ExerciseDef = { name: '', reps: '10-12', rest: 90, sets: 3 }
 
@@ -165,6 +168,7 @@ export default function RoutineEditor() {
   // Estados para buscador anatómico
   const [selectedMuscle, setSelectedMuscle] = useState('pecho')
   const [selectedTargetDay, setSelectedTargetDay] = useState<string>('')
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false)
 
   useEffect(() => {
     if (!routineId) return
@@ -188,9 +192,17 @@ export default function RoutineEditor() {
     return dayId
   }
 
+  function handleAddDayClick() {
+    hapticImpact('light')
+    const newDayId = addDay()
+    setSelectedTargetDay(newDayId)
+  }
+
   function removeDay(dayId: string) {
+    hapticImpact('medium')
     if (!confirm('¿Eliminar este día por completo?')) return
     setDays(d => { const n = { ...d }; delete n[dayId]; return n })
+    if (selectedTargetDay === dayId) setSelectedTargetDay('')
   }
 
   function updateDayField(dayId: string, field: keyof DayDef, value: string) {
@@ -198,6 +210,7 @@ export default function RoutineEditor() {
   }
 
   function addExercise(dayId: string) {
+    hapticImpact('light')
     setDays(d => ({ ...d, [dayId]: { ...d[dayId], exercises: [...d[dayId].exercises, { ...EMPTY_EX }] } }))
   }
 
@@ -212,35 +225,28 @@ export default function RoutineEditor() {
     setDays(d => ({ ...d, [dayId]: { ...d[dayId], exercises: d[dayId].exercises.filter((_, i) => i !== idx) } }))
   }
 
-  function moveExercise(dayId: string, idx: number, direction: 'up' | 'down') {
-    setDays(d => {
-      const exs = [...d[dayId].exercises]
-      const targetIdx = direction === 'up' ? idx - 1 : idx + 1
-      if (targetIdx < 0 || targetIdx >= exs.length) return d
-      const temp = exs[idx]
-      exs[idx] = exs[targetIdx]
-      exs[targetIdx] = temp
-      return { ...d, [dayId]: { ...d[dayId], exercises: exs } }
-    })
+
+  function updateExercisesOrder(dayId: string, newExercises: ExerciseDef[]) {
+    setDays(d => ({ ...d, [dayId]: { ...d[dayId], exercises: newExercises } }))
   }
 
   function injectSuggestedExercise(ex: { name: string; reps: string; sets: number; rest: number }) {
+    hapticImpact('light')
     let targetId = currentTargetDay
     if (!targetId) {
       targetId = addDay()
     }
     setDays(d => {
       const day = d[targetId]
-      if (!day) return d
-      // Si el primer ejercicio está vacío, lo sobrescribimos; si no, añadimos uno nuevo
-      const exs = [...day.exercises]
-      if (exs.length === 1 && !exs[0].name.trim()) {
-        exs[0] = { ...ex }
-      } else {
-        exs.push({ ...ex })
+      return {
+        ...d,
+        [targetId]: {
+          ...day,
+          exercises: [...day.exercises, { name: ex.name, sets: ex.sets, reps: ex.reps, rest: ex.rest }]
+        }
       }
-      return { ...d, [targetId]: { ...day, exercises: exs } }
     })
+    setIsCatalogOpen(false)
   }
 
   async function generateWithAI() {
@@ -351,7 +357,6 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
     }
   }
 
-  const suggestedExercises = EXERCISE_CATALOG[selectedMuscle] || []
 
   return (
     <div className="fade-in">
@@ -388,7 +393,7 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
             </div>
             <div>
               <h4 style={{ margin: 0, fontSize: 'var(--text-sm)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                ✨ Asistente Inteligente IA
+                Asistente Inteligente IA
               </h4>
               <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
                 Genera días y ejercicios automáticamente según tu objetivo
@@ -403,9 +408,10 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
         {aiOpen && (
           <div style={{ padding: 'var(--space-4) var(--space-5)', background: 'var(--color-surface)' }}>
             {!hasAI ? (
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning)', padding: 'var(--space-2) 0' }}>
-                ⚠️ Configura un proveedor y clave de IA en <strong>Configuración → IA</strong> para habilitar el generador automático.
-              </div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning)', padding: 'var(--space-2) 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <span>Configura un proveedor y clave de IA en <strong>Configuración → IA</strong> para habilitar el generador automático.</span>
+                </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                 <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
@@ -417,10 +423,10 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
                       onChange={e => setAiObjective(e.target.value)}
                       disabled={aiGenerating}
                     >
-                      <option value="hipertrofia">💥 Hipertrofia (Ganancia muscular)</option>
-                      <option value="fuerza">🏋️‍♂️ Fuerza Pura</option>
-                      <option value="definicion">🔥 Definición / Pérdida de grasa</option>
-                      <option value="principiante">🌱 Acondicionamiento Principiante</option>
+                      <option value="hipertrofia">Hipertrofia (Ganancia muscular)</option>
+                      <option value="fuerza">Fuerza Pura</option>
+                      <option value="definicion">Definición / Pérdida de grasa</option>
+                      <option value="principiante">Acondicionamiento Principiante</option>
                     </select>
                   </div>
                   <div className="field" style={{ flex: 2, minWidth: '250px' }}>
@@ -444,7 +450,7 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
                     onClick={generateWithAI}
                     disabled={aiGenerating}
                   >
-                    {aiGenerating ? 'Estructurando rutina inteligente...' : '⚡ Generar Rutina Completa'}
+                    {aiGenerating ? 'Estructurando rutina inteligente...' : 'Generar Rutina Completa'}
                   </button>
                 </div>
               </div>
@@ -453,79 +459,71 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
         )}
       </section>
 
-      {/* BUSCADOR ANATÓMICO (ESTILO MUSCLEWIKI) */}
-      <section className="card-premium">
-        <div className="panel-head" style={{ borderBottom: '1px solid var(--color-border)', padding: 'var(--space-3) var(--space-5)' }}>
-          <h4 style={{ margin: 0, fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <IconDumbbell size={18} /> Buscador Anatómico de Ejercicios
-          </h4>
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-            Selecciona un grupo muscular para ver sugerencias
-          </span>
-        </div>
+      {/* BOTTOM SHEET CATALOGO */}
+      {createPortal(
+        <AnimatePresence>
+          {isCatalogOpen && (
+            <motion.div 
+              className="bottom-sheet-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={(e) => e.target === e.currentTarget && setIsCatalogOpen(false)}
+            >
+              <motion.div 
+                className="bottom-sheet"
+                drag="y"
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={0.4}
+                onDragEnd={(e, info) => { if (info.offset.y > 100) setIsCatalogOpen(false) }}
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              >
+                <div className="drag-handle"><div className="bottom-sheet-drag" /></div>
+                
+                <div className="bottom-sheet-content">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
+                    <h3>Catálogo de Ejercicios</h3>
+                    <button className="icon-btn-subtle" onClick={() => setIsCatalogOpen(false)}>
+                      <IconClose size={20} />
+                    </button>
+                  </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-4)', padding: 'var(--space-4)' }}>
-          {/* MAPA SVG */}
-          <div style={{ padding: 'var(--space-2)', background: 'var(--color-surface-offset)', borderRadius: 'var(--radius-lg)' }}>
-            <AnatomicalMap selectedMuscle={selectedMuscle} onSelectMuscle={setSelectedMuscle} />
-          </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
+                    <div style={{ padding: 'var(--space-2)', background: 'var(--color-surface-offset)', borderRadius: 'var(--radius-lg)' }}>
+                      <AnatomicalMap selectedMuscle={selectedMuscle} onSelectMuscle={setSelectedMuscle} />
+                    </div>
 
-          {/* LISTA DE SUGERENCIAS */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-accent)' }}>
-                EJERCICIOS PARA: {MUSCLE_LABELS[selectedMuscle]?.toUpperCase()}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Destino:</span>
-                <select 
-                  className="premium-input" 
-                  style={{ padding: '2px 8px', fontSize: 'var(--text-xs)', height: 'auto', minWidth: '90px' }}
-                  value={currentTargetDay}
-                  onChange={e => setSelectedTargetDay(e.target.value)}
-                >
-                  {dayIds.map(id => (
-                    <option key={id} value={id}>{days[id]?.label || id}</option>
-                  ))}
-                  {dayIds.length === 0 && <option value="">Crear Día 1</option>}
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto', paddingRight: '4px' }}>
-              {suggestedExercises.map((ex, i) => (
-                <div 
-                  key={i} 
-                  style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    padding: '8px 12px', 
-                    background: 'var(--color-surface-2)', 
-                    borderRadius: 'var(--radius-md)',
-                    borderLeft: '3px solid var(--color-primary)'
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600 }}>{ex.name}</div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
-                      {ex.sets} series × {ex.reps} reps | Desc: {ex.rest}s
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                      <h4 style={{ color: 'var(--color-primary)' }}>{MUSCLE_LABELS[selectedMuscle]}</h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                        {EXERCISE_CATALOG[selectedMuscle].map((ex, i) => (
+                          <div key={i} className="exercise-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-surface)', padding: 'var(--space-3)', borderRadius: 'var(--radius-lg)' }}>
+                            <div>
+                              <div className="exercise-name" style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>{ex.name}</div>
+                              <div className="exercise-meta" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>{ex.sets} sets × {ex.reps} | {ex.rest}s descanso</div>
+                            </div>
+                            <button 
+                              className="icon-btn-subtle" 
+                              style={{ color: 'var(--color-primary)', background: 'var(--color-primary-highlight)' }}
+                              onClick={() => injectSuggestedExercise(ex)}
+                            >
+                              <IconPlus size={18} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  <button 
-                    className="ghost-btn" 
-                    style={{ padding: '4px 8px', fontSize: 'var(--text-xs)', background: 'var(--color-surface-offset)' }}
-                    onClick={() => injectSuggestedExercise(ex)}
-                    title="Añadir ejercicio a la rutina"
-                  >
-                    + Añadir
-                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* METADATOS BÁSICOS */}
       <section className="card-premium">
@@ -552,91 +550,136 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
         </div>
       </section>
 
-      {/* LISTADO DE DÍAS CONFIGURADOS */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-        {Object.entries(days).map(([dayId, day]) => (
-          <section key={dayId} className="card-premium">
-            <div className="panel-head" style={{ background: 'var(--color-surface-2)', padding: 'var(--space-3) var(--space-5)' }}>
-              <div style={{ display: 'flex', gap: 'var(--space-3)', flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                <div className="day-id-badge">{dayId.toUpperCase()}</div>
-                <div className="field" style={{ flex: 1, minWidth: 120, margin: 0 }}>
-                  <input 
-                    className="premium-input-ghost"
-                    placeholder="Etiqueta (Ej. Torso A)" 
-                    value={day.label} 
-                    onChange={e => updateDayField(dayId, 'label', e.target.value)} 
-                  />
-                </div>
-                <div className="field" style={{ flex: 2, minWidth: 180, margin: 0 }}>
-                  <input 
-                    className="premium-input-ghost tiny"
-                    placeholder="Subtítulo (Ej. Pecho y tríceps)" 
-                    value={day.subtitle} 
-                    onChange={e => updateDayField(dayId, 'subtitle', e.target.value)} 
-                  />
-                </div>
-              </div>
-              <button className="icon-btn-danger" style={{ width: '32px', height: '32px' }} onClick={() => removeDay(dayId)}>
-                <IconTrash size={16} />
-              </button>
-            </div>
+      {/* PESTAÑAS (TABS) DE DÍAS */}
+      {dayIds.length > 0 && (
+        <div className="day-tabs-container" style={{ marginTop: 'var(--space-4)' }}>
+          {dayIds.map(d => (
+            <button
+              key={d}
+              className={`day-tab ${currentTargetDay === d ? 'active' : ''}`}
+              onClick={() => { hapticImpact('light'); setSelectedTargetDay(d) }}
+            >
+              {(days[d] as any).label || d.toUpperCase()}
+            </button>
+          ))}
+          <button className="day-tab-add" onClick={handleAddDayClick}>
+            <IconPlus size={20} />
+          </button>
+        </div>
+      )}
 
-            <div className="panel-body" style={{ padding: 'var(--space-3) var(--space-5)' }}>
-              <div className="exercise-editor-list">
-                {day.exercises.map((ex, idx) => (
-                  <div key={idx} className="exercise-editor-row" style={{ alignItems: 'center' }}>
-                    <div className="ex-main-info">
-                      <div className="field" style={{ margin: 0 }}>
-                        {idx === 0 && <label style={{ fontSize: '10px' }}>Ejercicio</label>}
-                        <input 
-                          placeholder="Nombre del ejercicio…" 
-                          value={ex.name} 
-                          onChange={e => updateExercise(dayId, idx, 'name', e.target.value)} 
-                        />
-                      </div>
-                    </div>
-                    <div className="ex-stats-info">
-                      <div className="field" style={{ margin: 0 }}>
-                        {idx === 0 && <label style={{ fontSize: '10px' }}>Reps</label>}
-                        <input placeholder="10-12" value={ex.reps} onChange={e => updateExercise(dayId, idx, 'reps', e.target.value)} />
-                      </div>
-                      <div className="field" style={{ margin: 0 }}>
-                        {idx === 0 && <label style={{ fontSize: '10px' }}>Series</label>}
-                        <input type="number" placeholder="3" value={ex.sets} onChange={e => updateExercise(dayId, idx, 'sets', Number(e.target.value))} />
-                      </div>
-                      <div className="field" style={{ margin: 0 }}>
-                        {idx === 0 && <label style={{ fontSize: '10px' }}>Desc. (s)</label>}
-                        <input type="number" placeholder="90" value={ex.rest} onChange={e => updateExercise(dayId, idx, 'rest', Number(e.target.value))} />
-                      </div>
-                    </div>
-                    <div className="ex-actions" style={{ marginTop: idx === 0 ? '16px' : 0 }}>
-                      <div style={{ display: 'flex', gap: '2px' }}>
-                        <button className="icon-btn-subtle" disabled={idx === 0} onClick={() => moveExercise(dayId, idx, 'up')}>
-                          <IconArrowUp size={14} />
-                        </button>
-                        <button className="icon-btn-subtle" disabled={idx === day.exercises.length - 1} onClick={() => moveExercise(dayId, idx, 'down')}>
-                          <IconArrowDown size={14} />
-                        </button>
-                        <button className="icon-btn-subtle danger" onClick={() => removeExercise(dayId, idx)}>
-                          <IconTrash size={14} />
-                        </button>
-                      </div>
-                    </div>
+      {/* CONTENIDO DEL DÍA SELECCIONADO */}
+      <AnimatePresence mode="wait">
+        {currentTargetDay && days[currentTargetDay] ? (
+          <motion.div
+            key={currentTargetDay}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}
+          >
+            <section className="card-premium">
+              <div className="panel-head" style={{ background: 'var(--color-surface-2)', padding: 'var(--space-3) var(--space-5)' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-3)', flex: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div className="day-id-badge">{currentTargetDay.toUpperCase()}</div>
+                  <div className="field" style={{ flex: 1, minWidth: 120, margin: 0 }}>
+                    <input 
+                      className="premium-input-ghost"
+                      placeholder="Etiqueta (Ej. Torso A)" 
+                      value={days[currentTargetDay].label} 
+                      onChange={e => updateDayField(currentTargetDay, 'label', e.target.value)} 
+                    />
                   </div>
-                ))}
+                  <div className="field" style={{ flex: 2, minWidth: 180, margin: 0 }}>
+                    <input 
+                      className="premium-input-ghost tiny"
+                      placeholder="Subtítulo (Ej. Pecho y tríceps)" 
+                      value={days[currentTargetDay].subtitle} 
+                      onChange={e => updateDayField(currentTargetDay, 'subtitle', e.target.value)} 
+                    />
+                  </div>
+                </div>
+                <button className="icon-btn-danger" style={{ width: '32px', height: '32px' }} onClick={() => removeDay(currentTargetDay)}>
+                  <IconTrash size={16} />
+                </button>
               </div>
-              <button className="add-ex-btn" style={{ marginTop: 'var(--space-2)' }} onClick={() => addExercise(dayId)}>
-                <IconPlus size={14} /> Añadir ejercicio en blanco
-              </button>
-            </div>
-          </section>
-        ))}
 
-        <button className="add-day-btn-premium" onClick={addDay}>
-          <div className="add-icon"><IconPlus size={24} /></div>
-          <span>Agregar nuevo día de entrenamiento</span>
-        </button>
-      </div>
+              <div className="panel-body" style={{ padding: 'var(--space-3) var(--space-5)' }}>
+                <Reorder.Group 
+                  axis="y" 
+                  values={days[currentTargetDay].exercises} 
+                  onReorder={(newOrder) => updateExercisesOrder(currentTargetDay, newOrder)}
+                  className="exercise-editor-list"
+                  style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
+                >
+                  {days[currentTargetDay].exercises.map((ex, idx) => (
+                    <Reorder.Item 
+                      key={`${currentTargetDay}-ex-${idx}-${ex.name}`} 
+                      value={ex}
+                      className="exercise-editor-row"
+                      style={{ cursor: 'grab', background: 'var(--color-surface)', position: 'relative' }}
+                      onDragStart={() => hapticImpact('light')}
+                      whileDrag={{ scale: 1.02, boxShadow: '0 8px 30px rgba(0,0,0,0.15)' }}
+                    >
+                      <div className="ex-main-info" style={{ flex: 1, display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+                        <div style={{ opacity: 0.3, cursor: 'grab', padding: '0 var(--space-1)' }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/></svg>
+                        </div>
+                        <div className="field" style={{ margin: 0, flex: 1 }}>
+                          <label className="mobile-only-label" style={{ fontSize: '10px' }}>Ejercicio</label>
+                          <input 
+                            placeholder="Nombre del ejercicio…" 
+                            value={ex.name} 
+                            onChange={e => updateExercise(currentTargetDay, idx, 'name', e.target.value)} 
+                          />
+                        </div>
+                      </div>
+                      <div className="ex-stats-info" style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                        <div className="field" style={{ margin: 0, width: '60px' }}>
+                          <label className="mobile-only-label" style={{ fontSize: '10px' }}>Reps</label>
+                          <input placeholder="10-12" value={ex.reps} onChange={e => updateExercise(currentTargetDay, idx, 'reps', e.target.value)} style={{ textAlign: 'center' }} />
+                        </div>
+                        <div className="field" style={{ margin: 0, width: '50px' }}>
+                          <label className="mobile-only-label" style={{ fontSize: '10px' }}>Series</label>
+                          <input type="number" placeholder="3" value={ex.sets} onChange={e => updateExercise(currentTargetDay, idx, 'sets', Number(e.target.value))} style={{ textAlign: 'center' }} />
+                        </div>
+                        <div className="field" style={{ margin: 0, width: '60px' }}>
+                          <label className="mobile-only-label" style={{ fontSize: '10px' }}>Desc. (s)</label>
+                          <input type="number" placeholder="90" value={ex.rest} onChange={e => updateExercise(currentTargetDay, idx, 'rest', Number(e.target.value))} style={{ textAlign: 'center' }} />
+                        </div>
+                      </div>
+                      <div className="ex-actions" style={{ marginLeft: 'auto' }}>
+                        <button className="icon-btn-subtle danger" onClick={() => removeExercise(currentTargetDay, idx)}>
+                          <IconTrash size={16} />
+                        </button>
+                      </div>
+                    </Reorder.Item>
+                  ))}
+                </Reorder.Group>
+                
+                <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
+                  <button className="add-ex-btn" style={{ flex: 1 }} onClick={() => addExercise(currentTargetDay)}>
+                    <IconPlus size={16} /> Añadir en blanco
+                  </button>
+                  <button className="primary-btn" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={() => setIsCatalogOpen(true)}>
+                    <IconDumbbell size={16} /> Catálogo
+                  </button>
+                </div>
+              </div>
+            </section>
+          </motion.div>
+        ) : (
+          <div className="empty-state" style={{ marginTop: 'var(--space-6)' }}>
+            <div className="empty-icon"><IconDumbbell size={48} /></div>
+            <p>Agrega el primer día de tu rutina para empezar.</p>
+            <button className="add-day-btn-premium" style={{ marginTop: 'var(--space-2)' }} onClick={handleAddDayClick}>
+              <div className="add-icon"><IconPlus size={24} /></div>
+              <span>Crear Día 1</span>
+            </button>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

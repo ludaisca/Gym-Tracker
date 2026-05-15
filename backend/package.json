@@ -10,14 +10,20 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@bull-board/api": "^7.1.5",
+    "@bull-board/fastify": "^7.1.5",
+    "@fastify/compress": "^8.3.1",
     "@fastify/cors": "^10.0.2",
     "@fastify/helmet": "^13.0.2",
     "@fastify/jwt": "^9.0.3",
     "@fastify/rate-limit": "^10.3.0",
+    "@fastify/redis": "^7.2.0",
     "@prisma/client": "^6.8.2",
     "bcryptjs": "^3.0.2",
+    "bullmq": "^5.76.8",
     "fastify": "^5.4.0",
     "fastify-plugin": "^5.1.0",
+    "ioredis": "^5.10.1",
     "nodemailer": "^8.0.7",
     "zod": "^3.24.4"
   },

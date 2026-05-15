@@ -11,21 +11,27 @@ const foodEntrySchema = z.object({
   fat: z.number().default(0),
 })
 
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato de fecha inválido (YYYY-MM-DD)')
+
 const nutritionRoutes: FastifyPluginAsync = async (fastify) => {
   const { prisma } = fastify
 
   fastify.addHook('onRequest', fastify.authenticate)
 
-  fastify.get('/:date', async (request) => {
+  fastify.get('/:date', async (request, reply) => {
     const { sub } = request.user as { sub: string }
-    const { date } = request.params as { date: string }
+    const parsed = dateSchema.safeParse((request.params as { date: string }).date)
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.issues[0].message })
+    const date = parsed.data
     return prisma.nutritionDay.findUnique({ where: { userId_date: { userId: sub, date } } })
       ?? { userId: sub, date, water: 0, meals: {} }
   })
 
-  fastify.put('/:date', async (request) => {
+  fastify.put('/:date', async (request, reply) => {
     const { sub } = request.user as { sub: string }
-    const { date } = request.params as { date: string }
+    const parsedDate = dateSchema.safeParse((request.params as { date: string }).date)
+    if (!parsedDate.success) return reply.status(400).send({ error: parsedDate.error.issues[0].message })
+    const date = parsedDate.data
     const body = z.object({ water: z.number().int().optional(), meals: z.record(z.unknown()).optional() }).parse(request.body)
     const safeBody = { water: body.water, meals: body.meals as Prisma.InputJsonValue | undefined }
     return prisma.nutritionDay.upsert({
@@ -37,7 +43,11 @@ const nutritionRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/:date/meals/:mealType', async (request, reply) => {
     const { sub } = request.user as { sub: string }
-    const { date, mealType } = request.params as { date: string; mealType: string }
+    const params = request.params as { date: string; mealType: string }
+    const parsedDate = dateSchema.safeParse(params.date)
+    if (!parsedDate.success) return reply.status(400).send({ error: parsedDate.error.issues[0].message })
+    const { mealType } = params
+    const date = parsedDate.data
     const entry = foodEntrySchema.parse(request.body)
 
     const day = await prisma.nutritionDay.findUnique({ where: { userId_date: { userId: sub, date } } })
@@ -58,7 +68,11 @@ const nutritionRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete('/:date/meals/:mealType/:foodId', async (request, reply) => {
     const { sub } = request.user as { sub: string }
-    const { date, mealType, foodId } = request.params as { date: string; mealType: string; foodId: string }
+    const params = request.params as { date: string; mealType: string; foodId: string }
+    const parsedDate = dateSchema.safeParse(params.date)
+    if (!parsedDate.success) return reply.status(400).send({ error: parsedDate.error.issues[0].message })
+    const { mealType, foodId } = params
+    const date = parsedDate.data
 
     const day = await prisma.nutritionDay.findUnique({ where: { userId_date: { userId: sub, date } } })
     if (!day) return reply.status(204).send()

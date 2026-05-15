@@ -22,4 +22,14 @@ buildApp().then((app) => {
       process.exit(1)
     }
   })
+
+  // ── Graceful Shutdown (Escalado sin cortes) ──────────────
+  const gracefulShutdown = async (signal: string) => {
+    app.log.info(`Recibida señal ${signal}. Cerrando servidor graceful...`)
+    await app.close()
+    process.exit(0)
+  }
+
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'))
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 })

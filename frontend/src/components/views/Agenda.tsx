@@ -4,6 +4,7 @@ import { useAuthStore } from '../../store'
 import { useSessions } from '../../hooks/useSessions'
 import { useRoutines } from '../../hooks/useRoutines'
 import { getRoutineDays, getDayIds } from '../../lib/fitness'
+import { CheckCircle2 } from 'lucide-react'
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
@@ -21,6 +22,7 @@ export default function Agenda() {
   const { sessions } = useSessions(weekNumber)
 
   return (
+    <div className="fade-in">
     <section className="card">
       <div className="panel-head">
         <div><h3>Agenda semanal</h3><p>Vista centralizada para planear la semana.</p></div>
@@ -41,8 +43,8 @@ export default function Agenda() {
               <p className="tiny muted" style={{ marginTop: '.3rem' }}>
                 Cardio: {session?.cardio?.duration || '—'}
               </p>
-              <p className="tiny muted" style={{ marginTop: '.3rem' }}>
-                Estado: {session?.complete ? '✓ Completada' : done > 0 ? `${done}/${total} ejercicios` : 'Pendiente'}
+              <p className="tiny muted" style={{ marginTop: '.3rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                Estado: {session?.complete ? <><CheckCircle2 size={12} /> Completada</> : done > 0 ? `${done}/${total} ejercicios` : 'Pendiente'}
               </p>
               <button
                 className={`complete-btn${session?.complete ? ' is-complete' : ''}`}
@@ -56,5 +58,6 @@ export default function Agenda() {
         })}
       </div>
     </section>
+    </div>
   )
 }

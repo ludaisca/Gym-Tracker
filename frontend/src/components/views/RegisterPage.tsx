@@ -1,26 +1,39 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { authApi } from '../../api/auth'
+import { motion, AnimatePresence, type Variants } from 'framer-motion'
+import { Mail, Lock, Eye, EyeOff, AlertCircle, User, CheckCircle2, Zap, Flame, Target, Trophy, Dumbbell } from 'lucide-react'
+import { hapticImpact } from '../../lib/haptics'
 
-const AVATARS = ['💪', '🏋️', '🔥', '⚡', '🎯', '🦁', '🐺', '🏆']
+const AVATARS = [
+  { id: '1', icon: Dumbbell },
+  { id: '2', icon: Zap },
+  { id: '3', icon: Flame },
+  { id: '4', icon: Target },
+  { id: '5', icon: Trophy }
+]
 
 export default function RegisterPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [avatar, setAvatar] = useState('💪')
+  const [showPassword, setShowPassword] = useState(false)
+  const [avatar, setAvatar] = useState('1')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [registered, setRegistered] = useState(false)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    hapticImpact('light')
     setError('')
     setLoading(true)
     try {
       await authApi.register({ name, email, password, avatar })
       setRegistered(true)
+      hapticImpact('heavy')
     } catch (err: unknown) {
+      hapticImpact('heavy')
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Error al crear cuenta'
       setError(msg)
     } finally {
@@ -28,88 +41,148 @@ export default function RegisterPage() {
     }
   }
 
-  if (registered) {
-    return (
-      <div className="auth-page fade-in">
-        <div className="auth-card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '3rem', marginBottom: 'var(--space-4)' }}>📬</div>
-          <h1 style={{ marginBottom: 'var(--space-2)' }}>Revisa tu correo</h1>
-          <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-6)', lineHeight: 1.6 }}>
-            Te enviamos un enlace de verificación a <strong style={{ color: 'var(--color-text)' }}>{email}</strong>.
-            Haz clic en él para activar tu cuenta.
-          </p>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
-            ¿No llegó? Revisa la carpeta de spam o{' '}
-            <Link to="/login" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
-              inicia sesión
-            </Link>{' '}
-            para reenviar el correo.
-          </p>
-        </div>
-      </div>
-    )
+  const containerVariants: Variants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } },
+    exit: { opacity: 0, scale: 0.98, transition: { duration: 0.2 } }
+  }
+
+  const itemVariants: Variants = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } }
   }
 
   return (
-    <div className="auth-page fade-in">
-      <div className="auth-card">
-        <div style={{ marginBottom: 'var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <div className="brand-mark">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M3 10v4"/><path d="M21 10v4"/><path d="M7 7v10"/><path d="M17 7v10"/><path d="M3 12h18"/>
-            </svg>
-          </div>
-          <div><h1 style={{ fontSize: 'var(--text-lg)', marginBottom: 0 }}>Gym Tracker</h1></div>
-        </div>
+    <div className="auth-page">
+      <div className="auth-bg-blob b1" />
+      <div className="auth-bg-blob b2" />
 
-        <h1>Crear cuenta</h1>
-        <p>Empieza a trackear tu progreso</p>
-
-        {error && <div className="auth-error">{error}</div>}
-
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <div className="auth-field">
-            <label>Tu nombre</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="Claudio" required />
-          </div>
-
-          <div className="auth-field">
-            <label>Avatar</label>
-            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-              {AVATARS.map((a) => (
-                <button key={a} type="button" onClick={() => setAvatar(a)} style={{
-                  fontSize: '1.6rem', padding: '0.4rem', borderRadius: 'var(--radius-lg)',
-                  border: `2px solid ${a === avatar ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                  background: a === avatar ? 'var(--color-primary-highlight)' : 'transparent',
-                }}>
-                  {a}
-                </button>
-              ))}
+      <AnimatePresence mode="wait">
+        <motion.div 
+          key={registered ? 'success' : 'form'}
+          className="auth-card"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+        >
+          {registered ? (
+            <div style={{ textAlign: 'center' }}>
+              <motion.div variants={itemVariants} style={{ display: 'inline-flex', padding: '1rem', background: 'color-mix(in srgb, var(--color-success) 15%, transparent)', borderRadius: '50%', color: 'var(--color-success)', marginBottom: 'var(--space-4)' }}>
+                <CheckCircle2 size={48} strokeWidth={1.5} />
+              </motion.div>
+              
+              <motion.h1 variants={itemVariants}>Revisa tu correo</motion.h1>
+              
+              <motion.p variants={itemVariants} className="subtitle" style={{ lineHeight: 1.6 }}>
+                Te hemos enviado un enlace mágico a <strong style={{ color: 'var(--color-text)' }}>{email}</strong>. Haz clic en él para activar tu cuenta y empezar tu progreso.
+              </motion.p>
+              
+              <motion.div variants={itemVariants} style={{ marginTop: 'var(--space-6)' }}>
+                <Link to="/login" style={{ textDecoration: 'none' }}>
+                  <button className="ghost-btn" style={{ width: '100%', padding: '1rem' }} onClick={() => hapticImpact('light')}>
+                    Volver a Inicio de sesión
+                  </button>
+                </Link>
+              </motion.div>
             </div>
-          </div>
+          ) : (
+            <>
+              <motion.div variants={itemVariants} style={{ marginBottom: 'var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', justifyContent: 'center' }}>
+                <div className="brand-mark" style={{ boxShadow: '0 8px 24px color-mix(in srgb, var(--color-primary) 40%, transparent)' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                    <path d="M3 10v4"/><path d="M21 10v4"/><path d="M7 7v10"/><path d="M17 7v10"/><path d="M3 12h18"/>
+                  </svg>
+                </div>
+              </motion.div>
 
-          <div className="auth-field">
-            <label>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu@email.com" required autoComplete="email" />
-          </div>
+              <motion.div variants={itemVariants} style={{ textAlign: 'center' }}>
+                <h1>Crear cuenta</h1>
+                <p className="subtitle">Comienza a trackear tu evolución hoy</p>
+              </motion.div>
 
-          <div className="auth-field">
-            <label>Contraseña (mínimo 8 caracteres)</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••" required minLength={8} autoComplete="new-password" />
-          </div>
+              <motion.div variants={itemVariants}>
+                {error && <div className="auth-error"><AlertCircle size={16} /> {error}</div>}
+              </motion.div>
 
-          <button type="submit" className="primary-btn auth-submit" disabled={loading}>
-            {loading ? 'Creando cuenta…' : 'Crear cuenta'}
-          </button>
-        </form>
+              <motion.form variants={itemVariants} className="auth-form" onSubmit={handleSubmit}>
+                <div className="auth-field">
+                  <label>Tu Nombre</label>
+                  <div className="auth-input-wrap">
+                    <div className="auth-input-icon"><User size={18} /></div>
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Alex" required />
+                  </div>
+                </div>
 
-        <p className="auth-link">
-          ¿Ya tienes cuenta? <Link to="/login" style={{ color: 'var(--color-primary)', fontWeight: 700 }}>Iniciar sesión</Link>
-        </p>
-      </div>
+                <div className="auth-field">
+                  <label>Símbolo</label>
+                  <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', justifyContent: 'center', marginTop: '4px' }}>
+                    {AVATARS.map((a) => {
+                      const Icon = a.icon
+                      const isActive = a.id === avatar
+                      return (
+                        <button 
+                          key={a.id} 
+                          type="button" 
+                          onClick={() => { hapticImpact('light'); setAvatar(a.id) }} 
+                          style={{
+                            width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            borderRadius: 'var(--radius-full)', transition: 'all 0.2s',
+                            border: `1.5px solid ${isActive ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                            background: isActive ? 'var(--color-primary-highlight)' : 'transparent',
+                            color: isActive ? 'var(--color-primary)' : 'var(--color-text-faint)'
+                          }}
+                        >
+                          <Icon size={20} strokeWidth={isActive ? 2.5 : 1.5} />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="auth-field">
+                  <label>Correo Electrónico</label>
+                  <div className="auth-input-wrap">
+                    <div className="auth-input-icon"><Mail size={18} /></div>
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@email.com" required autoComplete="email" />
+                  </div>
+                </div>
+
+                <div className="auth-field">
+                  <label>Contraseña</label>
+                  <div className="auth-input-wrap">
+                    <div className="auth-input-icon"><Lock size={18} /></div>
+                    <input 
+                      type={showPassword ? 'text' : 'password'} 
+                      value={password} 
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Mín. 8 caracteres" 
+                      required minLength={8} autoComplete="new-password"
+                      style={{ paddingRight: '40px' }}
+                    />
+                    <button 
+                      type="button" 
+                      className="auth-pwd-toggle"
+                      onClick={() => { hapticImpact('light'); setShowPassword(!showPassword) }}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <button type="submit" className="auth-submit" disabled={loading}>
+                  {loading ? 'Preparando tu cuenta...' : 'Crear Cuenta'}
+                </button>
+              </motion.form>
+
+              <motion.p variants={itemVariants} className="auth-link">
+                ¿Ya eres miembro? <Link to="/login" onClick={() => hapticImpact('light')}>Inicia sesión</Link>
+              </motion.p>
+            </>
+          )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   )
 }
