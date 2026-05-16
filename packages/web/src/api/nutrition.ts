@@ -5,6 +5,9 @@ export const nutritionApi = {
   getDay: (date: string) =>
     api.get<NutritionDay>(`/nutrition/${date}`).then((r) => r.data),
 
+  getDays: (dates: string[]) =>
+    api.get<(NutritionDay | null)[]>(`/nutrition/batch?dates=${dates.join(',')}`).then((r) => r.data),
+
   updateDay: (date: string, data: { water?: number; meals?: Partial<Record<MealType, FoodEntry[]>> }) =>
     api.put<NutritionDay>(`/nutrition/${date}`, data).then((r) => r.data),
 

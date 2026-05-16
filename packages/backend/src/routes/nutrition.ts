@@ -17,6 +17,24 @@ const nutritionRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.addHook('onRequest', fastify.authenticate)
 
+  // ── GET /nutrition/batch?dates=2026-05-08,2026-05-07,... ─────────────────
+  // Debe registrarse antes de /:date para evitar que "batch" sea tratado como fecha
+  fastify.get('/batch', async (request, reply) => {
+    const { sub } = request.user as { sub: string }
+    const { dates } = request.query as { dates?: string }
+    if (!dates) return reply.status(400).send({ error: 'Parámetro dates requerido' })
+
+    const dateList = dates.split(',').map(d => d.trim()).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 30)
+    if (dateList.length === 0) return reply.status(400).send({ error: 'Ninguna fecha válida (formato YYYY-MM-DD)' })
+
+    const rows = await prisma.nutritionDay.findMany({
+      where: { userId: sub, date: { in: dateList } },
+    })
+
+    const byDate = Object.fromEntries(rows.map(r => [r.date, r]))
+    return dateList.map(d => byDate[d] ?? { userId: sub, date: d, water: 0, meals: {} })
+  })
+
   fastify.get('/:date', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const parsed = dateSchema.safeParse((request.params as { date: string }).date)

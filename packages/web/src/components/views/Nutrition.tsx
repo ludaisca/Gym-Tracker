@@ -89,11 +89,11 @@ export default function Nutrition() {
   useEffect(() => { loadDay(date) }, [date, loadDay])
   useEffect(() => { nutritionApi.getSavedFoods().then(setSavedFoods).catch((err: unknown) => console.warn("[load]", err)) }, [])
 
-  // Promedio últimos 7 días (excluye hoy para no sesgar con datos parciales)
+  // Promedio últimos 7 días — usa batch endpoint (1 sola petición)
   useEffect(() => {
     const dates: string[] = []
     for (let i = 1; i <= 7; i++) dates.push(shiftDate(todayISO(), -i))
-    Promise.all(dates.map(d => nutritionApi.getDay(d).catch(() => null))).then(days => {
+    nutritionApi.getDays(dates).then(days => {
       const valid = days.filter((d): d is NutritionDay => d !== null && !!d.meals)
       if (valid.length === 0) { setWeekAvg(null); return }
       const sum = valid.reduce((acc, d) => {
@@ -112,7 +112,7 @@ export default function Nutrition() {
         carbs:   Math.round(sum.carbs   / valid.length),
         fat:     Math.round(sum.fat     / valid.length),
       })
-    })
+    }).catch((err: unknown) => console.warn('[Nutrition weekAvg]', err))
   }, [])
 
   const meals = (day?.meals ?? {}) as Partial<Record<MealType, FoodEntry[]>>

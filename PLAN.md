@@ -30,12 +30,12 @@ Generado el 2026-05-15 a partir de auditoría técnica completa.
 
 ### Seguridad alta
 
-- [ ] **[5] Transacciones en importación de datos**
+- [x] **[5] Transacciones en importación de datos**
   - Archivo: `packages/backend/src/services/importTask.ts`
   - Wrappear todo en `prisma.$transaction()`
   - Feedback granular de qué se importó y qué falló
 
-- [ ] **[6] Fix cola offline — TTL y límite de tamaño**
+- [x] **[6] Fix cola offline — TTL y límite de tamaño**
   - Archivo: `packages/web/src/store/index.ts` + `hooks/useOfflineSync.ts`
   - TTL de 7 días por entrada en la cola
   - Máximo 200 entradas (descartar las más antiguas)
@@ -47,19 +47,21 @@ Generado el 2026-05-15 a partir de auditoría técnica completa.
 
 ### Performance
 
-- [ ] **[8] Batch endpoint para Nutrición**
-  - Backend: `GET /nutrition?dates=2026-05-08,...` → devuelve array
-  - Frontend: reemplazar 7 requests paralelos en `Nutrition.tsx`
+- [x] **[8] Batch endpoint para Nutrición**
+  - Backend: `GET /nutrition/batch?dates=2026-05-08,...` → devuelve array en 1 query
+  - Frontend: reemplazados 7 requests paralelos por 1 llamada en `Nutrition.tsx`
 
-- [ ] **[9] Índices faltantes en Prisma**
-  - Agregar `@@index([userId])` en modelos: AIChat, Routine, RefreshToken
+- [x] **[9] Índices faltantes en Prisma**
+  - Agregado `@@index([userId])` en: Routine, GlobalNote, SavedFood, RefreshToken
+  - ⚠️ Pendiente aplicar con `make db-migrate` cuando la BD esté activa
 
 ### Deuda técnica
 
-- [ ] **[10] Tipos estrictos para exercises y routines**
-  - Crear `packages/backend/src/types/domain.ts`
-  - Interfaces: ExerciseSet, ExerciseSession, RoutineDay
-  - Eliminar `as any` en routes: ai.ts, sessions.ts, routines.ts
+- [x] **[10] Tipos estrictos para exercises y routines**
+  - Creado `packages/backend/src/types/domain.ts`
+  - Interfaces: ExerciseSet, ExerciseSession, CardioData, ExerciseDef, RoutineDay
+  - Función `extractBestOneRMs()` centralizada (usada en challenges.ts)
+  - Eliminado bloque de 30 líneas duplicado en challenges.ts
 
 ---
 

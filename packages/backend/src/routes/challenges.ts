@@ -3,6 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 import { mkdirSync } from 'fs'
 import { join } from 'path'
+import { extractBestOneRMs } from '../types/domain'
 
 // ── helpers ──────────────────────────────────────────────────────────────
 function randomCode(len = 6) {
@@ -254,37 +255,8 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
         : Promise.resolve([]),
     ])
 
-    type ExerciseMark = { name: string; weight: number; reps: number; oneRM: number }
-    function extractBests(sessions: typeof creatorSessions): Record<string, ExerciseMark> {
-      const bests: Record<string, ExerciseMark> = {}
-      for (const session of sessions) {
-        let exercises: Array<{ name?: string; done?: boolean; sets?: Array<{ kg?: string; weight?: number; reps?: string | number }> }> = []
-        if (typeof session.exercises === 'string') {
-          try { exercises = JSON.parse(session.exercises) } catch {}
-        } else if (Array.isArray(session.exercises)) {
-          exercises = session.exercises as any
-        }
-        if (!Array.isArray(exercises)) continue
-        for (const ex of exercises) {
-          if (!ex?.name || !Array.isArray(ex.sets)) continue
-          for (const set of ex.sets) {
-            // Frontend stores { kg: string, reps: string }; support legacy { weight: number, reps: number }
-            const w = parseFloat((set.kg as string | undefined) ?? String(set.weight ?? 0))
-            const r = parseFloat(String(set.reps ?? 0))
-            if (!(w > 0) || !(r > 0)) continue
-            const oneRM = Math.round(w * (1 + r / 30))
-            const key = ex.name.toLowerCase()
-            if (!bests[key] || oneRM > bests[key].oneRM) {
-              bests[key] = { name: ex.name, weight: w, reps: r, oneRM }
-            }
-          }
-        }
-      }
-      return bests
-    }
-
-    const creatorBests  = extractBests(creatorSessions)
-    const opponentBests = extractBests(opponentSessions)
+    const creatorBests  = extractBestOneRMs(creatorSessions)
+    const opponentBests = extractBestOneRMs(opponentSessions)
 
     const commonKeys = [...new Set([...Object.keys(creatorBests), ...Object.keys(opponentBests)])]
     const versus = commonKeys.map(key => ({
