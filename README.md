@@ -1,260 +1,224 @@
-<div align="center">
+# Gym Tracker
 
-# 🏋️ Gym Tracker
+Aplicación de seguimiento de entrenamiento y nutrición. PWA mobile-first con soporte offline, IA integrada y generación de APK nativa para Android.
 
-**App web de seguimiento de entrenamiento personal — instalable como PWA**
+## Stack
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
-[![Fastify](https://img.shields.io/badge/Fastify-5.4-000000?style=flat-square&logo=fastify&logoColor=white)](https://fastify.dev/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Prisma](https://img.shields.io/badge/Prisma-6.8-2D3748?style=flat-square&logo=prisma&logoColor=white)](https://www.prisma.io/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![nginx](https://img.shields.io/badge/nginx-alpine-009639?style=flat-square&logo=nginx&logoColor=white)](https://nginx.org/)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+| Capa | Tecnología |
+|------|-----------|
+| Backend | Fastify v5 · Prisma · PostgreSQL · Redis · BullMQ |
+| Frontend | React 19 · Vite 8 · Zustand · Axios · PWA (vite-plugin-pwa) |
+| Mobile | Capacitor 8 (APK nativa desde el mismo código web) |
+| Infra | Docker Compose · nginx reverse proxy · Coolify (producción) |
 
-</div>
-
----
-
-## 📋 Tabla de contenidos
-
-- [Arquitectura](#-arquitectura)
-- [Requisitos](#-requisitos-previos)
-- [Configuración del entorno](#-configuración-del-entorno)
-- [Deploy con Coolify](#-deploy-con-coolify)
-- [Docker Compose (producción)](#-docker-compose-producción)
-- [Tailscale](#-tailscale)
-- [Desarrollo local](#-desarrollo-local)
-- [Variables de entorno](#-variables-de-entorno)
-
----
-
-## 🏗 Arquitectura
+## Estructura del monorepo
 
 ```
-Cliente (browser / móvil)
-       │
-       ▼
-  nginx :80  (reverse proxy)
-       │
-       ├── /api/*  ──►  api (Fastify :3001)  ──►  db (PostgreSQL :5432)
-       │
-       └── /*      ──►  SPA (dist estático de Vite)
+v1/
+├── packages/
+│   ├── backend/          # API Fastify
+│   │   ├── src/
+│   │   │   ├── app.ts         # Plugins y rutas de Fastify
+│   │   │   ├── routes/        # Un archivo por dominio
+│   │   │   ├── plugins/       # prisma, redis, auth
+│   │   │   └── services/      # queue (BullMQ), email, importTask
+│   │   └── prisma/
+│   │       └── schema.prisma
+│   ├── web/              # PWA React
+│   │   └── src/
+│   │       ├── api/           # Axios + interceptores
+│   │       ├── store/         # Zustand (auth, UI, offline)
+│   │       ├── hooks/         # useOfflineSync, useSessions, etc.
+│   │       ├── components/
+│   │       │   ├── layout/    # AppShell, bottom nav
+│   │       │   ├── views/     # Una vista por pantalla
+│   │       │   └── ui/        # Iconos, toasts
+│   │       └── styles/        # globals.css (design tokens)
+│   └── android/          # Wrapper Capacitor (sin código React)
+│       └── capacitor.config.ts
+├── docker-compose.yml
+├── docker-compose.override.yml   # Bind :80 solo en dev local
+├── Dockerfile.backend
+├── Dockerfile.nginx
+├── nginx/nginx.conf
+└── Makefile
 ```
 
-| Servicio | Imagen | Rol |
-|---|---|---|
-| `nginx` | `Dockerfile.nginx` | Reverse proxy + sirve el SPA |
-| `web` | `Dockerfile.frontend` | Compila React con Vite (solo en build) |
-| `api` | `Dockerfile.backend` | Fastify + Prisma, aplica migraciones al arrancar |
-| `db` | `postgres:16-alpine` | Base de datos, datos persistentes en volumen `pgdata` |
+## Funcionalidades
 
----
+- **Entrenamientos** — Sesiones por semana/día, autofill del entrenamiento anterior, múltiples sets con kg y reps, cardio, timer integrado
+- **Rutinas** — Presets estándar (Bro Split, Push Pull Legs, Full Body…) + rutinas custom
+- **Nutrición** — Registro de comidas y macros por día, análisis de fotos con IA, tracking de agua, promedio semanal
+- **IA** — Análisis de progreso, recomendaciones de entrenamiento, chat contextual (OpenAI / Anthropic / Google)
+- **Duelos** — Challenges entre usuarios con check-ins fotográficos y ranking
+- **Peso corporal** — Historial + gráfica de tendencia
+- **Offline-first** — Cola de escrituras pendientes que se reproduce al reconectar
+- **Temas** — Modo claro/oscuro + 5 colores de acento (teal, verde, azul, naranja, violeta)
+- **Export/Import** — Backup completo en JSON
 
-## ✅ Requisitos previos
+## Requisitos previos
 
-- Docker + Docker Compose
-- `make`
-- Node.js 22 (solo para desarrollo local)
+- Node.js 20+
+- Docker y Docker Compose
+- Java 21 (solo para builds Android — el sistema debe tener JDK 21, no 25)
 
----
+## Desarrollo local
 
-## ⚙️ Configuración del entorno
-
-Copia el archivo de ejemplo y rellena los valores:
+### 1. Variables de entorno
 
 ```bash
-cp .env.example .env
+cp .env.example .env   # editar con tus valores
 ```
+
+Variables requeridas:
 
 ```env
-# PostgreSQL
-DB_NAME=gymtracker
-DB_USER=gymuser
-DB_PASSWORD=una_clave_segura_aqui
+DATABASE_URL=postgresql://gymtracker:gymtracker@localhost:5432/gymtracker
+REDIS_URL=redis://localhost:6379
+JWT_SECRET=<mínimo 32 chars aleatorios>
+JWT_REFRESH_SECRET=<mínimo 32 chars aleatorios>
+ENCRYPTION_KEY=<exactamente 32 chars — cifra las API keys de IA>
 
-# Solo para desarrollo local
-DATABASE_URL=postgresql://gymuser:una_clave_segura_aqui@localhost:5432/gymtracker
-
-# Genera cada uno con: openssl rand -base64 32
-JWT_SECRET=cadena_aleatoria_larga_minimo_32_caracteres
-JWT_REFRESH_SECRET=otra_cadena_diferente_para_refresh
+# Opcionales
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
+ADMIN_TOKEN=<token para Bull Board>
 ```
 
-> 💡 Para generar secrets seguros:
-> ```bash
-> openssl rand -base64 32
-> ```
-
----
-
-## 🚀 Deploy con Coolify
-
-Este proyecto está optimizado para desplegarse en [Coolify](https://coolify.io) usando Docker Compose.
-
-### Pasos
-
-1. **Conecta tu repositorio** en Coolify → New Resource → Docker Compose
-2. **Desactiva "Build Secrets"** en Configuration → General (evita que Coolify corrompa los Dockerfiles)
-3. **Configura las variables de entorno** en la tab *Environment Variables* con los siguientes valores:
-
-```
-DB_NAME=gymtracker
-DB_USER=gymuser
-DB_PASSWORD=<password_seguro>
-JWT_SECRET=<openssl rand -base64 32>
-JWT_REFRESH_SECRET=<openssl rand -base64 32>
-```
-
-4. **Asigna un dominio** al servicio `nginx` en la sección FQDN
-5. **Despliega** — Coolify construirá las 3 imágenes y levantará el stack automáticamente
-
-> ⚠️ **Nota:** Las variables deben marcarse como *Available at Runtime*, no solo en build time.
-
----
-
-## 🐳 Docker Compose (producción)
-
-### Primer deploy
+### 2. Instalar dependencias
 
 ```bash
-make build
+npm install          # instala todos los workspaces
 ```
 
-Este comando:
-1. Construye la imagen del frontend (Vite → dist estático)
-2. Construye la imagen del backend (TypeScript compilado, 2 stages)
-3. Construye la imagen de nginx (config embebida)
-4. Levanta los servicios en orden: `db` → `api` → `nginx`
-5. El backend aplica las migraciones de Prisma automáticamente
-
-La app queda disponible en: **`http://localhost:3000`**
-
-### Comandos de operación
+### 3. Levantar servicios y migrar la base de datos
 
 ```bash
-make build       # Reconstruir imágenes y levantar
-make deploy      # git pull + reconstruir + levantar
-make logs        # Logs en tiempo real de nginx y api
-make logs-api    # Logs solo del backend
-make logs-db     # Logs solo de PostgreSQL
-make restart     # Reiniciar nginx y api sin tocar la BD
-
-docker compose down      # Parar servicios (datos persisten)
-docker compose down -v   # Parar y borrar todos los datos ⚠️
+make db-up           # PostgreSQL + Redis en Docker
+make db-migrate      # ejecuta migraciones Prisma
 ```
 
-### Persistencia
-
-Los datos de PostgreSQL se almacenan en el volumen Docker `pgdata`. Sobreviven a reinicios y a `docker compose down`. Solo se eliminan con `docker compose down -v`.
-
----
-
-## 🔒 Tailscale
-
-### Opción A — Acceso directo por IP
+### 4. Arrancar el servidor de desarrollo
 
 ```bash
-make build
-tailscale ip -4        # Obtén tu IP de Tailscale, ej: 100.80.118.36
-# Accede desde cualquier dispositivo del tailnet:
-# http://100.80.118.36:3000
+make dev             # frontend :5173 + backend :3001 en paralelo
 ```
 
-### Opción B — HTTPS con hostname (Tailscale Serve)
+Comandos individuales:
 
 ```bash
-make build
-tailscale serve --bg 3000
-tailscale serve status   # Muestra la URL HTTPS del tailnet
-# https://nombre-maquina.tailnet-name.ts.net
+cd packages/backend && npm run dev    # tsx watch
+cd packages/web && npm run dev        # Vite dev server
 ```
 
-Para desactivar:
-```bash
-tailscale serve reset
-```
-
----
-
-## 💻 Desarrollo local
-
-Requiere Node.js 22 instalado. Usa hot-reload con Vite + tsx watch.
+## Producción con Docker Compose
 
 ```bash
-# 1. Levantar solo la BD
-make db-up
-
-# 2. Instalar dependencias (primera vez)
-cd frontend && npm install && cd ..
-cd backend  && npm install && cd ..
-
-# 3. Arrancar en paralelo
-make dev
+make build           # rebuild completo sin caché
+make up              # levantar todos los contenedores
+make logs            # logs en vivo de nginx y api
+make restart         # reiniciar api y nginx (sin tocar BD)
+make down            # parar todo
+make backup          # dump de PostgreSQL → ./backups/
 ```
 
-- **Frontend** (Vite): `http://localhost:5173`
-- **Backend** (Fastify): `http://localhost:3001`
-- El proxy de Vite redirige `/api/*` al backend automáticamente
+El archivo `docker-compose.override.yml` añade `ports: ["80:80"]` para dev local. En producción (Coolify) no se carga y Traefik enruta el tráfico.
 
-### Acceso desde Tailscale en modo dev
+## Android (APK)
+
+El paquete `packages/android/` es solo el wrapper de Capacitor. Todo el código React vive en `packages/web/`.
 
 ```bash
-cd backend  && npm run dev &
-cd frontend && npm run dev -- --host
-# Vite mostrará: Network: http://100.80.118.36:5173/
+make android-build   # build web con --mode android + cap sync
+make android-open    # abre en Android Studio
+make android-run     # instala en dispositivo USB
 ```
 
-### Comandos útiles
+Para generar el APK firmado:
 
 ```bash
-make db-migrate    # Aplicar nuevas migraciones de Prisma
-make db-studio     # Abrir Prisma Studio (explorador visual de BD)
-
-cd frontend && npm run lint
-cd frontend && npx tsc -b
-cd backend  && npx tsc
+cd packages/android
+JAVA_HOME=~/java/jdk-21.0.11+10 ./android/gradlew assembleDebug
+# APK → android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
----
+La variable `VITE_API_URL` del archivo `packages/android/.env` apunta a la API de producción para la APK.
 
-## 🔐 Variables de entorno
+## Migraciones de base de datos
 
-### Obligatorias
+```bash
+make db-migrate                        # aplicar migraciones existentes
+cd packages/backend && npx prisma migrate dev --name nombre   # crear nueva migración
+make db-studio                         # Prisma Studio en el navegador
+```
 
-| Variable | Descripción | Cómo generarla |
-|---|---|---|
-| `DB_NAME` | Nombre de la base de datos | ej. `gymtracker` |
-| `DB_USER` | Usuario de PostgreSQL | ej. `gymuser` |
-| `DB_PASSWORD` | Contraseña de PostgreSQL | `openssl rand -base64 32` |
-| `JWT_SECRET` | Secret para access tokens | `openssl rand -base64 32` |
-| `JWT_REFRESH_SECRET` | Secret para refresh tokens | `openssl rand -base64 32` (diferente) |
-| `APP_URL` | URL pública del frontend | `https://tuapp.com` |
+## API Reference
 
-### Solo desarrollo local
+| Prefijo | Descripción |
+|---------|-------------|
+| `POST /api/auth/register` | Crear cuenta |
+| `POST /api/auth/login` | Iniciar sesión |
+| `POST /api/auth/refresh` | Renovar access token |
+| `POST /api/auth/logout` | Invalidar tokens |
+| `GET/PUT /api/users/me` | Perfil de usuario |
+| `GET/PUT /api/users/me/settings` | Configuración |
+| `GET/PUT /api/sessions/:week/:day` | Sesión de entrenamiento |
+| `CRUD /api/routines` | Rutinas custom |
+| `CRUD /api/nutrition/:date` | Días de nutrición |
+| `CRUD /api/notes` | Notas globales |
+| `POST /api/ai/analyze-food` | Análisis de foto con IA |
+| `POST /api/ai/analyze` | Análisis de progreso con IA |
+| `POST /api/ai/chat` | Chat contextual con IA |
+| `CRUD /api/challenges` | Duelos |
+| `POST /api/migrate/localstorage` | Importar datos legacy |
 
-| Variable | Descripción | Ejemplo |
-|---|---|---|
-| `DATABASE_URL` | URL directa para Prisma (`make dev`) | `postgresql://gymuser:pass@localhost:5432/gymtracker` |
+Panel de colas (Bull Board): `GET /admin/queues` con header `Authorization: <ADMIN_TOKEN>`
 
-### SMTP — correos de verificación y reset (opcionales)
+## Autenticación
 
-Sin `SMTP_HOST` la app funciona igual, pero los correos se imprimen en los logs del contenedor.
+- **Access token** JWT de 15 min (solo en memoria, no persiste)
+- **Refresh token** de 30 días en `localStorage`, guardado también en PostgreSQL + lista negra en Redis
+- Al recargar la app, el interceptor de Axios renueva automáticamente el access token usando el refresh token
+- Un singleton `refreshPromise` serializa múltiples peticiones 401 simultáneas para evitar refresh loops
 
-| Variable | Descripción | Ejemplo |
-|---|---|---|
-| `SMTP_HOST` | Servidor SMTP | `mail.tudominio.com` |
-| `SMTP_PORT` | Puerto SMTP | `465` (SSL) o `587` (STARTTLS) |
-| `SMTP_SECURE` | SSL directo en puerto | `true` para 465, `false` para 587 |
-| `SMTP_USER` | Email remitente | `no-reply@tudominio.com` |
-| `SMTP_PASS` | Contraseña / App Password SMTP | — |
-| `SMTP_FROM` | Nombre visible en el correo | `Gym Tracker <no-reply@tudominio.com>` |
+## Despliegue en Coolify
 
----
+1. Crear proyecto en Coolify apuntando a este repositorio
+2. Seleccionar `docker-compose.yml` como archivo de compose (no carga el `.override.yml`)
+3. Configurar las variables de entorno en el panel de Coolify
+4. Traefik de Coolify enruta el dominio al contenedor nginx automáticamente
 
-<div align="center">
+El dominio de producción debe estar en la lista CORS del backend (`APP_DOMAIN` en producción o la URL del frontend).
 
-Hecho con ☕ y 🏋️
+## Scripts disponibles
 
-</div>
+```bash
+# Desde la raíz
+make dev            # desarrollo completo
+make db-up          # solo bases de datos
+make db-migrate     # migraciones
+make db-studio      # Prisma Studio
+make up             # producción Docker
+make down           # parar Docker
+make build          # rebuild Docker
+make logs           # logs Docker
+make restart        # reiniciar api+nginx
+make backup         # backup PostgreSQL
+make android-build  # build APK web
+make android-open   # Android Studio
+make android-run    # instalar en dispositivo
+
+# Desde packages/backend
+npm run dev         # tsx watch
+npm run build       # tsc (verificar tipos)
+
+# Desde packages/web
+npm run dev         # Vite dev server
+npm run build       # build producción (web)
+npm run build:android  # build para APK
+npm run build:docker   # build sin tsc (Dockerfile)
+npm run lint        # ESLint
+```

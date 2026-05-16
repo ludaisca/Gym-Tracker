@@ -5,8 +5,8 @@
 dev:
 	@[ -f .env ] || (echo "❌ Falta .env — copia .env.example y ajusta los valores" && exit 1)
 	@trap 'kill 0' SIGINT; \
-	(cd frontend && npm run dev) & \
-	(cd backend && set -a && . ../.env && set +a && npm run dev) & \
+	(cd packages/web && npm run dev) & \
+	(cd packages/backend && set -a && . ../../.env && set +a && npm run dev) & \
 	wait
 
 # Levanta solo la BD y caché (para desarrollo local)
@@ -15,11 +15,11 @@ db-up:
 
 # Migraciones Prisma (desarrollo)
 db-migrate:
-	cd backend && set -a && . ../.env && set +a && npx prisma migrate dev
+	cd packages/backend && set -a && . ../../.env && set +a && npx prisma migrate dev
 
 # Prisma Studio
 db-studio:
-	cd backend && npx prisma studio
+	cd packages/backend && npx prisma studio
 
 # ── Producción (Docker Compose) ──────────────────────────────────────
 up:
@@ -51,14 +51,15 @@ deploy:
 	@echo "✅ Desplegado"
 
 # ── Android ──────────────────────────────────────────────────────────
-android-build:  ## Build APK de debug (requiere Android Studio instalado)
-	cd frontend && npm run build -- --mode android && npx cap sync android
+android-build:  ## Build web con --mode android y sincroniza Capacitor
+	cd packages/web && npm run build:android
+	cd packages/android && npx cap sync android
 
 android-open:   ## Abrir proyecto en Android Studio
-	cd frontend && npx cap open android
+	cd packages/android && npx cap open android
 
 android-run:    ## Instalar en dispositivo Android conectado por USB
-	cd frontend && npx cap run android
+	cd packages/android && npx cap run android
 
 # Backup manual de la base de datos (genera archivo en ./backups/)
 backup:
