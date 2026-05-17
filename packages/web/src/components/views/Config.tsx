@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore, useUIStore, useOfflineStore } from '../../store'
 import { usersApi } from '../../api/users'
@@ -10,6 +10,9 @@ import {
 } from '../ui/Icons'
 import { toast } from '../../lib/toast'
 import { Dumbbell, Zap, Flame, Target, Trophy, Brain, Waves, Rocket } from 'lucide-react'
+import { subscribeToPush, unsubscribeFromPush, pushApi } from '../../api/push'
+import { useProAccess } from '../../hooks/useProAccess'
+import { ProGate } from '../ui/ProGate'
 
 const AVATARS = [
   { id: '1', icon: Dumbbell },
@@ -33,6 +36,7 @@ const ACCENT_THEMES = [
 export default function Config() {
   const navigate = useNavigate()
   const { user, setAuth, accessToken, clearAuth } = useAuthStore()
+  const { isPro, planExpiresAt, trialEndsAt } = useProAccess()
   const { toggleTheme, theme, accentTheme, setAccentTheme } = useUIStore()
   const { queue, dequeue, clearQueue } = useOfflineStore()
   const [settings, setSettings] = useState<Partial<UserSettings>>(user?.settings ?? {})
@@ -225,6 +229,23 @@ export default function Config() {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // Push notifications state
+  const [pushSupported, setPushSupported] = useState(false)
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default')
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+
+  useEffect(() => {
+    const supported = 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window
+    setPushSupported(supported)
+    if (supported) {
+      setPushPermission(Notification.permission)
+      navigator.serviceWorker.ready.then(reg =>
+        reg.pushManager.getSubscription().then(sub => setPushSubscribed(!!sub))
+      ).catch(() => {})
+    }
+  }, [])
+
   async function handleDeleteAccount() {
     if (!deleteConfirm) { setDeleteConfirm(true); return }
     setDeleting(true)
@@ -244,6 +265,32 @@ export default function Config() {
 
   return (
     <div className="fade-in">
+      {/* ── Mi Plan ───────────────────────────────────────────── */}
+      <div className={`plan-card ${isPro ? 'plan-card--pro' : ''}`}>
+        <div className="plan-card-left">
+          <div className="plan-card-name">
+            {isPro ? '★ Gym Tracker Pro' : 'Plan Gratuito'}
+          </div>
+          <div className="plan-card-sub">
+            {isPro
+              ? trialEndsAt
+                ? `Prueba gratis hasta ${new Date(trialEndsAt).toLocaleDateString('es-MX', { dateStyle: 'medium' })}`
+                : planExpiresAt
+                  ? `Activo hasta ${new Date(planExpiresAt).toLocaleDateString('es-MX', { dateStyle: 'medium' })}`
+                  : 'Acceso Pro vitalicio'
+              : 'Hasta 3 rutinas · sin IA ni duelos'}
+          </div>
+        </div>
+        <div className="plan-card-action">
+          {isPro
+            ? <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-primary)', fontWeight: 700 }}>Activo ✓</span>
+            : <button className="primary-btn" style={{ fontSize: 'var(--text-xs)', padding: '0.5rem 1rem' }} onClick={() => navigate('/upgrade')}>
+                Mejorar →
+              </button>
+          }
+        </div>
+      </div>
+
       {/* ── Perfil header ─────────────────────────────────────── */}
       <section className="card">
         <div className="profile-header-main">
@@ -468,7 +515,9 @@ export default function Config() {
       </section>
 
       {/* ── Integración IA ────────────────────────────────────── */}
-      <section className="card">
+      {!isPro ? (
+        <ProGate mode="lock" lockLabel="Asistente de IA — Función Pro" feature="Conecta tu cuenta con Google Gemini para análisis de entrenamientos y escaneo de comidas." />
+      ) : <section className="card">
         <div className="panel-head">
           <div>
             <h3>Asistente de Inteligencia Artificial</h3>
@@ -521,7 +570,99 @@ export default function Config() {
             </button>
           )}
         </div>
-      </section>
+      </section>}
+
+      {/* ── Notificaciones Push ───────────────────────────────── */}
+      {!isPro ? (
+        <ProGate mode="lock" lockLabel="Notificaciones Push — Función Pro" feature="Recibe recordatorios de entrenamiento directamente en tu dispositivo." />
+      ) : <section className="card">
+        <div className="panel-head">
+          <div>
+            <h3>Notificaciones Push</h3>
+            <p>Recibe recordatorios de entrenamiento directamente en tu dispositivo.</p>
+          </div>
+          {pushSubscribed && (
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success)', fontWeight: 700 }}>
+              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor', marginRight: '6px' }} />
+              Activas
+            </span>
+          )}
+        </div>
+        <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          {!pushSupported ? (
+            <p className="tiny muted">Tu navegador no soporta notificaciones push.</p>
+          ) : pushPermission === 'denied' ? (
+            <p className="tiny muted">Has bloqueado las notificaciones. Cámbialas en la configuración del navegador.</p>
+          ) : (
+            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+              {!pushSubscribed ? (
+                <button
+                  className="primary-btn"
+                  disabled={pushLoading}
+                  onClick={async () => {
+                    setPushLoading(true)
+                    try {
+                      const sub = await subscribeToPush()
+                      if (sub) {
+                        setPushSubscribed(true)
+                        setPushPermission(Notification.permission)
+                        toast('Notificaciones activadas')
+                      } else {
+                        toast('No fue posible activar las notificaciones', 'error')
+                      }
+                    } catch {
+                      toast('Error al activar notificaciones', 'error')
+                    } finally {
+                      setPushLoading(false)
+                    }
+                  }}
+                >
+                  {pushLoading ? 'Activando…' : 'Activar notificaciones'}
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="ghost-btn"
+                    disabled={pushLoading}
+                    onClick={async () => {
+                      setPushLoading(true)
+                      try {
+                        await unsubscribeFromPush()
+                        setPushSubscribed(false)
+                        toast('Notificaciones desactivadas')
+                      } catch {
+                        toast('Error al desactivar notificaciones', 'error')
+                      } finally {
+                        setPushLoading(false)
+                      }
+                    }}
+                    style={{ color: 'var(--color-warning)' }}
+                  >
+                    Desactivar
+                  </button>
+                  <button
+                    className="ghost-btn"
+                    disabled={pushLoading}
+                    onClick={async () => {
+                      setPushLoading(true)
+                      try {
+                        const result = await pushApi.test()
+                        toast(`Notificación enviada (${result.sent} dispositivo${result.sent !== 1 ? 's' : ''})`)
+                      } catch {
+                        toast('Error al enviar notificación de prueba', 'error')
+                      } finally {
+                        setPushLoading(false)
+                      }
+                    }}
+                  >
+                    Enviar prueba
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </section>}
 
       {/* ── Sincronización Local ──────────────────────────────── */}
       <section className="card">
@@ -583,13 +724,19 @@ export default function Config() {
         <div className="panel-body triple">
           <div>
             <p className="tiny muted" style={{ marginBottom: '.75rem' }}>Descarga un respaldo completo de tus datos en formato JSON.</p>
-            <button className="primary-btn" style={{ borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', gap: '.4rem' }} onClick={handleExport}>
-              <IconDownload size={15} /> Exportar JSON
-            </button>
+            {isPro ? (
+              <button className="primary-btn" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }} onClick={handleExport}>
+                <IconDownload size={15} /> Exportar JSON
+              </button>
+            ) : (
+              <button className="ghost-btn" style={{ display: 'flex', alignItems: 'center', gap: '.4rem', opacity: 0.6 }} onClick={() => navigate('/upgrade')}>
+                🔒 Exportar JSON (Pro)
+              </button>
+            )}
           </div>
           <div>
             <p className="tiny muted" style={{ marginBottom: '.75rem' }}>Carga un archivo JSON exportado previamente para restaurar tus datos.</p>
-            <button className="ghost-btn" style={{ borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', gap: '.4rem' }} onClick={handleImport}>
+            <button className="ghost-btn" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }} onClick={handleImport}>
               <IconUpload size={15} /> Importar JSON
             </button>
           </div>

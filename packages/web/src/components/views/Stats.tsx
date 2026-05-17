@@ -1,5 +1,8 @@
 import { useMemo, useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ProGate } from '../ui/ProGate'
+import { ProBadge } from '../ui/ProBadge'
+import { useProAccess } from '../../hooks/useProAccess'
 import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -185,6 +188,7 @@ function WeightTab() {
 export default function Stats() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
+  const { isPro } = useProAccess()
   const weekNumber = user?.currentWeek ?? 1
   const activeRoutineId = user?.activeRoutineId ?? null
   const customRoutines = useRoutines()
@@ -259,6 +263,55 @@ export default function Stats() {
     [sessions, streak, totalCompleteSessions]
   )
 
+  // F4 — Proyección 1RM (Epley: peso × (1 + reps/30))
+  const oneRMData = useMemo(() => {
+    const bests: Record<string, { name: string; weight: number; reps: number; oneRM: number }> = {}
+    for (const s of sessions) {
+      for (const ex of s.exercises) {
+        if (!ex.done || !ex.name) continue
+        for (const set of ex.sets) {
+          const kg = parseFloat(set.kg)
+          const reps = parseFloat(set.reps)
+          if (!(kg > 0) || !(reps > 0)) continue
+          const oneRM = Math.round(kg * (1 + reps / 30) * 10) / 10
+          const prev = bests[ex.name]
+          if (!prev || oneRM > prev.oneRM) {
+            bests[ex.name] = { name: ex.name, weight: kg, reps, oneRM }
+          }
+        }
+      }
+    }
+    return Object.values(bests).sort((a, b) => b.oneRM - a.oneRM).slice(0, 12)
+  }, [sessions])
+
+  // F3 — Sugerencias de progresión de peso
+  const progressionSuggestions = useMemo(() => {
+    const suggestions: { name: string; currentKg: number; suggestedKg: number }[] = []
+    for (const exercise of allExercises) {
+      const relevantSessions = [...sessions]
+        .sort((a, b) => b.weekNumber - a.weekNumber)
+        .filter(s => s.exercises.some(e => e.name === exercise && e.done))
+        .slice(0, 3)
+      if (relevantSessions.length < 3) continue
+      const stats = relevantSessions.map(s => {
+        const ex = s.exercises.find(e => e.name === exercise && e.done)
+        if (!ex || !ex.sets.length) return null
+        const weights = ex.sets.map(set => parseFloat(set.kg)).filter(w => w > 0)
+        if (!weights.length) return null
+        const maxWeight = Math.max(...weights)
+        const allRepsComplete = ex.sets.every(set => parseFloat(set.reps) > 0)
+        return { maxWeight, allRepsComplete }
+      }).filter(Boolean) as { maxWeight: number; allRepsComplete: boolean }[]
+      if (stats.length < 3) continue
+      if (!stats.every(s => s.allRepsComplete)) continue
+      const allSameWeight = stats.every(s => s.maxWeight === stats[0].maxWeight) && stats[0].maxWeight > 0
+      if (allSameWeight) {
+        suggestions.push({ name: exercise, currentKg: stats[0].maxWeight, suggestedKg: stats[0].maxWeight + 2.5 })
+      }
+    }
+    return suggestions
+  }, [sessions, allExercises])
+
   // Persistir fechas de desbloqueo en localStorage por userId
   const [achievementDates, setAchievementDates] = useState<Record<string, string>>({})
   useEffect(() => {
@@ -317,6 +370,7 @@ export default function Stats() {
 
       {tab === 'progreso' && (
         <div className="stats-tab-content">
+          <ProGate mode="blur" feature="estadísticas avanzadas" lockLabel="Estadísticas Pro">
           {volData.length >= 2 && (
             <section className="card">
               <div className="panel-head">
@@ -401,6 +455,59 @@ export default function Stats() {
             </section>
           )}
 
+          {oneRMData.length > 0 && (
+            <section className="card">
+              <div className="panel-head">
+                <div><h3>Proyección 1RM</h3><p>Máximo estimado con una repetición (fórmula Epley).</p></div>
+              </div>
+              <div className="panel-body">
+                <div className="pr-table-wrap">
+                  <table className="pr-table">
+                    <thead><tr><th>Ejercicio</th><th>Mejor set</th><th>1RM est.</th></tr></thead>
+                    <tbody>
+                      {oneRMData.map(r => (
+                        <tr key={r.name}>
+                          <td>{r.name}</td>
+                          <td className="muted">{r.weight} kg × {r.reps} reps</td>
+                          <td><strong>{r.oneRM} kg</strong></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {progressionSuggestions.length > 0 && (
+            <section className="card">
+              <div className="panel-head">
+                <div>
+                  <h3>Sugerencias de progresión</h3>
+                  <p>Ejercicios con peso consistente en las últimas 3 sesiones.</p>
+                </div>
+              </div>
+              <div className="panel-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  {progressionSuggestions.map(s => (
+                    <div key={s.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-3)', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{s.name}</div>
+                        <div className="tiny muted">Actual: {s.currentKg} kg</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 700, color: 'var(--color-primary)' }}>+2.5 kg</div>
+                        <div className="tiny muted">→ {s.suggestedKg} kg</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
+
+          </ProGate>
+
           <section className="card">
             <div className="panel-head">
               <div><h3>Resumen por día</h3><p>Semana {weekNumber}.</p></div>
@@ -439,13 +546,16 @@ export default function Stats() {
             <div className="panel-body">
               <div className="achievements-grid">
                 {ACHIEVEMENTS.map(a => {
-                  const unlocked = unlockedAchievements.some(u => u.id === a.id)
+                  const isProAchievement = a.id === 'centurion' || a.id === 'racha-8'
+                  const effectivelyLocked = isProAchievement && !isPro
+                  const unlocked = !effectivelyLocked && unlockedAchievements.some(u => u.id === a.id)
                   const unlockedAt = achievementDates[a.id]
-                  const unlockedLabel = unlockedAt
+                  const unlockedLabel = unlockedAt && !effectivelyLocked
                     ? new Date(unlockedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
                     : null
                   return (
-                    <div key={a.id} className={`achievement-card ${unlocked ? 'unlocked' : 'locked'}`}>
+                    <div key={a.id} className={`achievement-card ${unlocked ? 'unlocked' : 'locked'}`} style={{ position: 'relative' }}>
+                      {isProAchievement && <span style={{ position: 'absolute', top: 6, right: 6 }}><ProBadge size="sm" /></span>}
                       <div className={`achievement-icon ${unlocked ? 'unlocked' : ''}`}>
                         {unlocked ? a.icon : <IconLock />}
                       </div>

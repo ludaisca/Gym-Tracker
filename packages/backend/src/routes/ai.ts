@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { getRoutineDays, PRESET_ROUTINES } from '../lib/presetRoutines'
 import { decryptValue } from '../lib/crypto'
+import { requirePro } from '../plugins/requirePro'
 
 const analyzeFoodSchema = z.object({
   imageBase64: z.string().min(1).max(2_000_000),
@@ -169,6 +170,7 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
   const { prisma } = fastify
 
   fastify.addHook('onRequest', fastify.authenticate)
+  fastify.addHook('onRequest', requirePro(fastify))
 
   fastify.post('/analyze-food', {
     bodyLimit: 10 * 1024 * 1024,

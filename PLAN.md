@@ -67,16 +67,32 @@ Generado el 2026-05-15 a partir de auditoría técnica completa.
 
 ## FUNCIONALIDADES NUEVAS
 
-| # | Feature | Descripción | Esfuerzo |
-|---|---------|-------------|---------|
-| F1 | Recordatorios Push PWA | Notificaciones para entrenamientos programados | Medio |
-| F2 | Indicador offline en AppShell | Banner persistente cuando el usuario está offline | Bajo |
-| F3 | Progresión automática de peso | IA sugiere aumentar cuando reps son consistentes | Medio |
-| F4 | Proyección de 1RM | Epley formula con historial real de sets | Bajo |
-| F5 | Compartir rutina con link | shareable code sin infraestructura compleja | Medio |
-| F6 | Analytics endpoint semanal | `GET /analytics/week/:week` — volumen, PRs | Medio |
-| F7 | Marketplace de rutinas | Comunidad y engagement largo plazo | Alto |
-| F8 | Apple Health / Google Fit | Wearables y datos de HR | Alto |
+| # | Feature | Descripción | Esfuerzo | Estado |
+|---|---------|-------------|---------|--------|
+| F1 | Recordatorios Push PWA | Notificaciones para entrenamientos programados | Medio | ✅ |
+| F2 | Indicador offline en AppShell | Banner persistente cuando el usuario está offline | Bajo | ✅ |
+| F3 | Progresión automática de peso | Sugiere +2.5 kg cuando reps consistentes en 3 sesiones | Medio | ✅ |
+| F4 | Proyección de 1RM | Epley formula con historial real de sets | Bajo | ✅ |
+| F5 | Compartir rutina con link | shareCode generado, importar por código | Medio | ✅ |
+| F6 | Analytics endpoint semanal | `GET /analytics/week/:week` — volumen, PRs | Medio | ⚠️ Backend listo, falta vista UI |
+| F7 | Marketplace de rutinas | Publicar y clonar rutinas de la comunidad | Alto | ✅ |
+| F8 | Apple Health / Google Fit | Wearables y datos de HR | Alto | — |
+
+> **F6 nota**: `GET /analytics/week/:week` y `GET /analytics/exercise` operativos en backend (`packages/backend/src/routes/analytics.ts`) pero `Stats.tsx` calcula localmente los datos sin consumirlos. Pendiente: vista o reemplazar el cálculo local por estas llamadas.
+
+---
+
+## Monetización (Sistema Free + Pro)
+
+Añadido fuera del PLAN.md original.
+
+- [x] Plugin `requirePro` (backend) + hook `useProAccess` (web)
+- [x] Componentes `ProGate` (blur/lock), `ProBadge`, `UpgradeModal`, vista `/upgrade`
+- [x] Trial de 7 días: `POST /users/me/trial` (una vez por usuario)
+- [x] Grant manual: `POST /users/admin/grant-pro` con `ADMIN_TOKEN`
+- [x] Modelo: campos `plan`, `planExpiresAt`, `trialEndsAt`, `stripeCustomerId` en `User`
+- [x] Rutas Pro-gated: `analytics.*`, `ai.*`, `challenges.*`, `push.subscribe`, `routines.publish`, `users.export`. Soft limit 3 rutinas custom en plan Free.
+- [ ] Integración Stripe real (próxima sesión — hoy solo grant por ADMIN_TOKEN)
 
 ---
 
@@ -86,3 +102,8 @@ Generado el 2026-05-15 a partir de auditoría técnica completa.
 - **ENCRYPTION_KEY**: Debe ser exactamente 32 bytes (256 bits) para AES-256. Generar con `openssl rand -hex 16` (32 chars hex) o `openssl rand -base64 24` (32 chars base64).
 - **Java 21**: Sistema tiene Java 25. El path correcto para builds Android es `~/java/jdk-21.0.11+10`. Configurado en `packages/android/android/gradle.properties`.
 - **Offline queue**: La cola vive en localStorage bajo la clave `gym-tracker-offline`. No comprimida. Puede crecer si hay muchas escrituras offline prolongadas.
+- **Push VAPID keys**: Se auto-generan en el primer arranque y se persisten en la tabla `SystemConfig` de la BD. No requieren configuración manual. Opcionalmente puedes fijar `VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY` en Coolify para evitar regeneración si borras la BD. `VAPID_EMAIL` es opcional (default `admin@gymtracker.local`). El servicio está en `src/services/vapid.ts`.
+- **Push SW handler**: El service worker generado por vite-plugin-pwa importa `push-handler.js` (en `public/`) via `importScripts`. Contiene los listeners `push` y `notificationclick`.
+- **Schema migrations pendientes**: Ejecutar `make db-migrate` para aplicar los índices de [9] + nuevos campos de F1 (`PushSubscription`), F5 (`shareCode`), F7 (`isPublic`, `downloadCount`, `@@index([isPublic])`).
+- **Marketplace GET /marketplace**: Ruta pública (sin auth). El clone (`POST /marketplace/clone/:id`) requiere autenticación.
+- **Analytics**: Los endpoints `GET /analytics/week/:week` y `GET /analytics/exercise?name=...` devuelven datos del usuario autenticado. Útiles para integraciones externas o dashboards.

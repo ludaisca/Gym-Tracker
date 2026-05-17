@@ -3,6 +3,7 @@ import { z } from 'zod'
 import crypto from 'crypto'
 import { mkdirSync } from 'fs'
 import { join } from 'path'
+import { requirePro } from '../plugins/requirePro'
 import { extractBestOneRMs } from '../types/domain'
 
 // ── helpers ──────────────────────────────────────────────────────────────
@@ -36,6 +37,7 @@ const checkinSchema = z.object({
 const challengesRoutes: FastifyPluginAsync = async (fastify) => {
   const { prisma } = fastify
   fastify.addHook('onRequest', fastify.authenticate)
+  fastify.addHook('onRequest', requirePro(fastify))
 
   const uploadDir = join(process.cwd(), 'uploads', 'checkins')
   try { mkdirSync(uploadDir, { recursive: true }) } catch {}

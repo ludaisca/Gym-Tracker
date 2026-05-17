@@ -13,4 +13,6 @@ export const usersApi = {
   export: () => api.get('/users/me/export').then((r) => r.data),
 
   import: (payload: unknown) => api.post('/users/me/import', payload),
+
+  activateTrial: () => api.post<User>('/users/me/trial').then((r) => r.data),
 }

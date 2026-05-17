@@ -23,6 +23,9 @@ import nutritionRoutes from './routes/nutrition'
 import aiRoutes from './routes/ai'
 import migrateRoutes from './routes/migrate'
 import challengesRoutes from './routes/challenges'
+import pushRoutes from './routes/push'
+import analyticsRoutes from './routes/analytics'
+import marketplaceRoutes from './routes/marketplace'
 
 export async function buildApp() {
   const fastify = Fastify({
@@ -55,15 +58,18 @@ export async function buildApp() {
   await fastify.register(prismaPlugin)
   await fastify.register(authPlugin)
 
-  await fastify.register(authRoutes,      { prefix: '/auth' })
-  await fastify.register(usersRoutes,     { prefix: '/users' })
-  await fastify.register(sessionsRoutes,  { prefix: '/sessions' })
-  await fastify.register(routinesRoutes,  { prefix: '/routines' })
-  await fastify.register(notesRoutes,     { prefix: '/notes' })
-  await fastify.register(nutritionRoutes, { prefix: '/nutrition' })
+  await fastify.register(authRoutes,        { prefix: '/auth' })
+  await fastify.register(usersRoutes,       { prefix: '/users' })
+  await fastify.register(sessionsRoutes,    { prefix: '/sessions' })
+  await fastify.register(routinesRoutes,    { prefix: '/routines' })
+  await fastify.register(notesRoutes,       { prefix: '/notes' })
+  await fastify.register(nutritionRoutes,   { prefix: '/nutrition' })
   await fastify.register(aiRoutes,          { prefix: '/ai' })
   await fastify.register(migrateRoutes,     { prefix: '/migrate' })
   await fastify.register(challengesRoutes,  { prefix: '/' })
+  await fastify.register(pushRoutes,        { prefix: '/push' })
+  await fastify.register(analyticsRoutes,   { prefix: '/analytics' })
+  await fastify.register(marketplaceRoutes, { prefix: '/marketplace' })
 
   initWorker() // Arrancar worker de colas
 

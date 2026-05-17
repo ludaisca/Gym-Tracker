@@ -4,6 +4,7 @@ export interface SetData {
 }
 
 export interface ExerciseSession {
+  name?: string
   done: boolean
   sets: SetData[]
 }
@@ -113,6 +114,9 @@ export interface User {
   routineStartDate?: string | null
   currentWeek: number
   settings?: UserSettings | null
+  plan: 'free' | 'pro'
+  planExpiresAt?: string | null
+  trialEndsAt?: string | null
 }
 
 export interface AuthResponse {

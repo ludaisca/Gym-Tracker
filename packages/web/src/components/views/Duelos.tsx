@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { challengesApi, type Challenge, type VersusData } from '../../api/challenges'
 import { useAuthStore } from '../../store'
 import { IconTrophy, IconCamera, IconStats, IconCheck } from '../ui/Icons'
+import { ProGate } from '../ui/ProGate'
+import { useProAccess } from '../../hooks/useProAccess'
 
 // ── Canvas watermark helper ──────────────────────────────────────────────
 async function captureWithWatermark(
@@ -560,6 +562,7 @@ function VersusModal({ challenge, onClose }: { challenge: Challenge; onClose: ()
 // ── Main view ─────────────────────────────────────────────────────────────
 export default function Duelos() {
   const { user } = useAuthStore()
+  const { isPro } = useProAccess()
   const myId = user?.id ?? ''
 
   const [challenges, setChallenges] = useState<Challenge[]>([])
@@ -626,6 +629,16 @@ export default function Duelos() {
 
   const active   = challenges.filter(c => c.status !== 'finished')
   const finished = challenges.filter(c => c.status === 'finished')
+
+  if (!isPro) {
+    return (
+      <ProGate
+        mode="lock"
+        lockLabel="Duelos — Función Pro"
+        feature="Reta a un amigo, registra tu asistencia con foto validada y compara tu progreso en tiempo real."
+      />
+    )
+  }
 
   if (loading) return <div className="content"><div className="spinner" /></div>
 

@@ -63,6 +63,17 @@ cd packages/web && npm run build:android  # Vite build --mode android (para Capa
 cd packages/web && npm run lint           # ESLint
 ```
 
+### Migraciones de base de datos
+`prisma migrate dev` requiere TTY interactivo. En entornos no-interactivos (CI, scripts):
+```bash
+# Generar SQL sin aplicar
+npx prisma migrate diff --from-schema-datasource prisma/schema.prisma \
+  --to-schema-datamodel prisma/schema.prisma --script > migration.sql
+
+# Aplicar migraciones existentes sin prompts
+DATABASE_URL=postgresql://... npx prisma migrate deploy
+```
+
 ## Arquitectura
 
 ### Stack
@@ -74,21 +85,59 @@ cd packages/web && npm run lint           # ESLint
 ### Estructura del backend (`packages/backend/src/`)
 - `server.ts` — punto de entrada, importa `app.ts`
 - `app.ts` — registra todos los plugins y rutas de Fastify; aquí va CORS, rate-limit, Bull Board
-- `plugins/` — `prisma.ts`, `redis.ts`, `auth.ts` (decorators de Fastify)
+- `plugins/` — `prisma.ts`, `redis.ts`, `auth.ts` (decorators de Fastify), `requirePro.ts` (feature gate)
 - `routes/` — un archivo por dominio; cada ruta valida con Zod
 - `services/queue.ts` — BullMQ: cola `gym-tracker-bg-jobs` + worker para emails e importaciones
 - `services/email.ts` — Nodemailer; sin SMTP configurado imprime los emails en consola (útil para dev)
+- `services/vapid.ts` — claves VAPID para push: lee de env vars o genera y persiste en `SystemConfig` de la BD
 
 ### Estructura del web frontend (`packages/web/src/`)
 - `api/client.ts` — instancia Axios con `baseURL = VITE_API_URL ?? '/api'`; interceptor de refresh token con singleton para evitar múltiples refreshes simultáneos
 - `api/*.ts` — funciones por dominio que llaman al cliente
-- `store/index.ts` — tres stores Zustand: `useAuthStore` (auth + user), `useUIStore` (tema, offline), `useOfflineStore` (cola de escrituras pendientes)
+- `store/index.ts` — tres stores Zustand: `useAuthStore` (auth + user + `isPro()`), `useUIStore` (tema, offline), `useOfflineStore` (cola de escrituras pendientes)
 - `hooks/useOfflineSync.ts` — al reconectar, replay en serie de la `offlineStore.queue`
+- `hooks/useProAccess.ts` — hook que expone `{ isPro, plan, planExpiresAt, trialEndsAt }`
 - `components/views/` — una vista por pantalla (Dashboard, DayView, Routines, etc.)
-- `components/layout/AppShell.tsx` — shell principal con bottom nav
+- `components/layout/AppShell.tsx` — shell principal con bottom nav personalizable
+- `components/ui/ProBadge.tsx` — chip "★ PRO" para marcar funciones premium
+- `components/ui/ProGate.tsx` — wrapper `mode="blur"` (preview borroso) o `mode="lock"` (card de bloqueo)
+- `components/ui/UpgradeModal.tsx` — bottom sheet de upsell contextual
 
 ### Flujo de autenticación
 JWT de corta duración (access token) + refresh token en `localStorage`. El access token **no se persiste** en Zustand (solo en memoria); al recargar la app se renueva automáticamente usando el refresh token via `/auth/refresh`. El interceptor de Axios usa un singleton `refreshPromise` para serializar múltiples peticiones 401 simultáneas.
+
+### Sistema de monetización (Free + Pro)
+
+**Backend — `packages/backend/src/plugins/requirePro.ts`**
+
+```typescript
+checkIsPro(user)   // helper puro: verifica plan='pro' con expiración, O trialEndsAt activo
+requirePro(fastify) // Fastify hook: devuelve 403 { code: 'REQUIRES_PRO' } si no es Pro
+```
+
+Rutas gateadas: `analytics.*`, `ai.*`, `challenges.*` (todo), `push.subscribe`, `routines.publish`, `users.export`. El soft limit de 3 rutinas custom se verifica en `POST /routines/`.
+
+Endpoints de gestión de plan:
+- `POST /users/me/trial` — activa 7 días de prueba (una vez por usuario)
+- `POST /users/admin/grant-pro` — requiere `Authorization: Bearer {ADMIN_TOKEN}`; `months: 0` = Pro vitalicio
+
+**⚠️ Fastify hook scope**: `addHook` dentro de un plugin afecta **todas** las rutas de ese scope, incluyendo las registradas antes del hook. Para rutas mixtas (algunas públicas, otras protegidas), usar sub-scope: `await fastify.register(async (auth) => { auth.addHook(...); ... })`.
+
+**Frontend**
+
+`useProAccess()` computa `isPro` desde `user.plan` + `user.planExpiresAt` + `user.trialEndsAt` directamente (no llama al servidor).
+
+Para bloquear una sección entera:
+```tsx
+<ProGate mode="lock" lockLabel="Función Pro" feature="descripción" />
+```
+
+Para mostrar preview borroso con overlay:
+```tsx
+<ProGate mode="blur" feature="estadísticas avanzadas">
+  <MiComponente />
+</ProGate>
+```
 
 ### Capacitor / Android (`packages/android/`)
 - Config: `packages/android/capacitor.config.ts` (`appId: com.ludaisca.gymtracker`, `webDir: ../web/dist`)
@@ -104,4 +153,12 @@ JWT de corta duración (access token) + refresh token en `localStorage`. El acce
 - Coolify enruta el dominio `gym-tracker.ludaisca.ddns.net` a través de su Traefik interno al contenedor nginx
 
 ### Variables de entorno
-En desarrollo, `.env` está en la raíz del proyecto y el Makefile lo carga con `set -a && . ../../.env && set +a`. Las variables críticas son `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `ENCRYPTION_KEY` (para las API keys de IA en `UserSettings.aiKey`).
+En desarrollo, `.env` está en la raíz del proyecto y el Makefile lo carga con `set -a && . ../../.env && set +a`. Las variables críticas:
+
+| Variable | Uso |
+|---|---|
+| `DATABASE_URL` | PostgreSQL (usa `db:5432` en Docker, `localhost:5432` en dev local) |
+| `REDIS_URL` | Redis |
+| `JWT_SECRET` / `JWT_REFRESH_SECRET` | Tokens de acceso y refresco |
+| `ENCRYPTION_KEY` | Cifrado de API keys de IA en `UserSettings.aiKey` |
+| `ADMIN_TOKEN` | Autenticación para `POST /users/admin/grant-pro` |

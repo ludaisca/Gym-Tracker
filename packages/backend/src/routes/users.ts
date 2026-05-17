@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { encryptValue } from '../lib/crypto'
+import { checkIsPro } from '../plugins/requirePro'
 
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
@@ -52,6 +53,46 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
       include: { settings: true },
     })
     return sanitizeUser(user)
+  })
+
+  // ── POST /me/trial — activa prueba de 7 días (solo si nunca tuvo trial) ──
+  fastify.post('/me/trial', async (request, reply) => {
+    const { sub } = request.user as { sub: string }
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: sub }, select: { plan: true, trialEndsAt: true } })
+    if (user.plan === 'pro') return reply.status(409).send({ error: 'Ya tienes plan Pro activo.' })
+    if (user.trialEndsAt) return reply.status(409).send({ error: 'Ya utilizaste tu período de prueba.' })
+    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    const updated = await prisma.user.update({
+      where: { id: sub },
+      data: { trialEndsAt },
+      include: { settings: true },
+    })
+    return sanitizeUser(updated)
+  })
+
+  // ── POST /admin/grant-pro — activa Pro manualmente (requiere ADMIN_TOKEN) ──
+  fastify.post('/admin/grant-pro', {
+    onRequest: async (req, reply) => {
+      const adminToken = process.env.ADMIN_TOKEN
+      if (!adminToken || req.headers.authorization !== `Bearer ${adminToken}`) {
+        return reply.status(401).send({ error: 'No autorizado.' })
+      }
+    },
+  }, async (request, reply) => {
+    const body = z.object({
+      userId: z.string(),
+      months: z.number().int().min(0),
+    }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: body.error.issues[0].message })
+
+    const { userId, months } = body.data
+    const planExpiresAt = months === 0 ? null : new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000)
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { plan: 'pro', planExpiresAt },
+      include: { settings: true },
+    })
+    return { ok: true, user: sanitizeUser(updated) }
   })
 
   fastify.put('/me', async (request, reply) => {
@@ -119,8 +160,10 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
     return { ...safeSettings, aiKeySet: !!aiKey }
   })
 
-  fastify.get('/me/export', async (request) => {
+  fastify.get('/me/export', async (request, reply) => {
     const { sub } = request.user as { sub: string }
+    const userPlan = await prisma.user.findUnique({ where: { id: sub }, select: { plan: true, planExpiresAt: true, trialEndsAt: true } })
+    if (!checkIsPro(userPlan ?? null)) return reply.status(403).send({ error: 'Se requiere plan Pro.', code: 'REQUIRES_PRO' })
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: sub },
       include: {

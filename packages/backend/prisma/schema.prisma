@@ -23,6 +23,10 @@ model User {
   verificationExpiry DateTime?
   resetToken         String?   @unique
   resetExpiry        DateTime?
+  plan               String    @default("free")
+  planExpiresAt      DateTime?
+  trialEndsAt        DateTime?
+  stripeCustomerId   String?   @unique
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -35,9 +39,10 @@ model User {
   refreshTokens      RefreshToken[]
   bodyWeights        BodyWeight[]
   aiChat             AIChat?
-  challengesCreated  Challenge[]      @relation("ChallengeCreator")
-  challengesOpponent Challenge[]      @relation("ChallengeOpponent")
+  challengesCreated  Challenge[]        @relation("ChallengeCreator")
+  challengesOpponent Challenge[]        @relation("ChallengeOpponent")
   checkIns           CheckIn[]
+  pushSubscriptions  PushSubscription[]
 }
 
 model UserSettings {
@@ -59,16 +64,20 @@ model UserSettings {
 }
 
 model Routine {
-  id          String  @id @default(cuid())
-  userId      String
-  name        String
-  description String?
-  days        Json
+  id            String  @id @default(cuid())
+  userId        String
+  name          String
+  description   String?
+  days          Json
+  shareCode     String? @unique
+  isPublic      Boolean @default(false)
+  downloadCount Int     @default(0)
 
   user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions WorkoutSession[]
 
   @@index([userId])
+  @@index([isPublic])
 }
 
 model WorkoutSession {
@@ -207,5 +216,24 @@ model CheckIn {
 
   @@unique([challengeId, userId, serverTime])
   @@index([challengeId])
+  @@index([userId])
+}
+
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }

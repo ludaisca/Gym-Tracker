@@ -18,6 +18,7 @@ interface AuthState {
   setAuth: (user: User, token: string) => void
   updateUser: (updates: Partial<User>) => void
   clearAuth: () => void
+  isPro: () => boolean
 }
 
 interface UIState {
@@ -39,13 +40,21 @@ interface OfflineState {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       accessToken: null,
       isAuthenticated: false,
       setAuth: (user, accessToken) => set({ user, accessToken, isAuthenticated: true }),
       updateUser: (updates) => set((s) => ({ user: s.user ? { ...s.user, ...updates } : null })),
       clearAuth: () => set({ user: null, accessToken: null, isAuthenticated: false }),
+      isPro: () => {
+        const user = get().user
+        if (!user) return false
+        const now = new Date()
+        if (user.plan === 'pro' && (!user.planExpiresAt || new Date(user.planExpiresAt) > now)) return true
+        if (user.trialEndsAt && new Date(user.trialEndsAt) > now) return true
+        return false
+      },
     }),
     // accessToken no se persiste: se renueva en memoria tras cada recarga usando el refresh token
     { name: 'gym-auth', partialize: (s) => ({ user: s.user, isAuthenticated: s.isAuthenticated }) }

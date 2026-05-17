@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { useMemo, useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ChevronDown } from 'lucide-react'
 import type { ExerciseDef } from '../../types/domain'
 import type { ExerciseSession } from '../../types/domain'
 import { isPR, getExerciseHistory, getLastRecordedSets, calc1RM } from '../../lib/fitness'
@@ -24,6 +25,13 @@ export default function ExerciseCard({
   exDef, exState, allSessions, dayIds, currentWeek, routineDays,
   onToggleDone, onSetChange, onStartTimer, onAutoFill,
 }: Props) {
+  const [open, setOpen] = useState(true)
+
+  // Auto-colapsa cuando se marca como hecho
+  useEffect(() => {
+    if (exState.done) setOpen(false)
+  }, [exState.done])
+
   const currentBest = useMemo(() => {
     let best = 0
     exState.sets.forEach(s => {
@@ -61,62 +69,115 @@ export default function ExerciseCard({
     return exState.sets.every((s) => !s.kg || parseFloat(s.kg) === 0 || !s.reps || parseFloat(s.reps) === 0)
   }, [exState.sets])
 
+  // Resumen compacto para el estado colapsado
+  const collapsedSummary = useMemo(() => {
+    const filled = exState.sets.filter(s => s.kg && parseFloat(s.kg) > 0 && s.reps && parseFloat(s.reps) > 0)
+    if (filled.length === 0) return `${exDef.sets} series · ${exDef.reps} reps`
+    const best = filled.reduce((b, s) => {
+      const kg = parseFloat(s.kg)
+      return kg > b ? kg : b
+    }, 0)
+    return `${filled.length}/${exDef.sets} series · ${best} kg`
+  }, [exState.sets, exDef.sets, exDef.reps])
+
+  const restLabel = exDef.rest >= 60
+    ? `${Math.floor(exDef.rest / 60)}:${String(exDef.rest % 60).padStart(2, '0')}`
+    : `${exDef.rest}s`
+
   return (
-    <motion.article layout className={`exercise-item${exState.done ? ' done' : ''}`} transition={{ type: 'spring', stiffness: 350, damping: 25 }}>
-      <div className="exercise-top">
-        <button className="exercise-check" type="button" onClick={onToggleDone}>
+    <motion.article
+      layout
+      className={`exercise-item${exState.done ? ' done' : ''}`}
+      transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+    >
+      {/* ── Header — siempre visible, click para expandir/colapsar ── */}
+      <div
+        className="exercise-top exercise-accordion-header"
+        onClick={() => setOpen(o => !o)}
+      >
+        <button
+          className="exercise-check"
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleDone() }}
+        >
           {exState.done ? '✓' : ''}
         </button>
-        <div>
+
+        <div style={{ minWidth: 0 }}>
           <div className="exercise-name">
             {exDef.name}
             {hasPR && <span className="pr-badge">🏆 PR</span>}
           </div>
           <div className="exercise-meta">
-            Series: {exDef.sets} · Reps objetivo: {exDef.reps}
-            {max1RM > 0 && <span> · <strong>1RM máx ≈ {max1RM} kg</strong></span>}
+            {open
+              ? <>Series: {exDef.sets} · Reps: {exDef.reps}{max1RM > 0 && <span> · <strong>1RM ≈ {max1RM} kg</strong></span>}</>
+              : <span className="exercise-collapsed-summary">{collapsedSummary}</span>
+            }
           </div>
         </div>
+
         <div
           className="rest-tag"
-          style={{ cursor: 'pointer' }}
           title="Iniciar timer de descanso"
-          onClick={() => onStartTimer(exDef.rest, exDef.name)}
+          onClick={(e) => { e.stopPropagation(); onStartTimer(exDef.rest, exDef.name) }}
         >
-          ⏱ {exDef.rest >= 60 ? `${Math.floor(exDef.rest / 60)}:${String(exDef.rest % 60).padStart(2, '0')}` : `${exDef.rest}s`}
+          ⏱ {restLabel}
         </div>
+
         <div className="rep-tag">{exDef.reps}</div>
+
+        <motion.span
+          className="exercise-chevron"
+          animate={{ rotate: open ? 0 : -90 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <ChevronDown size={16} />
+        </motion.span>
       </div>
 
-      {lastRecordedSets && onAutoFill && isCurrentEmpty && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '.5rem' }}>
-          <button
-            className="ghost-btn"
-            style={{ padding: '.25rem .6rem', fontSize: 'var(--text-xs)', color: 'var(--color-accent)' }}
-            type="button"
-            onClick={() => onAutoFill(lastRecordedSets)}
-            title="Copiar series de la última sesión registrada"
+      {/* ── Cuerpo colapsable ── */}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            style={{ overflow: 'hidden' }}
           >
-            ⚡ Autocompletar con sesión anterior
-          </button>
-        </div>
-      )}
+            {lastRecordedSets && onAutoFill && isCurrentEmpty && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 var(--space-4) .5rem' }}>
+                <button
+                  className="ghost-btn"
+                  style={{ padding: '.25rem .6rem', fontSize: 'var(--text-xs)' }}
+                  type="button"
+                  onClick={() => onAutoFill(lastRecordedSets)}
+                  title="Copiar series de la última sesión registrada"
+                >
+                  ⚡ Autocompletar con sesión anterior
+                </button>
+              </div>
+            )}
 
-      <div className="sets">
-        {exState.sets.map((set, sidx) => (
-          <SetBox
-            key={sidx}
-            setIndex={sidx}
-            data={set}
-            restSeconds={exDef.rest}
-            exerciseName={exDef.name}
-            onChange={(field, value) => onSetChange(sidx, field, value)}
-            onStartTimer={onStartTimer}
-          />
-        ))}
-      </div>
+            <div className="sets">
+              {exState.sets.map((set, sidx) => (
+                <SetBox
+                  key={sidx}
+                  setIndex={sidx}
+                  data={set}
+                  restSeconds={exDef.rest}
+                  exerciseName={exDef.name}
+                  onChange={(field, value) => onSetChange(sidx, field, value)}
+                  onStartTimer={onStartTimer}
+                />
+              ))}
+            </div>
 
-      {history.length >= 2 && <ExerciseLineChart history={history} />}
+            {history.length >= 2 && <ExerciseLineChart history={history} />}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.article>
   )
 }
