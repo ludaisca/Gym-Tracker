@@ -6,7 +6,10 @@ dev:
 	@[ -f .env ] || (echo "❌ Falta .env — copia .env.example y ajusta los valores" && exit 1)
 	@trap 'kill 0' SIGINT; \
 	(cd packages/web && npm run dev) & \
-	(cd packages/backend && set -a && . ../../.env && set +a && npm run dev) & \
+	(cd packages/backend && set -a && . ../../.env && set +a && \
+	 export DATABASE_URL="$$(echo $$DATABASE_URL | sed 's|@db:|@localhost:|')" && \
+	 export REDIS_URL="$$(echo $$REDIS_URL | sed 's|@redis:|@localhost:|')" && \
+	 npm run dev) & \
 	wait
 
 # Levanta solo la BD y caché (para desarrollo local)
@@ -15,7 +18,9 @@ db-up:
 
 # Migraciones Prisma (desarrollo)
 db-migrate:
-	cd packages/backend && set -a && . ../../.env && set +a && npx prisma migrate dev
+	cd packages/backend && set -a && . ../../.env && set +a && \
+	 export DATABASE_URL="$$(echo $$DATABASE_URL | sed 's|@db:|@localhost:|')" && \
+	 npx prisma migrate dev
 
 # Prisma Studio
 db-studio:

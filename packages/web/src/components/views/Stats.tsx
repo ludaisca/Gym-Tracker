@@ -12,6 +12,7 @@ import { useRoutines } from '../../hooks/useRoutines'
 import { sessionsApi } from '../../api/sessions'
 import { getRoutineDays, getDayIds, calcStreak, getBestKgForWeek } from '../../lib/fitness'
 import { bodyWeightApi, type BodyWeightEntry } from '../../api/bodyweight'
+import { analyticsApi, type WeekAnalytics, type ExerciseAnalyticsPoint } from '../../api/analytics'
 import type { WorkoutSession } from '../../types/domain'
 
 type Sessions = WorkoutSession[]
@@ -204,6 +205,28 @@ export default function Stats() {
   const [tab, setTab] = useState<'progreso' | 'peso' | 'logros'>('progreso')
   const [selectedExercise, setSelectedExercise] = useState<string>('')
 
+  // Analytics desde backend (solo si Pro). Si falla o no Pro, cae al cálculo local.
+  const [weekData, setWeekData] = useState<WeekAnalytics | null>(null)
+  const [exerciseData, setExerciseData] = useState<ExerciseAnalyticsPoint[] | null>(null)
+
+  useEffect(() => {
+    if (!isPro) { setWeekData(null); return }
+    let cancelled = false
+    analyticsApi.getWeek(weekNumber)
+      .then(d => { if (!cancelled) setWeekData(d) })
+      .catch((err: unknown) => console.warn('[analytics/week]', err))
+    return () => { cancelled = true }
+  }, [isPro, weekNumber])
+
+  useEffect(() => {
+    if (!isPro || !selectedExercise) { setExerciseData(null); return }
+    let cancelled = false
+    analyticsApi.getExercise(selectedExercise)
+      .then(d => { if (!cancelled) setExerciseData(d) })
+      .catch((err: unknown) => console.warn('[analytics/exercise]', err))
+    return () => { cancelled = true }
+  }, [isPro, selectedExercise])
+
   const totalCompleted = useMemo(
     () => dayIds.reduce((a, d) => {
       const s = sessions.find(s => s.weekNumber === weekNumber && s.dayId === d)
@@ -248,7 +271,7 @@ export default function Stats() {
       .map(([w, vol]) => ({ week: `S${w}`, kg: Math.round(vol) }))
   }, [sessions])
 
-  const exerciseHistory = useMemo(() => {
+  const exerciseHistoryLocal = useMemo(() => {
     if (!selectedExercise) return []
     const data = []
     for (let w = 1; w <= weekNumber; w++) {
@@ -258,13 +281,21 @@ export default function Stats() {
     return data
   }, [selectedExercise, sessions, weekNumber, dayIds, routineDays])
 
+  // Prefiere datos del backend (incluyen 1RM por semana). Fallback al cálculo local.
+  const exerciseHistory = useMemo(() => {
+    if (exerciseData && exerciseData.length) {
+      return exerciseData.map(p => ({ week: `S${p.week}`, kg: p.bestKg }))
+    }
+    return exerciseHistoryLocal
+  }, [exerciseData, exerciseHistoryLocal])
+
   const unlockedAchievements = useMemo(
     () => ACHIEVEMENTS.filter(a => a.check(sessions, streak, totalCompleteSessions)),
     [sessions, streak, totalCompleteSessions]
   )
 
   // F4 — Proyección 1RM (Epley: peso × (1 + reps/30))
-  const oneRMData = useMemo(() => {
+  const oneRMDataLocal = useMemo(() => {
     const bests: Record<string, { name: string; weight: number; reps: number; oneRM: number }> = {}
     for (const s of sessions) {
       for (const ex of s.exercises) {
@@ -283,6 +314,20 @@ export default function Stats() {
     }
     return Object.values(bests).sort((a, b) => b.oneRM - a.oneRM).slice(0, 12)
   }, [sessions])
+
+  // Prefiere PRs del backend (calculados sobre toda la sesión y centralizados).
+  const oneRMData = useMemo(() => {
+    if (weekData && weekData.prs.length) {
+      return weekData.prs.slice(0, 12).map(p => ({ name: p.name, weight: p.kg, reps: p.reps, oneRM: p.oneRM }))
+    }
+    return oneRMDataLocal
+  }, [weekData, oneRMDataLocal])
+
+  // Top ejercicios por volumen de la semana actual (solo backend).
+  const topVolume = useMemo(
+    () => (weekData?.exercises ?? []).slice(0, 5),
+    [weekData]
+  )
 
   // F3 — Sugerencias de progresión de peso
   const progressionSuggestions = useMemo(() => {
@@ -474,6 +519,39 @@ export default function Stats() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {topVolume.length > 0 && (
+            <section className="card">
+              <div className="panel-head">
+                <div>
+                  <h3>Top ejercicios por volumen</h3>
+                  <p>Semana {weekNumber} · {weekData?.sessions ?? 0} sesiones · {(weekData?.totalVolume ?? 0).toLocaleString()} kg×r totales.</p>
+                </div>
+              </div>
+              <div className="panel-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  {topVolume.map((e, i) => {
+                    const max = topVolume[0].volume || 1
+                    const pct = Math.max(8, (e.volume / max) * 100)
+                    return (
+                      <div key={e.name} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                        <span className="pill" style={{ minWidth: 28, textAlign: 'center', fontWeight: 700 }}>{i + 1}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 4 }}>
+                            <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
+                            <span className="tiny muted" style={{ flexShrink: 0 }}>{e.volume.toLocaleString()} kg×r</span>
+                          </div>
+                          <div style={{ height: 6, background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: 'var(--color-primary)', borderRadius: 'var(--radius-full)' }} />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </section>
