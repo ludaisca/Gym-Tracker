@@ -49,7 +49,10 @@ export default function Routines() {
   useEffect(() => {
     if (tab !== 'mercado' || marketplaceRoutines.length > 0) return
     setLoadingMarket(true)
-    api.get<MarketplaceRoutine[]>('/marketplace').then(r => setMarketplaceRoutines(r.data)).catch((err: unknown) => console.warn('[marketplace]', err)).finally(() => setLoadingMarket(false))
+    api.get<MarketplaceRoutine[]>('/marketplace')
+      .then(r => setMarketplaceRoutines(r.data))
+      .catch((err: unknown) => console.warn('[marketplace]', err))
+      .finally(() => setLoadingMarket(false))
   }, [tab, marketplaceRoutines.length])
 
   const activeId = user?.activeRoutineId ?? null
@@ -158,172 +161,173 @@ export default function Routines() {
   const pendingRoutineData = pendingId ? [...presets, ...customs].find(r => r.id === pendingId) : null
 
   return (
-    <div className="fade-in">
+    <div className="routines-wrap">
+
+      {/* ── Header + Tabs ── */}
       <section className="card">
-        {/* ── Header ── */}
         <div className="panel-head">
           <div>
             <h3>Mis Rutinas</h3>
             <p>Selecciona o crea tu plan de entrenamiento.</p>
           </div>
-          <button
-            className="primary-btn"
-            onClick={() => navigate('/rutinas/nueva')}
-          >
+          <button className="primary-btn" onClick={() => navigate('/rutinas/nueva')}>
             <IconPlus size={16} /> Nueva
           </button>
         </div>
 
-        {/* ── Tabs ── */}
-        <div className="stats-tabs" style={{ padding: '0 var(--space-5)', marginBottom: 0 }}>
-          <button className={`stats-tab-btn ${tab === 'presets' ? 'active' : ''}`} onClick={() => setTab('presets')}>
-            <IconTarget size={16} /> Predeterminadas
+        <div className="routines-tab-bar">
+          <button className={`routines-tab-btn${tab === 'presets' ? ' active' : ''}`} onClick={() => setTab('presets')}>
+            <IconTarget size={15} /> Predeterminadas
           </button>
-          <button className={`stats-tab-btn ${tab === 'custom' ? 'active' : ''}`} onClick={() => setTab('custom')}>
-            <IconEdit size={16} /> Mis Creaciones ({customs.length})
+          <button className={`routines-tab-btn${tab === 'custom' ? ' active' : ''}`} onClick={() => setTab('custom')}>
+            <IconEdit size={15} /> Mis Creaciones
+            {customs.length > 0 && <span className="tab-count">{customs.length}</span>}
           </button>
-          <button className={`stats-tab-btn ${tab === 'mercado' ? 'active' : ''}`} onClick={() => setTab('mercado')}>
-            <IconGlobe size={16} /> Mercado
+          <button className={`routines-tab-btn${tab === 'mercado' ? ' active' : ''}`} onClick={() => setTab('mercado')}>
+            <IconGlobe size={15} /> Mercado
           </button>
         </div>
 
-        {/* ── Import code (custom tab) ── */}
         {tab === 'custom' && (
-          <div style={{ display: 'flex', gap: 'var(--space-2)', padding: 'var(--space-4) var(--space-5) 0', alignItems: 'center' }}>
+          <div className="import-code-row">
             <input
               className="code-input"
               placeholder="Código de rutina (ej. AB3X7Y9Z)"
               value={importCode}
               onChange={e => setImportCode(e.target.value.toUpperCase())}
               maxLength={8}
-              style={{ flex: 1 }}
             />
             <button className="ghost-btn" onClick={handleImportByCode} disabled={importing || !importCode.trim()}>
               {importing ? '…' : 'Importar'}
             </button>
           </div>
         )}
-
-        {/* ── Cards grid ── */}
-        <div className="panel-body split">
-
-          {/* Marketplace */}
-          {tab === 'mercado' && (
-            loadingMarket ? (
-              <div className="empty-state" style={{ gridColumn: '1/-1' }}><p>Cargando rutinas...</p></div>
-            ) : marketplaceRoutines.length === 0 ? (
-              <div className="empty-state" style={{ gridColumn: '1/-1' }}>
-                <div className="empty-icon"><IconGlobe size={40} /></div>
-                <p>No hay rutinas públicas todavía.</p>
-                <p className="tiny muted">Publica tu propia rutina desde Mis Creaciones.</p>
-              </div>
-            ) : (
-              marketplaceRoutines.map(r => {
-                const dayEntries = Object.entries((r.days as Record<string, unknown>) ?? {})
-                const exCount = dayEntries.reduce((a, [, d]) => a + ((d as { exercises?: unknown[] }).exercises?.length ?? 0), 0)
-                return (
-                  <article key={r.id} className="summary-card">
-                    <div className="summary-row">
-                      <h4>{r.name}</h4>
-                      <span className="pill">{dayEntries.length}d</span>
-                    </div>
-                    <p className="tiny muted" style={{ marginBottom: 'var(--space-1)' }}>{r.description || 'Sin descripción'}</p>
-                    <p className="tiny muted">{exCount} ejercicios · por {r.user.name} · {r.downloadCount} descargas</p>
-                    <button className="complete-btn" onClick={() => cloneMarketplace(r.id)}>
-                      <IconDownload size={14} /> Añadir a mis rutinas
-                    </button>
-                  </article>
-                )
-              })
-            )
-          )}
-
-          {/* Presets & Custom */}
-          {tab !== 'mercado' && activeRoutines.length === 0 && (
-            <div className="empty-state" style={{ gridColumn: '1/-1', padding: 'var(--space-10) 0' }}>
-              <div className="empty-icon"><IconTarget size={40} /></div>
-              <p>No tienes rutinas personalizadas aún.</p>
-              <button className="ghost-btn" onClick={() => setTab('presets')}>Ver predeterminadas</button>
-            </div>
-          )}
-
-          {tab !== 'mercado' && activeRoutines.map(r => {
-            const isActive = r.id === activeId
-            const dayEntries = Object.entries(r.days ?? {})
-            const exCount = dayEntries.reduce((a, [, d]) => a + ((d as { exercises?: unknown[] }).exercises?.length ?? 0), 0)
-            const rExt = r as Routine & { isCustom?: boolean; isPublic?: boolean }
-            return (
-              <motion.article
-                key={r.id}
-                className={`summary-card${isActive ? ' status-active' : ''}`}
-                onClick={() => hapticImpact('light')}
-              >
-                {/* Header row */}
-                <div className="summary-row">
-                  <h4 style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
-                    {isActive && (
-                      <span className="active-badge"><IconCheck size={10} /> Activa</span>
-                    )}
-                  </h4>
-                  <span className="pill" style={{ flexShrink: 0 }}>{dayEntries.length}d</span>
-                </div>
-
-                {/* Description */}
-                <p className="tiny muted" style={{ marginBottom: 'var(--space-2)' }}>
-                  {r.description || 'Sin descripción'}
-                </p>
-
-                {/* Stats */}
-                <p className="tiny muted">
-                  {exCount} ejercicios · {dayEntries.slice(0, 3).map(([d]) => capitalize(d).slice(0, 2)).join(' · ')}
-                  {dayEntries.length > 3 && ` +${dayEntries.length - 3}`}
-                </p>
-
-                {/* Actions */}
-                <div className="routine-actions">
-                  <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); setPreviewRoutine(r) }} title="Vista previa">
-                    <IconEye size={15} />
-                  </button>
-                  <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); cloneRoutine(r) }} title="Clonar">
-                    <IconCopy size={15} />
-                  </button>
-                  {rExt.isCustom && (
-                    <>
-                      <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); shareRoutine(r.id!) }} title="Compartir código">
-                        <IconShare size={15} />
-                      </button>
-                      <button
-                        className="icon-btn-subtle"
-                        onClick={e => { e.stopPropagation(); togglePublish(rExt) }}
-                        title={rExt.isPublic ? 'Quitar del mercado' : 'Publicar en mercado'}
-                        style={{ color: rExt.isPublic ? 'var(--color-primary)' : undefined }}
-                      >
-                        <IconGlobe size={15} />
-                      </button>
-                      <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); navigate(`/rutinas/${r.id}`) }} title="Editar">
-                        <IconEdit size={15} />
-                      </button>
-                      <button className="icon-btn-subtle" style={{ color: 'var(--color-warning)' }} onClick={e => { e.stopPropagation(); deleteRoutine(r.id!) }} title="Eliminar">
-                        <IconTrash size={15} />
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {/* Activate button */}
-                <button
-                  className={`complete-btn${isActive ? ' is-complete' : ''}`}
-                  disabled={isActive}
-                  onClick={e => { e.stopPropagation(); if (!isActive) setPendingId(r.id!) }}
-                >
-                  {isActive ? 'Activa actualmente' : 'Activar plan'}
-                </button>
-              </motion.article>
-            )
-          })}
-        </div>
       </section>
+
+      {/* ── Marketplace ── */}
+      {tab === 'mercado' && (
+        loadingMarket ? (
+          <div className="empty-state"><p>Cargando rutinas...</p></div>
+        ) : marketplaceRoutines.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon"><IconGlobe size={40} /></div>
+            <p>No hay rutinas públicas todavía.</p>
+            <p className="tiny muted">Publica tu propia rutina desde Mis Creaciones.</p>
+          </div>
+        ) : (
+          <div className="rcard-list">
+            {marketplaceRoutines.map(r => {
+              const dayEntries = Object.entries((r.days as Record<string, unknown>) ?? {})
+              const exCount = dayEntries.reduce((a, [, d]) => a + ((d as { exercises?: unknown[] }).exercises?.length ?? 0), 0)
+              return (
+                <article key={r.id} className="rcard">
+                  <div className="rcard-top">
+                    <h4 className="rcard-name">{r.name}</h4>
+                    <span className="pill">{dayEntries.length}d</span>
+                  </div>
+                  <p className="rcard-desc">{r.description || 'Sin descripción'}</p>
+                  <p className="tiny muted">{exCount} ejercicios · por {r.user.name} · {r.downloadCount} descargas</p>
+                  <button className="primary-btn-outline" style={{ marginTop: 'var(--space-3)' }} onClick={() => cloneMarketplace(r.id)}>
+                    <IconDownload size={14} /> Añadir a mis rutinas
+                  </button>
+                </article>
+              )
+            })}
+          </div>
+        )
+      )}
+
+      {/* ── Presets & Custom ── */}
+      {tab !== 'mercado' && (
+        activeRoutines.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon"><IconTarget size={40} /></div>
+            <p>No tienes rutinas personalizadas aún.</p>
+            <button className="ghost-btn" onClick={() => setTab('presets')}>Ver predeterminadas</button>
+          </div>
+        ) : (
+          <div className="rcard-list">
+            {activeRoutines.map(r => {
+              const isActive = r.id === activeId
+              const dayEntries = Object.entries(r.days ?? {})
+              const exCount = dayEntries.reduce((a, [, d]) => a + ((d as { exercises?: unknown[] }).exercises?.length ?? 0), 0)
+              const rExt = r as Routine & { isCustom?: boolean; isPublic?: boolean }
+              return (
+                <motion.article
+                  key={r.id}
+                  className={`rcard${isActive ? ' rcard--active' : ''}`}
+                  onClick={() => hapticImpact('light')}
+                >
+                  {/* Name row */}
+                  <div className="rcard-top">
+                    <h4 className="rcard-name">
+                      {r.name}
+                      {isActive && <span className="active-badge"><IconCheck size={10} /> Activa</span>}
+                    </h4>
+                    <span className="pill">{dayEntries.length}d</span>
+                  </div>
+
+                  {/* Description */}
+                  <p className="rcard-desc">{r.description || 'Sin descripción'}</p>
+
+                  {/* Day pills */}
+                  <div className="routine-card-days">
+                    {dayEntries.map(([d]) => (
+                      <span key={d} className="routine-day-pill">{capitalize(d).slice(0, 2)}</span>
+                    ))}
+                  </div>
+
+                  {/* Stats */}
+                  <p className="tiny muted">{exCount} ejercicios · {dayEntries.length} {dayEntries.length === 1 ? 'día' : 'días'}</p>
+
+                  {/* Actions row */}
+                  <div className="rcard-actions">
+                    <div className="rcard-icons">
+                      <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); setPreviewRoutine(r) }} title="Vista previa">
+                        <IconEye size={15} />
+                      </button>
+                      <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); cloneRoutine(r) }} title="Clonar">
+                        <IconCopy size={15} />
+                      </button>
+                      {rExt.isCustom && <>
+                        <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); shareRoutine(r.id!) }} title="Compartir código">
+                          <IconShare size={15} />
+                        </button>
+                        <button
+                          className="icon-btn-subtle"
+                          onClick={e => { e.stopPropagation(); togglePublish(rExt) }}
+                          title={rExt.isPublic ? 'Quitar del mercado' : 'Publicar en mercado'}
+                          style={{ color: rExt.isPublic ? 'var(--color-primary)' : undefined }}
+                        >
+                          <IconGlobe size={15} />
+                        </button>
+                        <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); navigate(`/rutinas/${r.id}`) }} title="Editar">
+                          <IconEdit size={15} />
+                        </button>
+                        <button
+                          className="icon-btn-subtle"
+                          style={{ color: 'var(--color-warning)' }}
+                          onClick={e => { e.stopPropagation(); deleteRoutine(r.id!) }}
+                          title="Eliminar"
+                        >
+                          <IconTrash size={15} />
+                        </button>
+                      </>}
+                    </div>
+                    <button
+                      className={isActive ? 'routine-active-btn' : 'primary-btn-outline'}
+                      disabled={isActive}
+                      onClick={e => { e.stopPropagation(); if (!isActive) setPendingId(r.id!) }}
+                    >
+                      {isActive ? <><IconCheck size={13} /> Activa</> : 'Activar'}
+                    </button>
+                  </div>
+                </motion.article>
+              )
+            })}
+          </div>
+        )
+      )}
 
       {/* ── Confirmation Bottom Sheet ── */}
       {createPortal(
