@@ -38,7 +38,7 @@ export function safePeriodEnd(sub: SubLike): Date {
   return d
 }
 
-export function getStripe(): Stripe {
+export function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) throw new Error('STRIPE_SECRET_KEY no configurada')
   return new Stripe(key, { apiVersion: '2026-04-22.dahlia' })

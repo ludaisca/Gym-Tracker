@@ -19,11 +19,11 @@ El código React vive **solo** en `packages/web/src/`. La APK Android construye 
 
 ### Desarrollo local
 
-> El Makefile carga `.env` de la raíz y convierte `@db:` → `@localhost:` y `@redis:` → `@localhost:` automáticamente.
+> El Makefile carga `.env` de la raíz y convierte `@db:5432` → `@localhost:5440` y `@redis:6379` → `@localhost:6390` automáticamente para aislar el dev local de la DB de producción (Coolify ocupa el `127.0.0.1:5432` del host).
 
 ```bash
-make db-up        # Levanta PostgreSQL (:5432) + Redis (:6379) en Docker
-make dev          # Web (Vite :5173) + backend (tsx watch :3001) en paralelo
+make db-up        # Levanta PostgreSQL local (:5440) + Redis local (:6390) en Docker
+make dev          # Web (Vite :5173) + backend (tsx watch :3010) en paralelo
 make db-migrate   # prisma migrate dev (requiere TTY)
 make db-studio    # Prisma Studio
 ```
@@ -78,14 +78,26 @@ cd packages/web && npm run lint
 
 ### Backend (`packages/backend/src/`)
 
+**Capas de la aplicación**:
 - `server.ts` → `app.ts` — punto de entrada; `app.ts` registra todos los plugins y rutas
-- `plugins/prisma.ts`, `plugins/redis.ts`, `plugins/auth.ts` — decorators de Fastify (`fastify.prisma`, `fastify.redis`, `fastify.authenticate`)
-- `plugins/requirePro.ts` — `checkIsPro(user)` (helper puro) + `requirePro(fastify)` (preHandler hook que devuelve 403 con `code: 'REQUIRES_PRO'`)
-- `routes/` — un archivo por dominio, validación con Zod en cada ruta
-- `routes/billing.ts` — Stripe Checkout Sessions + portal + webhook; usa tipos locales en lugar del namespace `Stripe.*` (ver nota TypeScript abajo)
-- `services/queue.ts` — BullMQ, cola `gym-tracker-bg-jobs`, worker para emails e importaciones
+- `plugins/` — decorators de Fastify: `fastify.prisma`, `fastify.redis`, `fastify.authenticate`, `fastify.repos`
+- `repositories/` — interfaces de dominio (`UserRepository`, `SessionRepository`, etc.) + implementaciones Prisma en `repositories/prisma/`
+- `use-cases/` — lógica de negocio desacoplada de Fastify (un archivo por dominio)
+- `routes/` — validación Zod + orquestación; delega en use-cases o repos directamente
+- `services/queue.ts` — BullMQ, cola `gym-tracker-bg-jobs`; monitoreo en `/api/admin/queues`
 - `services/email.ts` — Nodemailer; sin SMTP configurado imprime en consola
 - `services/vapid.ts` — claves VAPID para push: lee de env vars o genera y persiste en `SystemConfig`
+
+**`fastify.repos` decorator** (`plugins/repositories.ts`): expone instancias únicas de todos los repositorios. Acceder como `fastify.repos.users`, `fastify.repos.sessions`, etc. en lugar de instanciar repos directamente en las rutas.
+
+**Claves compuestas en BD**:
+- `WorkoutSession`: `[userId, weekNumber, dayId]`
+- `NutritionDay` / `BodyWeight`: `[userId, date]`
+- Usar `prisma.upsert` con estos where-clauses exactos para records diarios/semanales.
+
+**⚠️ Redis cache**: `GET /sessions` (historial completo) se cachea en Redis por usuario. Después de cualquier mutación de sesión, llamar `invalidateSessionsCache(userId)` — si no se hace, el cliente recibe datos stale.
+
+**⚠️ Jobs en background**: Operaciones pesadas (emails, importaciones JSON grandes) deben ir a `backgroundQueue` (`services/queue.ts`). No bloquear el event loop del HTTP endpoint.
 
 **⚠️ Fastify hook scope**: `addHook` dentro de un plugin afecta **todas** las rutas del scope, incluyendo las registradas antes del hook. Para rutas mixtas usar sub-scope:
 ```typescript
@@ -95,74 +107,77 @@ await fastify.register(async (scoped) => {
 })
 ```
 
+**Prefix stripping**: nginx (producción) y el proxy de Vite (dev) **eliminan** el prefijo `/api`. El frontend hace `GET /api/sessions`; el backend recibe `GET /sessions`. Las rutas en Fastify no llevan `/api`.
+
 **rawBody para Stripe webhooks**: el content-type parser en `app.ts` adjunta `req.rawBody` como `Buffer` antes de parsear JSON. El webhook en `/billing/webhook` accede a él via cast explícito.
 
-**TypeScript — Stripe v22 + moduleResolution: node**: El backend usa `moduleResolution: node`, que resuelve el entry CJS de Stripe y expone `StripeConstructor` sin los tipos `Stripe.Subscription`, `Stripe.Event`, etc. Solución: definir interfaces locales que describan solo los campos necesarios y castear con `as unknown as LocalType`. No cambiar el tsconfig.
+**TypeScript — Stripe v22 + moduleResolution: node**: El backend usa `moduleResolution: node`, que resuelve el entry CJS de Stripe y expone `StripeConstructor` sin los tipos `Stripe.Subscription`, `Stripe.Event`, etc. Solución: definir interfaces locales y castear con `as unknown as LocalType`. No cambiar el tsconfig.
+
+**Keys de IA por usuario**: las API keys de Anthropic/OpenAI se almacenan *por usuario* en `UserSettings.aiKey`, cifradas con `ENCRYPTION_KEY`. El backend actúa como proxy en `/ai/analyze` — nunca se exponen al frontend.
 
 ### Web frontend (`packages/web/src/`)
 
+**Path alias**: `@/` mapea a `packages/web/src/`. Usar imports absolutos `@/api/...`, `@/components/...` en lugar de rutas relativas profundas.
+
 **API layer**
 - `api/client.ts` — Axios con `baseURL = VITE_API_URL ?? '/api'`; interceptor de refresh con singleton `refreshPromise` para serializar múltiples 401 simultáneos. **No dejar `VITE_API_URL=""`** — string vacío no activa el nullish coalescing y rompe el proxy.
-- `api/billing.ts` — `createCheckout(plan, platform?)`: pasa `platform: 'android'` desde APK para recibir URLs con scheme `gymtracker://`
+- Cada dominio tiene su módulo en `api/`: `sessionsApi`, `routinesApi`, `nutritionApi`, etc.
 
 **Estado global** (`store/index.ts`)
 - `useAuthStore` — auth + user completo + `accessToken` (solo en memoria, no persiste)
-- `useUIStore` — tema, modo offline
+- `useUIStore` — **única** fuente de verdad para `data-theme` y `data-accent` en `<html>`. No mutar estos atributos del DOM directamente.
 - `useOfflineStore` — cola de escrituras pendientes para replay al reconectar
 
-**Hooks clave**
-- `useProAccess()` — computa `isPro` desde `user.plan + planExpiresAt + trialEndsAt` (sin llamada al servidor)
-- `useOfflineSync.ts` — al reconectar, reproduce la queue en serie
-- `useStripeCheckout.ts` — detecta `Capacitor.isNativePlatform()`: en APK abre Chrome Custom Tab via `@capacitor/browser` y escucha deep link de retorno via `@capacitor/app`
+**Patrones de data fetching**:
+- Datos históricos/globales: llamadas directas a la API + estado local (ej. `sessionsApi.listAll()`)
+- Datos reactivos de la semana activa: hooks (`useSessions`, `useRoutines`)
+- No mezclar los dos patrones para el mismo recurso.
+
+**Code splitting**: todas las vistas protegidas usan `React.lazy()` en `App.tsx`. No revertir a imports estáticos — evita el warning de chunk >500kB de Vite.
+
+**PWA / Service Worker**: el SW está en modo `prompt`. Las actualizaciones las gestiona `<ReloadPrompt />`. No cambiar a `autoUpdate`.
+
+**Offline sync**: `useOfflineStore` acumula escrituras fallidas; `useOfflineSync` las reproduce en **serie** al reconectar (evita race conditions). No cambiar a reproducción paralela.
 
 **Sistema de iconos** (`components/ui/Icons.tsx`)  
 Todos los iconos son SVG inline con `stroke="currentColor"` (monocromáticos, se adaptan al tema). No usar emojis ni iconos de colores. Exporta `ModuleIcon` para el nav. Añadir nuevos iconos siguiendo el mismo patrón (`def()` helper + `IconProps`).
-
-**Sistema Pro**
-- `<ProGate mode="lock" lockLabel="..." feature="..." />` — card bloqueada con `<IconLock />`
-- `<ProGate mode="blur" feature="...">` — preview borroso con overlay
-- `<ProBadge size="sm|md" />` — chip "★ PRO" inline
-- `<UpgradeModal feature="..." onClose={...} />` — bottom sheet de upsell
 
 **Sistema de diseño (CSS)**  
 Fuentes: `--font-body: Lexend`, `--font-mono: JetBrains Mono`.  
 Clases de layout principales: `.card`, `.panel-head`, `.panel-body`, `.summary-card` (con `.status-done/.status-partial/.status-active`), `.split`, `.triple`.  
 Para inputs de código/share usar `.code-input` (monoespaciado, letra espaciada, focus-ring primario).  
-Para botones de iconos en cards: `.icon-btn-subtle` dentro de `.routine-actions`.
+Para botones de iconos en cards: `.icon-btn-subtle`.  
+Para tabs scrollables de página: `.routines-tab-bar` / `.routines-tab-btn` (no reutilizar `.stats-tabs` que usa `flex: 1` y desborda en móvil).
+
+### Monetización
+
+Todas las features son **gratuitas** (`isPro` siempre true en el contexto actual). El backend tiene rutas gateadas con `requirePro` (`analytics.*`, `ai.*`, `challenges.*`, `push.subscribe`, `routines.publish`) pero el gate no se activa desde el frontend.
+
+**Gestión de plan (backend)**:
+- `POST /users/me/trial` — 7 días de prueba
+- `POST /users/admin/grant-pro` — `Authorization: Bearer {ADMIN_TOKEN}`; `months: 0` = Pro vitalicio
+- `POST /billing/checkout` — Stripe Checkout Session; acepta `platform: 'android'` para deep links `gymtracker://`
+- `POST /billing/webhook` — eventos Stripe con signature verificada
+
+**Stripe webhook**: `current_period_end` puede ser `undefined` con la API `2026-04-22.dahlia`. Usar `safePeriodEnd(sub)` definida en `billing.ts`.
 
 ### Autenticación
 
 JWT de corta duración (access token) + refresh token en `localStorage`. El access token **no se persiste** en Zustand; al recargar la app se renueva automáticamente vía `/auth/refresh`. El interceptor de Axios serializa múltiples 401 simultáneos con un singleton `refreshPromise`.
 
-### Monetización (Free + Pro)
-
-**Rutas gateadas con `requirePro`**: `analytics.*`, `ai.*`, `challenges.*` (todo), `push.subscribe`, `routines.publish`, `users.export`.  
-**Soft limit**: 3 rutinas custom verificado en `POST /routines/`.
-
-**Gestión de plan (backend)**:
-- `POST /users/me/trial` — 7 días de prueba, una vez por usuario
-- `POST /users/admin/grant-pro` — `Authorization: Bearer {ADMIN_TOKEN}`; `months: 0` = Pro vitalicio
-- `POST /billing/checkout` — crea Stripe Checkout Session; acepta `platform: 'android'` para deep links `gymtracker://`
-- `POST /billing/portal` — redirige al Stripe Billing Portal
-- `POST /billing/webhook` — recibe eventos Stripe (signature verificada); maneja `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
-
-**Stripe webhook**: `current_period_end` puede ser `undefined` con la API `2026-04-22.dahlia`. Usar `safePeriodEnd(sub)` definida en `billing.ts` que hace fallback a +1 mes/año.
-
-**APK payments**: el hook `useStripeCheckout` envía `platform: 'android'`, el backend responde con `success_url: 'gymtracker://upgrade?success=1'`. El AndroidManifest tiene un `<intent-filter>` para el scheme `gymtracker://`. Al retornar del Custom Tab, `App.addListener('appUrlOpen')` captura la URL y navega.
-
 ### Capacitor / Android
 
 - `packages/android/capacitor.config.ts`: `appId: com.ludaisca.gymtracker`, `webDir: ../web/dist`
-- Variables para la APK: `packages/android/.env` (`VITE_API_URL`)
+- Variables para la APK: `packages/android/.env` (`VITE_API_URL` → URL pública del backend, no localhost)
 - El WebView usa origen `capacitor://localhost` — debe estar en la lista CORS de producción en `app.ts`
-- Plugins instalados: `@capacitor/browser`, `@capacitor/app` (importados lazy en `useStripeCheckout.ts` para evitar bundle en la web)
+- Plugins instalados: `@capacitor/browser`, `@capacitor/app` (importados lazy para evitar bundle en la web)
 
 ### Docker / despliegue
 
 - `docker-compose.yml` — base; nginx usa `expose: ["80"]` (sin bind al host)
 - `docker-compose.override.yml` — agrega `ports: ["80:80"]` para dev local (Coolify lo ignora)
 - `Dockerfile.backend` — multi-stage; builder usa `npm ci --include=dev` para que `tsc` esté disponible aunque Coolify inyecte `NODE_ENV=production`
-- `Dockerfile.nginx` — ídem; usa `npm run build:docker` (sin tsc)
+- `Dockerfile.nginx` — usa `npm run build:docker` (sin tsc)
 - Coolify enruta `gym-tracker.ludaisca.ddns.net` a través de Traefik al contenedor nginx
 
 ### Variables de entorno
@@ -180,12 +195,5 @@ JWT de corta duración (access token) + refresh token en `localStorage`. El acce
 | `STRIPE_PRICE_ANNUAL` | Price ID de Stripe para plan anual |
 | `APP_URL` | URL base para redirects web de Stripe (fallback si no hay `Origin` header) |
 | `APP_DOMAIN` | Dominio de producción para CORS (ej. `gym-tracker.ludaisca.ddns.net`) |
-
-### Stripe — producción (pasos manuales)
-
-1. Crear precios en live mode en el Dashboard de Stripe
-2. Registrar webhook endpoint `https://gym-tracker.ludaisca.ddns.net/api/billing/webhook` con eventos: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
-3. Copiar el `whsec_live_...` al env `STRIPE_WEBHOOK_SECRET` en Coolify
-4. Usar Restricted API Key (no secret key) con permisos: Checkout Sessions (write), Customers (write), Subscriptions (read), Billing Portal (write)
 
 @OPERATIONS.md

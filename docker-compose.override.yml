@@ -2,3 +2,9 @@ services:
   nginx:
     ports:
       - "80:80"
+  db:
+    ports:
+      - "127.0.0.1:5440:5432"
+  redis:
+    ports:
+      - "127.0.0.1:6390:6379"

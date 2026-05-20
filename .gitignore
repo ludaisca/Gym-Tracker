@@ -31,3 +31,10 @@ Thumbs.db
 
 # Claude Code (configuración local)
 .claude/
+
+# stripe-projects-cli + Cursor (artefactos locales, no código fuente)
+.agents/
+.cursor/
+.cursorignore
+.projects/
+skills-lock.json

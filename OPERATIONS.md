@@ -11,6 +11,9 @@ Instrucciones operativas para Gym Tracker. Este archivo complementa CLAUDE.md co
 Coolify ocupa puertos que parecen disponibles:
 
 - **Puerto `3001`** → mapeado por un contenedor Coolify a Redis interno. **Usar `PORT=3010`** para el backend en dev local.
+- **Puerto `5432`** → ocupado por la BD PostgreSQL **de producción** del propio proyecto en Coolify. Si el dev local intentase usar 5432 estaría leyendo/escribiendo en producción. La BD local de dev escucha en `127.0.0.1:5440` (configurado en `docker-compose.override.yml`).
+- **Puerto `6379`** → Coolify expone otra Redis ahí; la Redis local de dev escucha en `127.0.0.1:6390`.
+- **Puerto `5433`** → ocupado por otra BD de Coolify; no usar.
 - **Puertos `80` / `443`** → Traefik de Coolify. No vincular servicios Docker locales a esos puertos.
 
 Para verificar qué está escuchando: `ss -tlnp | grep LISTEN`

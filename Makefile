@@ -7,8 +7,8 @@ dev:
 	@trap 'kill 0' SIGINT; \
 	(cd packages/web && npm run dev) & \
 	(cd packages/backend && set -a && . ../../.env && set +a && \
-	 export DATABASE_URL="$$(echo $$DATABASE_URL | sed 's|@db:|@localhost:|')" && \
-	 export REDIS_URL="$$(echo $$REDIS_URL | sed 's|@redis:|@localhost:|')" && \
+	 export DATABASE_URL="$$(echo $$DATABASE_URL | sed 's|@db:5432|@localhost:5440|')" && \
+	 export REDIS_URL="$$(echo $$REDIS_URL | sed 's|@redis:6379|@localhost:6390|')" && \
 	 export PORT=3010 && \
 	 npm run dev) & \
 	wait
@@ -20,7 +20,7 @@ db-up:
 # Migraciones Prisma (desarrollo)
 db-migrate:
 	cd packages/backend && set -a && . ../../.env && set +a && \
-	 export DATABASE_URL="$$(echo $$DATABASE_URL | sed 's|@db:|@localhost:|')" && \
+	 export DATABASE_URL="$$(echo $$DATABASE_URL | sed 's|@db:5432|@localhost:5440|')" && \
 	 npx prisma migrate dev
 
 # Prisma Studio
