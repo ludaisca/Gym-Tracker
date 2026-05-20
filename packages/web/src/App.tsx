@@ -24,7 +24,6 @@ const Nutrition = lazy(() => import('./components/views/Nutrition'))
 const Config = lazy(() => import('./components/views/Config'))
 const Duelos = lazy(() => import('./components/views/Duelos'))
 const SessionHistory = lazy(() => import('./components/views/SessionHistory'))
-const Upgrade = lazy(() => import('./components/views/Upgrade'))
 
 // Componente simple de carga (Skeleton o Spinner)
 function SuspenseLoader() {
@@ -78,7 +77,6 @@ const router = createBrowserRouter([
       { path: 'duelos',             element: <LazyRoute><Duelos /></LazyRoute> },
       { path: 'entrenamiento/:dayId', element: <LazyRoute><DayView /></LazyRoute> },
       { path: 'historial',            element: <LazyRoute><SessionHistory /></LazyRoute> },
-      { path: 'upgrade',              element: <LazyRoute><Upgrade /></LazyRoute> },
     ],
   },
 ])

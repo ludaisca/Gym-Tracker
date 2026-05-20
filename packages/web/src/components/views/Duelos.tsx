@@ -3,8 +3,6 @@ import { createPortal } from 'react-dom'
 import { challengesApi, type Challenge, type VersusData } from '../../api/challenges'
 import { useAuthStore } from '../../store'
 import { IconTrophy, IconCamera, IconStats, IconCheck } from '../ui/Icons'
-import { ProGate } from '../ui/ProGate'
-import { useProAccess } from '../../hooks/useProAccess'
 
 // ── Canvas watermark helper ──────────────────────────────────────────────
 async function captureWithWatermark(
@@ -562,7 +560,6 @@ function VersusModal({ challenge, onClose }: { challenge: Challenge; onClose: ()
 // ── Main view ─────────────────────────────────────────────────────────────
 export default function Duelos() {
   const { user } = useAuthStore()
-  const { isPro } = useProAccess()
   const myId = user?.id ?? ''
 
   const [challenges, setChallenges] = useState<Challenge[]>([])
@@ -630,34 +627,22 @@ export default function Duelos() {
   const active   = challenges.filter(c => c.status !== 'finished')
   const finished = challenges.filter(c => c.status === 'finished')
 
-  if (!isPro) {
-    return (
-      <ProGate
-        mode="lock"
-        lockLabel="Duelos — Función Pro"
-        feature="Reta a un amigo, registra tu asistencia con foto validada y compara tu progreso en tiempo real."
-      />
-    )
-  }
-
   if (loading) return <div className="content"><div className="spinner" /></div>
 
   return (
     <div className="fade-in">
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-        <div className="tiny muted" style={{ textTransform: 'uppercase', letterSpacing: '.08em' }}>
-          {active.length} reto{active.length !== 1 ? 's' : ''} activo{active.length !== 1 ? 's' : ''}
+      <section className="card">
+        <div className="panel-head">
+          <div>
+            <h3>Duelos</h3>
+            <p>{active.length} reto{active.length !== 1 ? 's' : ''} activo{active.length !== 1 ? 's' : ''}</p>
+          </div>
+          <div style={{ display: 'flex', gap: '.75rem' }}>
+            <button className="ghost-btn" onClick={() => setShowJoin(true)}>Unirme</button>
+            <button className="primary-btn" onClick={() => { setShowCreate(true); setCreateResult(null) }}>+ Crear reto</button>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '.75rem' }}>
-          <button className="primary-btn" style={{ padding: '.6rem 1rem', fontSize: 'var(--text-sm)' }} onClick={() => { setShowCreate(true); setCreateResult(null) }}>
-            + Crear reto
-          </button>
-          <button className="ghost-btn" style={{ padding: '.6rem 1rem', fontSize: 'var(--text-sm)' }} onClick={() => setShowJoin(true)}>
-            Unirme
-          </button>
-        </div>
-      </div>
+      </section>
 
       {error && <div className="form-error" style={{ marginTop: '1rem' }}>{error}</div>}
 

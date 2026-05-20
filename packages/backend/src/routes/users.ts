@@ -1,9 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { Prisma } from '@prisma/client'
-import bcrypt from 'bcryptjs'
-import { encryptValue } from '../lib/crypto'
-import { checkIsPro } from '../plugins/requirePro'
+import { isUCError } from '../use-cases/errors'
+import { getMe, activateTrial, grantPro, updateMe, updateSettings, exportUserData, deleteAccount } from '../use-cases/users'
 
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
@@ -33,44 +31,22 @@ const updateSettingsSchema = z.object({
 })
 
 const usersRoutes: FastifyPluginAsync = async (fastify) => {
-  const { prisma } = fastify
-
   fastify.addHook('onRequest', fastify.authenticate)
 
-  function sanitizeUser(user: { passwordHash: string; settings?: { aiKey?: string | null; [k: string]: unknown } | null; [k: string]: unknown }) {
-    const { passwordHash, ...safe } = user
-    if (safe.settings) {
-      const { aiKey, ...safeSettings } = safe.settings as { aiKey?: string | null; [k: string]: unknown }
-      safe.settings = { ...safeSettings, aiKeySet: !!aiKey }
-    }
-    return safe
-  }
-
-  fastify.get('/me', async (request) => {
+  fastify.get('/me', async (request, reply) => {
     const { sub } = request.user as { sub: string }
-    const user = await prisma.user.findUniqueOrThrow({
-      where: { id: sub },
-      include: { settings: true },
-    })
-    return sanitizeUser(user)
+    const result = await getMe(fastify.repos.users, sub)
+    if (isUCError(result)) return reply.status(result.statusCode).send({ error: result.error })
+    return result
   })
 
-  // ── POST /me/trial — activa prueba de 7 días (solo si nunca tuvo trial) ──
   fastify.post('/me/trial', async (request, reply) => {
     const { sub } = request.user as { sub: string }
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: sub }, select: { plan: true, trialEndsAt: true } })
-    if (user.plan === 'pro') return reply.status(409).send({ error: 'Ya tienes plan Pro activo.' })
-    if (user.trialEndsAt) return reply.status(409).send({ error: 'Ya utilizaste tu período de prueba.' })
-    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-    const updated = await prisma.user.update({
-      where: { id: sub },
-      data: { trialEndsAt },
-      include: { settings: true },
-    })
-    return sanitizeUser(updated)
+    const result = await activateTrial(fastify.repos.users, sub)
+    if (isUCError(result)) return reply.status(result.statusCode).send({ error: result.error })
+    return result
   })
 
-  // ── POST /admin/grant-pro — activa Pro manualmente (requiere ADMIN_TOKEN) ──
   fastify.post('/admin/grant-pro', {
     onRequest: async (req, reply) => {
       const adminToken = process.env.ADMIN_TOKEN
@@ -79,20 +55,12 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   }, async (request, reply) => {
-    const body = z.object({
-      userId: z.string(),
-      months: z.number().int().min(0),
-    }).safeParse(request.body)
+    const body = z.object({ userId: z.string(), months: z.number().int().min(0) }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.issues[0].message })
 
-    const { userId, months } = body.data
-    const planExpiresAt = months === 0 ? null : new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000)
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data: { plan: 'pro', planExpiresAt },
-      include: { settings: true },
-    })
-    return { ok: true, user: sanitizeUser(updated) }
+    const result = await grantPro(fastify.repos.users, body.data.userId, body.data.months)
+    if (isUCError(result)) return reply.status(result.statusCode).send({ error: result.error })
+    return result
   })
 
   fastify.put('/me', async (request, reply) => {
@@ -100,89 +68,26 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
     const body = updateUserSchema.safeParse(request.body)
     if (!body.success) throw { statusCode: 400, message: body.error.issues[0].message }
 
-    const { email, password, currentPassword, activeRoutineId, ...rest } = body.data
-    const data: any = { ...rest }
-
-    if (email || password) {
-      if (!currentPassword) {
-        return reply.status(400).send({ error: 'Se requiere la contraseña actual para cambiar email o contraseña.' })
-      }
-      const user = await prisma.user.findUniqueOrThrow({ where: { id: sub } })
-      const valid = await bcrypt.compare(currentPassword, user.passwordHash)
-      if (!valid) {
-        return reply.status(401).send({ error: 'La contraseña actual es incorrecta.' })
-      }
-    }
-
-    if (email) {
-      const existing = await prisma.user.findFirst({ where: { email, NOT: { id: sub } } })
-      if (existing) return reply.status(409).send({ error: 'El email ya está en uso por otro usuario.' })
-      data.email = email
-    }
-
-    if (password) {
-      data.passwordHash = await bcrypt.hash(password, 12)
-    }
-
-    if (activeRoutineId !== undefined) {
-      data.activeRoutineId = activeRoutineId
-      // Auto reset if activating a routine
-      if (activeRoutineId !== null) {
-        data.routineStartDate = new Date()
-        data.currentWeek = 1
-      } else {
-        data.routineStartDate = null
-      }
-    }
-
-    const user = await prisma.user.update({
-      where: { id: sub },
-      data,
-      include: { settings: true },
-    })
-    return sanitizeUser(user)
+    const result = await updateMe(fastify.repos.users, sub, body.data)
+    if (isUCError(result)) return reply.status(result.statusCode).send({ error: result.error })
+    return result
   })
 
-  fastify.put('/me/settings', async (request) => {
+  fastify.put('/me/settings', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const body = updateSettingsSchema.safeParse(request.body)
     if (!body.success) throw { statusCode: 400, message: body.error.issues[0].message }
 
-    const payload = { ...body.data }
-    if (payload.aiKey) payload.aiKey = encryptValue(payload.aiKey)
-
-    const updated = await prisma.userSettings.upsert({
-      where: { userId: sub },
-      update: payload,
-      create: { userId: sub, ...payload },
-    })
-    const { aiKey, ...safeSettings } = updated
-    return { ...safeSettings, aiKeySet: !!aiKey }
+    const result = await updateSettings(fastify.repos.users, sub, body.data)
+    if (isUCError(result)) return reply.status(result.statusCode).send({ error: result.error })
+    return result
   })
 
   fastify.get('/me/export', async (request, reply) => {
     const { sub } = request.user as { sub: string }
-    const userPlan = await prisma.user.findUnique({ where: { id: sub }, select: { plan: true, planExpiresAt: true, trialEndsAt: true } })
-    if (!checkIsPro(userPlan ?? null)) return reply.status(403).send({ error: 'Se requiere plan Pro.', code: 'REQUIRES_PRO' })
-    const user = await prisma.user.findUniqueOrThrow({
-      where: { id: sub },
-      include: {
-        settings: true,
-        sessions: true,
-        nutritionDays: true,
-        notes: true,
-        savedFoods: true,
-        customRoutines: true,
-        bodyWeights: { orderBy: { date: 'asc' } },
-      },
-    })
-    const { passwordHash, verificationToken, verificationExpiry, resetToken, resetExpiry, ...exportData } = user
-    if (exportData.settings) {
-      const { aiKey, ...safeSettings } = exportData.settings as Record<string, unknown>
-      void aiKey
-      exportData.settings = safeSettings as typeof exportData.settings
-    }
-    return { version: 4, exportedAt: new Date().toISOString(), data: exportData }
+    const result = await exportUserData(fastify.repos.users, sub)
+    if (isUCError(result)) return reply.status(result.statusCode).send({ error: result.error, ...(result.code && { code: result.code }) })
+    return result
   })
 
   fastify.post('/me/import', async (request, reply) => {
@@ -191,23 +96,13 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
     if (!payload?.data) return reply.code(400).send({ error: 'Formato inválido' })
 
     const { backgroundQueue } = require('../services/queue')
-    await backgroundQueue.add('import-data', {
-      type: 'import',
-      userId: sub,
-      payload: payload.data
-    })
-
+    await backgroundQueue.add('import-data', { type: 'import', userId: sub, payload: payload.data })
     return { imported: true, status: 'processing' }
   })
 
-  // ── Body weight tracker ──────────────────────────────────────────
   fastify.get('/me/bodyweight', async (request) => {
     const { sub } = request.user as { sub: string }
-    return prisma.bodyWeight.findMany({
-      where: { userId: sub },
-      orderBy: { date: 'asc' },
-      take: 365,
-    })
+    return fastify.repos.users.findBodyWeights(sub)
   })
 
   fastify.post('/me/bodyweight', async (request, reply) => {
@@ -219,27 +114,20 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
     }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: body.error.issues[0].message })
 
-    return prisma.bodyWeight.upsert({
-      where: { userId_date: { userId: sub, date: body.data.date } },
-      update: { weight_kg: body.data.weight_kg, notes: body.data.notes ?? null },
-      create: { userId: sub, ...body.data },
-    })
+    return fastify.repos.users.upsertBodyWeight(sub, body.data.date, body.data.weight_kg, body.data.notes)
   })
 
   fastify.delete('/me/bodyweight/:date', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const { date } = request.params as { date: string }
-    const entry = await prisma.bodyWeight.findUnique({ where: { userId_date: { userId: sub, date } } })
-    if (!entry) return reply.status(404).send({ error: 'No encontrado' })
-    await prisma.bodyWeight.delete({ where: { userId_date: { userId: sub, date } } })
+    const deleted = await fastify.repos.users.deleteBodyWeight(sub, date)
+    if (!deleted) return reply.status(404).send({ error: 'No encontrado' })
     return { deleted: true }
   })
 
-  // ── DELETE /me — eliminar cuenta y todos los datos ───────────────────
   fastify.delete('/me', async (request, reply) => {
     const { sub } = request.user as { sub: string }
-    await prisma.user.delete({ where: { id: sub } })  // cascade deletes all related data
-    return reply.code(200).send({ deleted: true })
+    return deleteAccount(fastify.repos.users, sub)
   })
 }
 

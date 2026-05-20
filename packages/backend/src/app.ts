@@ -12,6 +12,7 @@ import { FastifyAdapter } from '@bull-board/fastify'
 import prismaPlugin from './plugins/prisma'
 import redisPlugin from './plugins/redis'
 import authPlugin from './plugins/auth'
+import repositoriesPlugin from './plugins/repositories'
 import { initWorker, closeWorker, backgroundQueue } from './services/queue'
 
 import authRoutes from './routes/auth'
@@ -26,12 +27,24 @@ import challengesRoutes from './routes/challenges'
 import pushRoutes from './routes/push'
 import analyticsRoutes from './routes/analytics'
 import marketplaceRoutes from './routes/marketplace'
+import billingRoutes from './routes/billing'
 
 export async function buildApp() {
   const fastify = Fastify({
     logger: process.env.NODE_ENV !== 'test',
-    trustProxy: true,            // Esencial para Nginx o Traefik (Coolify)
-    bodyLimit: 15 * 1024 * 1024,  // 15 MB — coherente con nginx
+    trustProxy: true,
+    bodyLimit: 15 * 1024 * 1024,
+  })
+
+  // rawBody necesario para verificar la firma de webhooks de Stripe
+  fastify.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
+    try {
+      const json = JSON.parse(body.toString())
+      ;(req as unknown as Record<string, unknown>).rawBody = body
+      done(null, json)
+    } catch (err) {
+      done(err as Error, undefined)
+    }
   })
 
   const productionOrigins: string[] = ['capacitor://localhost']
@@ -40,11 +53,21 @@ export async function buildApp() {
   await fastify.register(cors, {
     origin: process.env.NODE_ENV === 'production'
       ? productionOrigins
-      : ['http://localhost:5173', 'http://localhost:3000'],
+      : true,   // dev: acepta cualquier origen (LAN, Tailscale, localhost)
     credentials: true,
   })
 
-  await fastify.register(helmet)
+  await fastify.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc:  ["'self'", 'https://js.stripe.com'],
+        frameSrc:   ['https://js.stripe.com', 'https://hooks.stripe.com'],
+        connectSrc: ["'self'", 'https://api.stripe.com'],
+        imgSrc:     ["'self'", 'data:', 'https://*.stripe.com'],
+      },
+    },
+  })
   await fastify.register(compress, { global: true })
   await fastify.register(redisPlugin)
   await fastify.register(rateLimit, {
@@ -56,6 +79,7 @@ export async function buildApp() {
   })
 
   await fastify.register(prismaPlugin)
+  await fastify.register(repositoriesPlugin)
   await fastify.register(authPlugin)
 
   await fastify.register(authRoutes,        { prefix: '/auth' })
@@ -70,6 +94,7 @@ export async function buildApp() {
   await fastify.register(pushRoutes,        { prefix: '/push' })
   await fastify.register(analyticsRoutes,   { prefix: '/analytics' })
   await fastify.register(marketplaceRoutes, { prefix: '/marketplace' })
+  await fastify.register(billingRoutes,     { prefix: '/billing' })
 
   initWorker() // Arrancar worker de colas
 

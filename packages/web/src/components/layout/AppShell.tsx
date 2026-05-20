@@ -14,8 +14,6 @@ import {
 } from '../ui/Icons'
 
 import { hapticImpact } from '../../lib/haptics'
-import { useProAccess } from '../../hooks/useProAccess'
-import { ProBadge } from '../ui/ProBadge'
 
 function capitalize(s: string) { return s.charAt(0).toUpperCase() + s.slice(1) }
 
@@ -38,7 +36,7 @@ export const ALL_MODULES = [
   { path: '/nutricion', label: 'Nutrición',     desc: 'Calorías y macros',     group: 'Principal',    badge: '' },
   { path: '/stats',     label: 'Estadísticas',  desc: 'Tu progreso',           group: 'Principal',    badge: '' },
   { path: '/insights',  label: 'Insights IA',   desc: 'Análisis inteligente',  group: 'Principal',    badge: '' },
-  { path: '/duelos',    label: 'Duelos',        desc: 'Retos con amigos',      group: 'Social',       badge: 'Nuevo' },
+  { path: '/duelos',    label: 'Duelos',        desc: 'Retos con amigos',      group: 'Social',       badge: '' },
   { path: '/rutinas',   label: 'Mis Rutinas',   desc: 'Gestionar programas',   group: 'Herramientas', badge: '' },
   { path: '/cardio',    label: 'Cardio',        desc: 'Sesiones de cardio',    group: 'Herramientas', badge: '' },
   { path: '/notas',     label: 'Notas',         desc: 'Checklists y apuntes',  group: 'Herramientas', badge: '' },
@@ -213,7 +211,6 @@ function NavEditor({
 export default function AppShell() {
   const { theme, toggleTheme, isOffline } = useUIStore()
   const { user } = useAuthStore()
-  const { isPro } = useProAccess()
   const pendingSync = useOfflineStore(s => s.queue.length)
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -242,7 +239,7 @@ export default function AppShell() {
     { path: '/nutricion', label: 'Nutrición' },
     { path: '/stats',     label: 'Estadísticas' },
     { path: '/insights',  label: 'Insights IA' },
-    { path: '/duelos',    label: 'Duelos', badge: 'Nuevo' },
+    { path: '/duelos',    label: 'Duelos', badge: '' },
   ]
   const navWorkout = useMemo(() =>
     Object.entries(routineDays).map(([dayId, day]) => ({
@@ -305,10 +302,7 @@ export default function AppShell() {
               <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => handleNav(item.path)}>
                 <span className="nav-icon"><ModuleIcon path={item.path} size={16} /></span>
                 <span>{item.label}</span>
-                {!isPro && (item.path === '/stats' || item.path === '/duelos' || item.path === '/insights') && (
-                  <ProBadge size="sm" />
-                )}
-                {'badge' in item && item.badge && isPro && <small className="nav-badge">{item.badge}</small>}
+                {'badge' in item && item.badge && <small className="nav-badge">{item.badge}</small>}
               </button>
             ))}
           </nav>
@@ -342,15 +336,6 @@ export default function AppShell() {
         <div className="sidebar-meta">
           <p><strong>Semana:</strong> {user?.currentWeek ?? 1}</p>
           <p style={{ marginTop: '.45rem' }}><strong>Objetivo:</strong> {user?.settings?.goal ?? 'No configurado'}</p>
-          {!isPro && (
-            <button
-              className="primary-btn"
-              style={{ marginTop: '0.75rem', width: '100%', fontSize: 'var(--text-xs)', padding: '0.5rem' }}
-              onClick={() => navigate('/upgrade')}
-            >
-              ★ Mejorar a Pro
-            </button>
-          )}
         </div>
       </aside>
 
@@ -432,10 +417,7 @@ export default function AppShell() {
                       </span>
                       <span className="fsmenu-item-label">
                         {mod.label}
-                        {!isPro && (mod.path === '/stats' || mod.path === '/duelos' || mod.path === '/insights') && (
-                          <ProBadge size="sm" />
-                        )}
-                        {mod.badge && isPro && <span className="app-menu-badge">{mod.badge}</span>}
+                        {mod.badge && <span className="app-menu-badge">{mod.badge}</span>}
                       </span>
                       <span className="fsmenu-item-desc">{mod.desc}</span>
                       {isActive(mod.path) && (

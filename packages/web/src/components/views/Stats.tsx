@@ -1,8 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ProGate } from '../ui/ProGate'
-import { ProBadge } from '../ui/ProBadge'
-import { useProAccess } from '../../hooks/useProAccess'
 import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -18,7 +15,7 @@ import type { WorkoutSession } from '../../types/domain'
 type Sessions = WorkoutSession[]
 
 // ── Icons ────────────────────────────────────────────────────────────────────
-import { IconCheck } from '../ui/Icons'
+import { IconCheck, IconLock } from '../ui/Icons'
 
 function IconTarget({ className }: { className?: string }) {
   return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
@@ -47,10 +44,6 @@ function IconNote({ className }: { className?: string }) {
 function IconWeight({ className }: { className?: string }) {
   return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
 }
-function IconLock({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-}
-
 // ── Achievements ─────────────────────────────────────────────────────────────
 interface Achievement {
   id: string; icon: React.ReactNode; title: string; desc: string
@@ -189,7 +182,6 @@ function WeightTab() {
 export default function Stats() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  const { isPro } = useProAccess()
   const weekNumber = user?.currentWeek ?? 1
   const activeRoutineId = user?.activeRoutineId ?? null
   const customRoutines = useRoutines()
@@ -205,27 +197,25 @@ export default function Stats() {
   const [tab, setTab] = useState<'progreso' | 'peso' | 'logros'>('progreso')
   const [selectedExercise, setSelectedExercise] = useState<string>('')
 
-  // Analytics desde backend (solo si Pro). Si falla o no Pro, cae al cálculo local.
   const [weekData, setWeekData] = useState<WeekAnalytics | null>(null)
   const [exerciseData, setExerciseData] = useState<ExerciseAnalyticsPoint[] | null>(null)
 
   useEffect(() => {
-    if (!isPro) { setWeekData(null); return }
     let cancelled = false
     analyticsApi.getWeek(weekNumber)
       .then(d => { if (!cancelled) setWeekData(d) })
       .catch((err: unknown) => console.warn('[analytics/week]', err))
     return () => { cancelled = true }
-  }, [isPro, weekNumber])
+  }, [weekNumber])
 
   useEffect(() => {
-    if (!isPro || !selectedExercise) { setExerciseData(null); return }
+    if (!selectedExercise) { setExerciseData(null); return }
     let cancelled = false
     analyticsApi.getExercise(selectedExercise)
       .then(d => { if (!cancelled) setExerciseData(d) })
       .catch((err: unknown) => console.warn('[analytics/exercise]', err))
     return () => { cancelled = true }
-  }, [isPro, selectedExercise])
+  }, [selectedExercise])
 
   const totalCompleted = useMemo(
     () => dayIds.reduce((a, d) => {
@@ -415,7 +405,6 @@ export default function Stats() {
 
       {tab === 'progreso' && (
         <div className="stats-tab-content">
-          <ProGate mode="blur" feature="estadísticas avanzadas" lockLabel="Estadísticas Pro">
           {volData.length >= 2 && (
             <section className="card">
               <div className="panel-head">
@@ -584,8 +573,6 @@ export default function Stats() {
             </section>
           )}
 
-          </ProGate>
-
           <section className="card">
             <div className="panel-head">
               <div><h3>Resumen por día</h3><p>Semana {weekNumber}.</p></div>
@@ -624,16 +611,13 @@ export default function Stats() {
             <div className="panel-body">
               <div className="achievements-grid">
                 {ACHIEVEMENTS.map(a => {
-                  const isProAchievement = a.id === 'centurion' || a.id === 'racha-8'
-                  const effectivelyLocked = isProAchievement && !isPro
-                  const unlocked = !effectivelyLocked && unlockedAchievements.some(u => u.id === a.id)
+                  const unlocked = unlockedAchievements.some(u => u.id === a.id)
                   const unlockedAt = achievementDates[a.id]
-                  const unlockedLabel = unlockedAt && !effectivelyLocked
+                  const unlockedLabel = unlockedAt
                     ? new Date(unlockedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
                     : null
                   return (
                     <div key={a.id} className={`achievement-card ${unlocked ? 'unlocked' : 'locked'}`} style={{ position: 'relative' }}>
-                      {isProAchievement && <span style={{ position: 'absolute', top: 6, right: 6 }}><ProBadge size="sm" /></span>}
                       <div className={`achievement-icon ${unlocked ? 'unlocked' : ''}`}>
                         {unlocked ? a.icon : <IconLock />}
                       </div>

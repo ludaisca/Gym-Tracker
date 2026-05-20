@@ -2,26 +2,21 @@ import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store'
-import { useProAccess } from '../../hooks/useProAccess'
-import { ProBadge } from '../ui/ProBadge'
 import { usersApi } from '../../api/users'
 import { routinesApi } from '../../api/routines'
 import { api } from '../../api/client'
 import { PRESET_ROUTINES } from '../../lib/presetRoutines'
 import type { Routine } from '../../types/domain'
-import { IconTarget, IconTrash, IconEdit, IconCopy, IconEye, IconPlus, IconCheck, IconClose } from '../ui/Icons'
+import { IconTarget, IconTrash, IconEdit, IconCopy, IconEye, IconPlus, IconCheck, IconClose, IconDownload } from '../ui/Icons'
 import { toast } from '../../lib/toast'
 import { motion, AnimatePresence } from 'framer-motion'
 import { hapticImpact } from '../../lib/haptics'
 
-function IconShare({ size = 18 }: { size?: number }) {
+function IconShare({ size = 16 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
 }
-function IconGlobe({ size = 18 }: { size?: number }) {
+function IconGlobe({ size = 16 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-}
-function IconDownload({ size = 18 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 }
 
 function capitalize(s: string) {
@@ -36,7 +31,7 @@ interface MarketplaceRoutine {
 export default function Routines() {
   const navigate = useNavigate()
   const { user, setAuth } = useAuthStore()
-  const { isPro } = useProAccess()
+
   const [customRoutines, setCustomRoutines] = useState<Routine[]>([])
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [clearWeek, setClearWeek] = useState(false)
@@ -164,225 +159,196 @@ export default function Routines() {
 
   return (
     <div className="fade-in">
-      <div className="panel-head" style={{ padding: '0 0 var(--space-6)' }}>
-        <div>
-          <h3>Mis Rutinas</h3>
-          <p>Selecciona o crea tu plan de entrenamiento.</p>
-        </div>
-        <button
-          className="primary-btn"
-          onClick={() => {
-            if (!isPro && customs.length >= 3) {
-              navigate('/upgrade')
-              return
-            }
-            navigate('/rutinas/nueva')
-          }}
-        >
-          <IconPlus size={18} /> Nueva rutina
-          {!isPro && customs.length >= 3 && <ProBadge size="sm" />}
-        </button>
-      </div>
-
-      <div className="stats-tabs">
-        <button className={`stats-tab-btn ${tab === 'presets' ? 'active' : ''}`} onClick={() => setTab('presets')}>
-          <IconTarget size={18} /> Predeterminadas
-        </button>
-        <button className={`stats-tab-btn ${tab === 'custom' ? 'active' : ''}`} onClick={() => setTab('custom')}>
-          <IconEdit size={18} /> Mis Creaciones ({customs.length})
-        </button>
-        <button className={`stats-tab-btn ${tab === 'mercado' ? 'active' : ''}`} onClick={() => setTab('mercado')}>
-          <IconGlobe size={18} /> Mercado
-        </button>
-      </div>
-
-      {/* ── Import by code ── */}
-      {tab === 'custom' && (
-        <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-4)', alignItems: 'center' }}>
-          <input
-            className="input"
-            placeholder="Código de rutina (ej. AB3X7Y9Z)"
-            value={importCode}
-            onChange={e => setImportCode(e.target.value.toUpperCase())}
-            maxLength={8}
-            style={{ flex: 1, fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}
-          />
-          <button className="ghost-btn" onClick={handleImportByCode} disabled={importing || !importCode.trim()}>
-            {importing ? '…' : 'Importar'}
+      <section className="card">
+        {/* ── Header ── */}
+        <div className="panel-head">
+          <div>
+            <h3>Mis Rutinas</h3>
+            <p>Selecciona o crea tu plan de entrenamiento.</p>
+          </div>
+          <button
+            className="primary-btn"
+            onClick={() => navigate('/rutinas/nueva')}
+          >
+            <IconPlus size={16} /> Nueva
           </button>
         </div>
-      )}
 
-      {/* ── Marketplace tab ── */}
-      {tab === 'mercado' && (
-        <div>
-          {loadingMarket ? (
-            <div className="empty-state"><p>Cargando rutinas...</p></div>
-          ) : marketplaceRoutines.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon"><IconGlobe size={48} /></div>
-              <p>No hay rutinas públicas todavía.</p>
-              <p className="tiny muted">Publica tu propia rutina desde Mis Creaciones.</p>
-            </div>
-          ) : (
-            <div className="routine-grid" style={{ overflowX: 'hidden' }}>
-              {marketplaceRoutines.map(r => {
+        {/* ── Tabs ── */}
+        <div className="stats-tabs" style={{ padding: '0 var(--space-5)', marginBottom: 0 }}>
+          <button className={`stats-tab-btn ${tab === 'presets' ? 'active' : ''}`} onClick={() => setTab('presets')}>
+            <IconTarget size={16} /> Predeterminadas
+          </button>
+          <button className={`stats-tab-btn ${tab === 'custom' ? 'active' : ''}`} onClick={() => setTab('custom')}>
+            <IconEdit size={16} /> Mis Creaciones ({customs.length})
+          </button>
+          <button className={`stats-tab-btn ${tab === 'mercado' ? 'active' : ''}`} onClick={() => setTab('mercado')}>
+            <IconGlobe size={16} /> Mercado
+          </button>
+        </div>
+
+        {/* ── Import code (custom tab) ── */}
+        {tab === 'custom' && (
+          <div style={{ display: 'flex', gap: 'var(--space-2)', padding: 'var(--space-4) var(--space-5) 0', alignItems: 'center' }}>
+            <input
+              className="code-input"
+              placeholder="Código de rutina (ej. AB3X7Y9Z)"
+              value={importCode}
+              onChange={e => setImportCode(e.target.value.toUpperCase())}
+              maxLength={8}
+              style={{ flex: 1 }}
+            />
+            <button className="ghost-btn" onClick={handleImportByCode} disabled={importing || !importCode.trim()}>
+              {importing ? '…' : 'Importar'}
+            </button>
+          </div>
+        )}
+
+        {/* ── Cards grid ── */}
+        <div className="panel-body split">
+
+          {/* Marketplace */}
+          {tab === 'mercado' && (
+            loadingMarket ? (
+              <div className="empty-state" style={{ gridColumn: '1/-1' }}><p>Cargando rutinas...</p></div>
+            ) : marketplaceRoutines.length === 0 ? (
+              <div className="empty-state" style={{ gridColumn: '1/-1' }}>
+                <div className="empty-icon"><IconGlobe size={40} /></div>
+                <p>No hay rutinas públicas todavía.</p>
+                <p className="tiny muted">Publica tu propia rutina desde Mis Creaciones.</p>
+              </div>
+            ) : (
+              marketplaceRoutines.map(r => {
                 const dayEntries = Object.entries((r.days as Record<string, unknown>) ?? {})
-                const exCount = dayEntries.reduce((a, [, d]) => a + ((d as any).exercises?.length ?? 0), 0)
+                const exCount = dayEntries.reduce((a, [, d]) => a + ((d as { exercises?: unknown[] }).exercises?.length ?? 0), 0)
                 return (
-                  <div key={r.id}>
-                    <article className="routine-card-premium">
-                      <div className="routine-card-content">
-                        <div className="routine-card-header">
-                          <div className="routine-card-info">
-                            <h4 className="routine-card-title">{r.name}</h4>
-                            <p className="routine-card-desc">{r.description || 'Sin descripción'}</p>
-                            <p className="tiny muted">por {r.user.name} · {r.downloadCount} descargas</p>
-                          </div>
-                        </div>
-                        <div className="routine-card-stats">
-                          <span><strong>{dayEntries.length}</strong> días</span>
-                          <span className="dot-sep" />
-                          <span><strong>{exCount}</strong> ejercicios</span>
-                        </div>
-                        <div className="routine-card-footer">
-                          <button className="primary-btn-outline" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '.4rem', justifyContent: 'center' }} onClick={() => cloneMarketplace(r.id)}>
-                            <IconDownload size={16} /> Añadir a mis rutinas
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  </div>
+                  <article key={r.id} className="summary-card">
+                    <div className="summary-row">
+                      <h4>{r.name}</h4>
+                      <span className="pill">{dayEntries.length}d</span>
+                    </div>
+                    <p className="tiny muted" style={{ marginBottom: 'var(--space-1)' }}>{r.description || 'Sin descripción'}</p>
+                    <p className="tiny muted">{exCount} ejercicios · por {r.user.name} · {r.downloadCount} descargas</p>
+                    <button className="complete-btn" onClick={() => cloneMarketplace(r.id)}>
+                      <IconDownload size={14} /> Añadir a mis rutinas
+                    </button>
+                  </article>
                 )
-              })}
+              })
+            )
+          )}
+
+          {/* Presets & Custom */}
+          {tab !== 'mercado' && activeRoutines.length === 0 && (
+            <div className="empty-state" style={{ gridColumn: '1/-1', padding: 'var(--space-10) 0' }}>
+              <div className="empty-icon"><IconTarget size={40} /></div>
+              <p>No tienes rutinas personalizadas aún.</p>
+              <button className="ghost-btn" onClick={() => setTab('presets')}>Ver predeterminadas</button>
             </div>
           )}
-        </div>
-      )}
 
-      {tab !== 'mercado' && activeRoutines.length === 0 ? (
-        <div className="empty-state" style={{ padding: 'var(--space-12) 0' }}>
-          <div className="empty-icon"><IconTarget size={48} /></div>
-          <p>No tienes rutinas personalizadas aún.</p>
-          <button className="ghost-btn" onClick={() => setTab('presets')}>Ver predeterminadas</button>
-        </div>
-      ) : tab !== 'mercado' ? (
-        <div className="routine-grid" style={{ overflowX: 'hidden' }}>
-          {activeRoutines.map(r => {
+          {tab !== 'mercado' && activeRoutines.map(r => {
             const isActive = r.id === activeId
             const dayEntries = Object.entries(r.days ?? {})
-            const exCount = dayEntries.reduce((a, [, d]) => a + ((d as any).exercises?.length ?? 0), 0)
-            const rExtended = r as Routine & { isCustom?: boolean; isPublic?: boolean }
+            const exCount = dayEntries.reduce((a, [, d]) => a + ((d as { exercises?: unknown[] }).exercises?.length ?? 0), 0)
+            const rExt = r as Routine & { isCustom?: boolean; isPublic?: boolean }
             return (
-              <div key={r.id} style={{ position: 'relative' }}>
-                <motion.article
-                  className={`routine-card-premium ${isActive ? 'active' : ''}`}
-                  style={{ position: 'relative', zIndex: 2, background: isActive ? 'var(--color-surface-2)' : 'var(--color-surface)' }}
-                  onClick={() => hapticImpact('light')}
+              <motion.article
+                key={r.id}
+                className={`summary-card${isActive ? ' status-active' : ''}`}
+                onClick={() => hapticImpact('light')}
+              >
+                {/* Header row */}
+                <div className="summary-row">
+                  <h4 style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                    {isActive && (
+                      <span className="active-badge"><IconCheck size={10} /> Activa</span>
+                    )}
+                  </h4>
+                  <span className="pill" style={{ flexShrink: 0 }}>{dayEntries.length}d</span>
+                </div>
+
+                {/* Description */}
+                <p className="tiny muted" style={{ marginBottom: 'var(--space-2)' }}>
+                  {r.description || 'Sin descripción'}
+                </p>
+
+                {/* Stats */}
+                <p className="tiny muted">
+                  {exCount} ejercicios · {dayEntries.slice(0, 3).map(([d]) => capitalize(d).slice(0, 2)).join(' · ')}
+                  {dayEntries.length > 3 && ` +${dayEntries.length - 3}`}
+                </p>
+
+                {/* Actions */}
+                <div className="routine-actions">
+                  <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); setPreviewRoutine(r) }} title="Vista previa">
+                    <IconEye size={15} />
+                  </button>
+                  <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); cloneRoutine(r) }} title="Clonar">
+                    <IconCopy size={15} />
+                  </button>
+                  {rExt.isCustom && (
+                    <>
+                      <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); shareRoutine(r.id!) }} title="Compartir código">
+                        <IconShare size={15} />
+                      </button>
+                      <button
+                        className="icon-btn-subtle"
+                        onClick={e => { e.stopPropagation(); togglePublish(rExt) }}
+                        title={rExt.isPublic ? 'Quitar del mercado' : 'Publicar en mercado'}
+                        style={{ color: rExt.isPublic ? 'var(--color-primary)' : undefined }}
+                      >
+                        <IconGlobe size={15} />
+                      </button>
+                      <button className="icon-btn-subtle" onClick={e => { e.stopPropagation(); navigate(`/rutinas/${r.id}`) }} title="Editar">
+                        <IconEdit size={15} />
+                      </button>
+                      <button className="icon-btn-subtle" style={{ color: 'var(--color-warning)' }} onClick={e => { e.stopPropagation(); deleteRoutine(r.id!) }} title="Eliminar">
+                        <IconTrash size={15} />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Activate button */}
+                <button
+                  className={`complete-btn${isActive ? ' is-complete' : ''}`}
+                  disabled={isActive}
+                  onClick={e => { e.stopPropagation(); if (!isActive) setPendingId(r.id!) }}
                 >
-                  <div className="routine-card-content">
-                    <div className="routine-card-header">
-                      <div className="routine-card-info">
-                        <h4 className="routine-card-title">
-                          {r.name}
-                          {isActive && <span className="active-badge"><IconCheck size={12} /> Activa</span>}
-                        </h4>
-                        <p className="routine-card-desc">{r.description || 'Sin descripción'}</p>
-                      </div>
-                      <div className="routine-card-actions-top">
-                        <button className="icon-btn-subtle" onClick={() => setPreviewRoutine(r)} title="Previsualizar">
-                          <IconEye size={18} />
-                        </button>
-                        <button className="icon-btn-subtle" onClick={() => cloneRoutine(r)} title="Clonar">
-                          <IconCopy size={18} />
-                        </button>
-                        {rExtended.isCustom && (
-                          <>
-                            <button className="icon-btn-subtle" onClick={() => shareRoutine(r.id!)} title="Compartir código">
-                              <IconShare size={18} />
-                            </button>
-                            <button
-                              className="icon-btn-subtle"
-                              onClick={() => isPro ? togglePublish(rExtended) : navigate('/upgrade')}
-                              title={!isPro ? 'Publicar en mercado (Pro)' : rExtended.isPublic ? 'Quitar del mercado' : 'Publicar en mercado'}
-                              style={{ color: rExtended.isPublic ? 'var(--color-primary)' : !isPro ? 'var(--color-text-faint)' : undefined, position: 'relative' }}
-                            >
-                              <IconGlobe size={18} />
-                              {!isPro && <span style={{ position: 'absolute', top: -6, right: -6 }}><ProBadge size="sm" /></span>}
-                            </button>
-                            <button className="icon-btn-subtle" onClick={() => navigate(`/rutinas/${r.id}`)} title="Editar">
-                              <IconEdit size={18} />
-                            </button>
-                            <button className="icon-btn-subtle" style={{ color: 'var(--color-warning)' }} onClick={() => deleteRoutine(r.id!)} title="Eliminar">
-                              <IconTrash size={18} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="routine-card-days">
-                      {dayEntries.slice(0, 4).map(([d, _day]) => (
-                        <span key={d} className="routine-day-pill">
-                          {capitalize(d).slice(0, 2)}
-                        </span>
-                      ))}
-                      {dayEntries.length > 4 && <span className="routine-day-pill muted">+{dayEntries.length - 4}</span>}
-                    </div>
-
-                    <div className="routine-card-stats">
-                      <span><strong>{dayEntries.length}</strong> días</span>
-                      <span className="dot-sep" />
-                      <span><strong>{exCount}</strong> ejercicios</span>
-                    </div>
-
-                    <div className="routine-card-footer">
-                      {isActive ? (
-                        <button className="primary-btn disabled" disabled style={{ width: '100%' }}>Activa actualmente</button>
-                      ) : (
-                        <button className="primary-btn-outline" style={{ width: '100%' }} onClick={() => setPendingId(r.id!)}>Activar plan</button>
-                      )}
-                    </div>
-                  </div>
-                </motion.article>
-              </div>
+                  {isActive ? 'Activa actualmente' : 'Activar plan'}
+                </button>
+              </motion.article>
             )
           })}
         </div>
-      ) : null}
+      </section>
 
-      {/* Confirmation Sheet (Bottom Sheet style) */}
+      {/* ── Confirmation Bottom Sheet ── */}
       {createPortal(
         <AnimatePresence>
           {pendingId && (
-            <motion.div 
+            <motion.div
               className="bottom-sheet-overlay"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={(e) => { if (e.target === e.currentTarget) { setPendingId(null); setClearWeek(false) } }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={e => { if (e.target === e.currentTarget) { setPendingId(null); setClearWeek(false) } }}
             >
-              <motion.div 
+              <motion.div
                 className="bottom-sheet"
-                drag="y"
-                dragConstraints={{ top: 0, bottom: 0 }}
-                dragElastic={0.4}
-                onDragEnd={(e, info) => { if (info.offset.y > 100) { setPendingId(null); setClearWeek(false) } }}
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
+                drag="y" dragConstraints={{ top: 0, bottom: 0 }} dragElastic={0.4}
+                onDragEnd={(_, info) => { if (info.offset.y > 100) { setPendingId(null); setClearWeek(false) } }}
+                initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               >
                 <div className="drag-handle"><div className="bottom-sheet-drag" /></div>
-                
                 <div className="bottom-sheet-content">
                   <h3 style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
-                    <IconTarget className="accent-primary" /> Cambiar rutina
+                    <IconTarget size={18} /> Cambiar rutina
                   </h3>
                   <p className="confirm-sheet-text" style={{ marginBottom: 'var(--space-4)' }}>
                     Vas a activar <strong>{pendingRoutineData?.name}</strong>. Tu historial se conserva, pero los registros de la semana actual pueden desincronizarse.
                   </p>
-                  
                   <div className="confirm-option-card" style={{ marginBottom: 'var(--space-5)' }}>
                     <label className="checkbox-container">
                       <input type="checkbox" checked={clearWeek} onChange={e => setClearWeek(e.target.checked)} />
@@ -393,8 +359,7 @@ export default function Routines() {
                       </div>
                     </label>
                   </div>
-
-                  <div className="confirm-sheet-actions" style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                  <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
                     <button className="ghost-btn" onClick={() => { setPendingId(null); setClearWeek(false) }} style={{ flex: 1 }}>Cancelar</button>
                     <button className="primary-btn" onClick={confirmActivate} disabled={activating} style={{ flex: 2 }}>
                       {activating ? 'Activando...' : 'Confirmar'}
@@ -408,30 +373,23 @@ export default function Routines() {
         document.body
       )}
 
-      {/* Preview Side Panel (Bottom Sheet style) */}
+      {/* ── Preview Bottom Sheet ── */}
       {createPortal(
         <AnimatePresence>
           {previewRoutine && (
-            <motion.div 
+            <motion.div
               className="bottom-sheet-overlay"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={(e) => e.target === e.currentTarget && setPreviewRoutine(null)}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={e => e.target === e.currentTarget && setPreviewRoutine(null)}
             >
-              <motion.div 
+              <motion.div
                 className="bottom-sheet"
-                drag="y"
-                dragConstraints={{ top: 0, bottom: 0 }}
-                dragElastic={0.4}
-                onDragEnd={(e, info) => { if (info.offset.y > 100) setPreviewRoutine(null) }}
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
+                drag="y" dragConstraints={{ top: 0, bottom: 0 }} dragElastic={0.4}
+                onDragEnd={(_, info) => { if (info.offset.y > 100) setPreviewRoutine(null) }}
+                initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
                 transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               >
                 <div className="drag-handle"><div className="bottom-sheet-drag" /></div>
-                
                 <div className="bottom-sheet-content">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-4)' }}>
                     <div>
@@ -442,10 +400,9 @@ export default function Routines() {
                       <IconClose size={20} />
                     </button>
                   </div>
-
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
                     {Object.entries(previewRoutine.days || {}).map(([id, day]) => {
-                      const d = day as any
+                      const d = day as unknown as { label?: string; exercises?: { name: string; sets: number; reps: number; rest: number }[] }
                       return (
                         <div key={id} className="preview-day-card">
                           <div className="preview-day-card-head">
@@ -456,7 +413,7 @@ export default function Routines() {
                             <span className="preview-day-subtitle">{d.label}</span>
                           </div>
                           <div className="preview-day-exercises">
-                            {d.exercises?.map((ex: any, idx: number) => (
+                            {d.exercises?.map((ex, idx) => (
                               <div key={idx} className="preview-exercise-item">
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
                                   <span className="preview-exercise-idx">{idx + 1}</span>
@@ -473,19 +430,13 @@ export default function Routines() {
                       )
                     })}
                   </div>
-
-                  <div style={{ marginTop: 'var(--space-4)' }}>
-                    <button 
-                      className="primary-btn" 
-                      style={{ width: '100%', padding: '1rem' }} 
-                      onClick={() => { 
-                        setPendingId(previewRoutine.id!); 
-                        setPreviewRoutine(null); 
-                      }}
-                    >
-                      Activar este plan ahora
-                    </button>
-                  </div>
+                  <button
+                    className="primary-btn"
+                    style={{ width: '100%', padding: '1rem', marginTop: 'var(--space-4)' }}
+                    onClick={() => { setPendingId(previewRoutine.id!); setPreviewRoutine(null) }}
+                  >
+                    Activar este plan ahora
+                  </button>
                 </div>
               </motion.div>
             </motion.div>

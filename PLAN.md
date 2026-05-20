@@ -1,6 +1,8 @@
 # Plan de correcciones y mejoras — Gym Tracker v1
 
-Generado el 2026-05-15 a partir de auditoría técnica completa.
+**Generado**: 2026-05-15 | **Última actualización**: 2026-05-17
+
+Estado actual: v1 rama clonada y lista para desarrollo/producción. Mayoría de correcciones y features implementadas.
 
 ---
 
@@ -92,7 +94,7 @@ Añadido fuera del PLAN.md original.
 - [x] Grant manual: `POST /users/admin/grant-pro` con `ADMIN_TOKEN`
 - [x] Modelo: campos `plan`, `planExpiresAt`, `trialEndsAt`, `stripeCustomerId` en `User`
 - [x] Rutas Pro-gated: `analytics.*`, `ai.*`, `challenges.*`, `push.subscribe`, `routines.publish`, `users.export`. Soft limit 3 rutinas custom en plan Free.
-- [ ] Integración Stripe real (próxima sesión — hoy solo grant por ADMIN_TOKEN)
+- [ ] Integración Stripe real (pendiente — actualmente solo grant por ADMIN_TOKEN)
 
 ---
 

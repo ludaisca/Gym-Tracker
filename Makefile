@@ -9,6 +9,7 @@ dev:
 	(cd packages/backend && set -a && . ../../.env && set +a && \
 	 export DATABASE_URL="$$(echo $$DATABASE_URL | sed 's|@db:|@localhost:|')" && \
 	 export REDIS_URL="$$(echo $$REDIS_URL | sed 's|@redis:|@localhost:|')" && \
+	 export PORT=3010 && \
 	 npm run dev) & \
 	wait
 

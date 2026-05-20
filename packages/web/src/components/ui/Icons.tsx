@@ -383,6 +383,38 @@ export function IconUpload({ size = 20, strokeWidth = 1.75, className, style }: 
   )
 }
 
+export function IconBell({ size = 20, strokeWidth = 1.75, className, style }: IconProps) {
+  return (
+    <svg {...def(size, strokeWidth)} className={className} style={style}>
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+    </svg>
+  )
+}
+
+export function IconSwords({ size = 20, strokeWidth = 1.75, className, style }: IconProps) {
+  return (
+    <svg {...def(size, strokeWidth)} className={className} style={style}>
+      <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/>
+      <line x1="13" y1="19" x2="19" y2="13"/>
+      <line x1="16" y1="16" x2="20" y2="20"/>
+      <line x1="19" y1="21" x2="21" y2="19"/>
+      <polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/>
+      <line x1="5" y1="14" x2="9" y2="18"/>
+      <line x1="7" y1="21" x2="3" y2="17"/>
+    </svg>
+  )
+}
+
+export function IconInfinity({ size = 20, strokeWidth = 1.75, className, style }: IconProps) {
+  return (
+    <svg {...def(size, strokeWidth)} className={className} style={style}>
+      <path d="M12 12c-2-2.5-4-4-6-4a4 4 0 0 0 0 8c2 0 4-1.5 6-4z"/>
+      <path d="M12 12c2 2.5 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.5-6 4z"/>
+    </svg>
+  )
+}
+
 // Module-to-icon mapping for AppShell / nav
 export function ModuleIcon({ path, size = 20, strokeWidth = 1.75 }: { path: string; size?: number; strokeWidth?: number }) {
   const props = { size, strokeWidth }

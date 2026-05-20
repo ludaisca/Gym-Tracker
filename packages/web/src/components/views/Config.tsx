@@ -11,8 +11,6 @@ import {
 import { toast } from '../../lib/toast'
 import { Dumbbell, Zap, Flame, Target, Trophy, Brain, Waves, Rocket } from 'lucide-react'
 import { subscribeToPush, unsubscribeFromPush, pushApi } from '../../api/push'
-import { useProAccess } from '../../hooks/useProAccess'
-import { ProGate } from '../ui/ProGate'
 
 const AVATARS = [
   { id: '1', icon: Dumbbell },
@@ -29,14 +27,14 @@ const ACCENT_THEMES = [
   { id: 'teal',   label: 'Teal',   lightColor: '#01696f', darkColor: '#4f98a3' },
   { id: 'forest', label: 'Forest', lightColor: '#2d6a4f', darkColor: '#52b788' },
   { id: 'ocean',  label: 'Ocean',  lightColor: '#1d6fa4', darkColor: '#4da6d9' },
-  { id: 'ember',  label: 'Ember',   lightColor: '#c05c1a', darkColor: '#4f98a3' }, // Fixed ember dark color
+  { id: 'ember',  label: 'Ember',   lightColor: '#c05c1a', darkColor: '#e07840' },
   { id: 'violet', label: 'Violeta', lightColor: '#6d3bbf', darkColor: '#9b6de0' },
 ]
 
 export default function Config() {
   const navigate = useNavigate()
   const { user, setAuth, accessToken, clearAuth } = useAuthStore()
-  const { isPro, planExpiresAt, trialEndsAt } = useProAccess()
+
   const { toggleTheme, theme, accentTheme, setAccentTheme } = useUIStore()
   const { queue, dequeue, clearQueue } = useOfflineStore()
   const [settings, setSettings] = useState<Partial<UserSettings>>(user?.settings ?? {})
@@ -265,32 +263,6 @@ export default function Config() {
 
   return (
     <div className="fade-in">
-      {/* ── Mi Plan ───────────────────────────────────────────── */}
-      <div className={`plan-card ${isPro ? 'plan-card--pro' : ''}`}>
-        <div className="plan-card-left">
-          <div className="plan-card-name">
-            {isPro ? '★ Gym Tracker Pro' : 'Plan Gratuito'}
-          </div>
-          <div className="plan-card-sub">
-            {isPro
-              ? trialEndsAt
-                ? `Prueba gratis hasta ${new Date(trialEndsAt).toLocaleDateString('es-MX', { dateStyle: 'medium' })}`
-                : planExpiresAt
-                  ? `Activo hasta ${new Date(planExpiresAt).toLocaleDateString('es-MX', { dateStyle: 'medium' })}`
-                  : 'Acceso Pro vitalicio'
-              : 'Hasta 3 rutinas · sin IA ni duelos'}
-          </div>
-        </div>
-        <div className="plan-card-action">
-          {isPro
-            ? <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-primary)', fontWeight: 700 }}>Activo ✓</span>
-            : <button className="primary-btn" style={{ fontSize: 'var(--text-xs)', padding: '0.5rem 1rem' }} onClick={() => navigate('/upgrade')}>
-                Mejorar →
-              </button>
-          }
-        </div>
-      </div>
-
       {/* ── Perfil header ─────────────────────────────────────── */}
       <section className="card">
         <div className="profile-header-main">
@@ -515,9 +487,7 @@ export default function Config() {
       </section>
 
       {/* ── Integración IA ────────────────────────────────────── */}
-      {!isPro ? (
-        <ProGate mode="lock" lockLabel="Asistente de IA — Función Pro" feature="Conecta tu cuenta con Google Gemini para análisis de entrenamientos y escaneo de comidas." />
-      ) : <section className="card">
+      <section className="card">
         <div className="panel-head">
           <div>
             <h3>Asistente de Inteligencia Artificial</h3>
@@ -570,12 +540,10 @@ export default function Config() {
             </button>
           )}
         </div>
-      </section>}
+      </section>
 
       {/* ── Notificaciones Push ───────────────────────────────── */}
-      {!isPro ? (
-        <ProGate mode="lock" lockLabel="Notificaciones Push — Función Pro" feature="Recibe recordatorios de entrenamiento directamente en tu dispositivo." />
-      ) : <section className="card">
+      <section className="card">
         <div className="panel-head">
           <div>
             <h3>Notificaciones Push</h3>
@@ -662,7 +630,7 @@ export default function Config() {
             </div>
           )}
         </div>
-      </section>}
+      </section>
 
       {/* ── Sincronización Local ──────────────────────────────── */}
       <section className="card">
@@ -724,15 +692,9 @@ export default function Config() {
         <div className="panel-body triple">
           <div>
             <p className="tiny muted" style={{ marginBottom: '.75rem' }}>Descarga un respaldo completo de tus datos en formato JSON.</p>
-            {isPro ? (
-              <button className="primary-btn" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }} onClick={handleExport}>
-                <IconDownload size={15} /> Exportar JSON
-              </button>
-            ) : (
-              <button className="ghost-btn" style={{ display: 'flex', alignItems: 'center', gap: '.4rem', opacity: 0.6 }} onClick={() => navigate('/upgrade')}>
-                🔒 Exportar JSON (Pro)
-              </button>
-            )}
+            <button className="primary-btn" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }} onClick={handleExport}>
+              <IconDownload size={15} /> Exportar JSON
+            </button>
           </div>
           <div>
             <p className="tiny muted" style={{ marginBottom: '.75rem' }}>Carga un archivo JSON exportado previamente para restaurar tus datos.</p>

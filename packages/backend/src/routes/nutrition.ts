@@ -1,6 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { randomUUID } from 'crypto'
+import { isUCError } from '../use-cases/errors'
+import {
+  getNutritionDay, getBatchNutrition, upsertNutritionDay,
+  addMealEntry, removeMealEntry,
+  listSavedFoods, createSavedFood, deleteSavedFood,
+} from '../use-cases/nutrition'
 
 const foodEntrySchema = z.object({
   name: z.string().min(1),
@@ -13,12 +18,8 @@ const foodEntrySchema = z.object({
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato de fecha inválido (YYYY-MM-DD)')
 
 const nutritionRoutes: FastifyPluginAsync = async (fastify) => {
-  const { prisma } = fastify
-
   fastify.addHook('onRequest', fastify.authenticate)
 
-  // ── GET /nutrition/batch?dates=2026-05-08,2026-05-07,... ─────────────────
-  // Debe registrarse antes de /:date para evitar que "batch" sea tratado como fecha
   fastify.get('/batch', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const { dates } = request.query as { dates?: string }
@@ -27,35 +28,22 @@ const nutritionRoutes: FastifyPluginAsync = async (fastify) => {
     const dateList = dates.split(',').map(d => d.trim()).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).slice(0, 30)
     if (dateList.length === 0) return reply.status(400).send({ error: 'Ninguna fecha válida (formato YYYY-MM-DD)' })
 
-    const rows = await prisma.nutritionDay.findMany({
-      where: { userId: sub, date: { in: dateList } },
-    })
-
-    const byDate = Object.fromEntries(rows.map(r => [r.date, r]))
-    return dateList.map(d => byDate[d] ?? { userId: sub, date: d, water: 0, meals: {} })
+    return getBatchNutrition(fastify.repos.nutrition, sub, dateList)
   })
 
   fastify.get('/:date', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const parsed = dateSchema.safeParse((request.params as { date: string }).date)
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.issues[0].message })
-    const date = parsed.data
-    return prisma.nutritionDay.findUnique({ where: { userId_date: { userId: sub, date } } })
-      ?? { userId: sub, date, water: 0, meals: {} }
+    return getNutritionDay(fastify.repos.nutrition, sub, parsed.data)
   })
 
   fastify.put('/:date', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const parsedDate = dateSchema.safeParse((request.params as { date: string }).date)
     if (!parsedDate.success) return reply.status(400).send({ error: parsedDate.error.issues[0].message })
-    const date = parsedDate.data
     const body = z.object({ water: z.number().int().optional(), meals: z.record(z.unknown()).optional() }).parse(request.body)
-    const safeBody = { water: body.water, meals: body.meals as object | undefined }
-    return prisma.nutritionDay.upsert({
-      where: { userId_date: { userId: sub, date } },
-      update: safeBody,
-      create: { userId: sub, date, ...safeBody },
-    })
+    return upsertNutritionDay(fastify.repos.nutrition, sub, parsedDate.data, { water: body.water, meals: body.meals as object | undefined })
   })
 
   fastify.post('/:date/meals/:mealType', async (request, reply) => {
@@ -63,24 +51,9 @@ const nutritionRoutes: FastifyPluginAsync = async (fastify) => {
     const params = request.params as { date: string; mealType: string }
     const parsedDate = dateSchema.safeParse(params.date)
     if (!parsedDate.success) return reply.status(400).send({ error: parsedDate.error.issues[0].message })
-    const { mealType } = params
-    const date = parsedDate.data
     const entry = foodEntrySchema.parse(request.body)
-
-    const day = await prisma.nutritionDay.findUnique({ where: { userId_date: { userId: sub, date } } })
-    const meals = (day?.meals as Record<string, unknown[]>) ?? {}
-    const list = (meals[mealType] as unknown[]) ?? []
-    const newEntry = { ...entry, id: randomUUID() }
-    list.push(newEntry)
-    meals[mealType] = list
-
-    const safeMeals = meals as object
-    await prisma.nutritionDay.upsert({
-      where: { userId_date: { userId: sub, date } },
-      update: { meals: safeMeals },
-      create: { userId: sub, date, meals: safeMeals },
-    })
-    return reply.status(201).send(newEntry)
+    const result = await addMealEntry(fastify.repos.nutrition, sub, parsedDate.data, params.mealType, entry)
+    return reply.status(201).send(result)
   })
 
   fastify.delete('/:date/meals/:mealType/:foodId', async (request, reply) => {
@@ -88,36 +61,25 @@ const nutritionRoutes: FastifyPluginAsync = async (fastify) => {
     const params = request.params as { date: string; mealType: string; foodId: string }
     const parsedDate = dateSchema.safeParse(params.date)
     if (!parsedDate.success) return reply.status(400).send({ error: parsedDate.error.issues[0].message })
-    const { mealType, foodId } = params
-    const date = parsedDate.data
-
-    const day = await prisma.nutritionDay.findUnique({ where: { userId_date: { userId: sub, date } } })
-    if (!day) return reply.status(204).send()
-
-    const meals = (day.meals as Record<string, { id: string }[]>) ?? {}
-    if (meals[mealType]) {
-      meals[mealType] = meals[mealType].filter((e) => e.id !== foodId)
-      await prisma.nutritionDay.update({ where: { userId_date: { userId: sub, date } }, data: { meals } })
-    }
+    await removeMealEntry(fastify.repos.nutrition, sub, parsedDate.data, params.mealType, params.foodId)
     return reply.status(204).send()
   })
 
-  // ── Saved foods ──────────────────────────────────────────────────────────────
   fastify.get('/saved-foods', async (request) => {
     const { sub } = request.user as { sub: string }
-    return prisma.savedFood.findMany({ where: { userId: sub }, take: 200 })
+    return listSavedFoods(fastify.repos.nutrition, sub)
   })
 
   fastify.post('/saved-foods', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const data = foodEntrySchema.parse(request.body)
-    return reply.status(201).send(await prisma.savedFood.create({ data: { userId: sub, ...data } }))
+    return reply.status(201).send(await createSavedFood(fastify.repos.nutrition, sub, data))
   })
 
   fastify.delete('/saved-foods/:id', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const { id } = request.params as { id: string }
-    await prisma.savedFood.deleteMany({ where: { id, userId: sub } })
+    await deleteSavedFood(fastify.repos.nutrition, sub, id)
     return reply.status(204).send()
   })
 }

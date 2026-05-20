@@ -1,6 +1,8 @@
 # Gym Tracker
 
-Aplicación de seguimiento de entrenamiento y nutrición. PWA mobile-first con soporte offline, IA integrada y generación de APK nativa para Android.
+Aplicación de seguimiento de entrenamiento y nutrición. PWA mobile-first con soporte offline, IA integrada, sistema de monetización Pro y generación de APK nativa para Android.
+
+**Estado actual**: v1 rama activa. Producción lista en Coolify. Mayoría de features y correcciones implementadas (ver PLAN.md).
 
 ## Stack
 
@@ -46,21 +48,31 @@ v1/
 
 ## Funcionalidades
 
+### Core
 - **Entrenamientos** — Sesiones por semana/día, autofill del entrenamiento anterior, múltiples sets con kg y reps, cardio, timer integrado
-- **Rutinas** — Presets estándar (Bro Split, Push Pull Legs, Full Body…) + rutinas custom
+- **Rutinas** — Presets estándar (Bro Split, Push Pull Legs, Full Body…) + rutinas custom + compartir con link
 - **Nutrición** — Registro de comidas y macros por día, análisis de fotos con IA, tracking de agua, promedio semanal
 - **IA** — Análisis de progreso, recomendaciones de entrenamiento, chat contextual (OpenAI / Anthropic / Google)
-- **Duelos** — Challenges entre usuarios con check-ins fotográficos y ranking
 - **Peso corporal** — Historial + gráfica de tendencia
+
+### Premium (Pro)
+- **Duelos** — Challenges entre usuarios con check-ins fotográficos y ranking
+- **Analytics avanzado** — Volumen por semana, PRs, proyecciones de 1RM
+- **Marketplace** — Publicar y clonar rutinas de la comunidad
+- **Push notifications** — Recordatorios de entrenamientos
+- **Progresión automática** — Sugiere +2.5 kg cuando reps consistentes
+
+### Todos
 - **Offline-first** — Cola de escrituras pendientes que se reproduce al reconectar
 - **Temas** — Modo claro/oscuro + 5 colores de acento (teal, verde, azul, naranja, violeta)
 - **Export/Import** — Backup completo en JSON
+- **Trial Pro** — 7 días gratis (una vez por usuario)
 
 ## Requisitos previos
 
 - Node.js 20+
 - Docker y Docker Compose
-- Java 21 (solo para builds Android — el sistema debe tener JDK 21, no 25)
+- Java 21 (solo para builds Android — ⚠️ sistema con Java 25 requiere path alternativo `~/java/jdk-21.0.11+10`)
 
 ## Desarrollo local
 
