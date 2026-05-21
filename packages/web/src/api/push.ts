@@ -14,6 +14,9 @@ export const pushApi = {
     api.delete('/push/unsubscribe', { data: { endpoint } }),
 
   test: () => api.post<{ sent: number; failed: number }>('/push/test').then((r) => r.data),
+
+  registerFcmToken: (token: string) => api.post('/push/fcm-token', { token }),
+  unregisterFcmToken: () => api.delete('/push/fcm-token'),
 }
 
 export async function subscribeToPush(): Promise<PushSubscription | null> {

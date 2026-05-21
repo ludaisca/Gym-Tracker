@@ -2,6 +2,7 @@ import { Queue, Worker, Job } from 'bullmq'
 import Redis from 'ioredis'
 import { sendMail } from './email'
 import { processImport } from './importTask'
+import { prisma } from '../lib/prisma'
 
 const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
   maxRetriesPerRequest: null,
@@ -23,7 +24,37 @@ export interface ImportJobData {
   payload: Record<string, unknown>
 }
 
-type JobData = EmailJobData | ImportJobData
+export interface ReminderScanJobData {
+  type: 'reminder-scan'
+}
+
+type JobData = EmailJobData | ImportJobData | ReminderScanJobData
+
+async function processReminderScan() {
+  const now = new Date()
+  const hh = now.getUTCHours().toString().padStart(2, '0')
+  const mm = now.getUTCMinutes().toString().padStart(2, '0')
+  const currentTime = `${hh}:${mm}`
+
+  const targets = await prisma.userSettings.findMany({
+    where: { reminderTime: currentTime, fcmToken: { not: null } },
+    select: { userId: true, fcmToken: true },
+  })
+  if (targets.length === 0) return
+
+  const { sendFcmNotification, cleanInvalidFcmToken } = await import('./fcm')
+  await Promise.allSettled(
+    targets.map(async (s) => {
+      const ok = await sendFcmNotification(
+        s.fcmToken!,
+        'Hora de entrenar 💪',
+        'Tienes un entrenamiento pendiente hoy. ¡A por ello!',
+        { url: '/dashboard' }
+      )
+      if (!ok) await cleanInvalidFcmToken(prisma, s.userId)
+    })
+  )
+}
 
 // ── Worker (Procesador de Tareas) ─────────────────────────────────────────
 let worker: Worker<JobData> | null = null
@@ -34,8 +65,10 @@ export function initWorker() {
   worker = new Worker<JobData>(
     'gym-tracker-bg-jobs',
     async (job: Job<JobData>) => {
-      console.log(`[Queue] Procesando tarea ${job.id} de tipo: ${job.data.type}`)
-      
+      if (job.data.type !== 'reminder-scan') {
+        console.log(`[Queue] Procesando tarea ${job.id} de tipo: ${job.data.type}`)
+      }
+
       try {
         if (job.data.type === 'email') {
           await sendMail({
@@ -48,6 +81,9 @@ export function initWorker() {
         else if (job.data.type === 'import') {
           await processImport(job.data.userId, job.data.payload)
         }
+        else if (job.data.type === 'reminder-scan') {
+          await processReminderScan()
+        }
       } catch (error) {
         console.error(`[Queue] Error procesando tarea ${job.id}:`, error)
         throw error
@@ -57,7 +93,9 @@ export function initWorker() {
   )
 
   worker.on('completed', (job) => {
-    console.log(`[Queue] Tarea completada: ${job.id}`)
+    if ((job.data as JobData).type !== 'reminder-scan') {
+      console.log(`[Queue] Tarea completada: ${job.id}`)
+    }
   })
 
   worker.on('failed', (job, err) => {
@@ -65,6 +103,14 @@ export function initWorker() {
   })
 
   return worker
+}
+
+export async function registerReminderJob() {
+  await backgroundQueue.add(
+    'reminder-scan',
+    { type: 'reminder-scan' } satisfies ReminderScanJobData,
+    { repeat: { every: 60_000 }, jobId: 'reminder-scan-repeatable' }
+  )
 }
 
 export async function closeWorker() {

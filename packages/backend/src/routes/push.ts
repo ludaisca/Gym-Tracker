@@ -51,43 +51,79 @@ const pushRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(204).send()
   })
 
-  // ── POST /push/test — envía notificación de prueba al usuario ────────────
-  auth.post('/test', async (req, reply) => {
-    const keys = await getVapidKeys(prisma)
-    if (!keys) return reply.status(503).send({ error: 'Push notifications no disponibles.' })
-
+  // ── POST /push/fcm-token — registra token FCM del dispositivo Android ─────
+  auth.post('/fcm-token', async (req, reply) => {
     const { sub } = req.user as { sub: string }
-    const subs = await prisma.pushSubscription.findMany({ where: { userId: sub } })
-    if (subs.length === 0) return reply.status(404).send({ error: 'No hay suscripciones activas.' })
-
-    const payload = JSON.stringify({
-      title: 'Gym Tracker',
-      body: '¡Las notificaciones push están funcionando!',
-      url: '/dashboard',
+    const { token } = z.object({ token: z.string().min(10) }).parse(req.body)
+    await prisma.userSettings.upsert({
+      where: { userId: sub },
+      update: { fcmToken: token },
+      create: { userId: sub, fcmToken: token },
     })
+    return reply.status(201).send({ ok: true })
+  })
 
-    const results = await Promise.allSettled(
-      subs.map(s =>
-        webpush.sendNotification(
-          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-          payload
+  // ── DELETE /push/fcm-token — borra token FCM ─────────────────────────────
+  auth.delete('/fcm-token', async (req, reply) => {
+    const { sub } = req.user as { sub: string }
+    await prisma.userSettings.updateMany({ where: { userId: sub }, data: { fcmToken: null } })
+    return reply.status(204).send()
+  })
+
+  // ── POST /push/test — envía notificación de prueba (Web Push + FCM) ────────
+  auth.post('/test', async (req, reply) => {
+    const { sub } = req.user as { sub: string }
+    let sent = 0
+    let failed = 0
+
+    // Web Push
+    const keys = await getVapidKeys(prisma)
+    const subs = await prisma.pushSubscription.findMany({ where: { userId: sub } })
+    if (keys && subs.length > 0) {
+      const payload = JSON.stringify({
+        title: 'Gym Tracker',
+        body: '¡Las notificaciones push están funcionando!',
+        url: '/dashboard',
+      })
+      const results = await Promise.allSettled(
+        subs.map(s =>
+          webpush.sendNotification(
+            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+            payload
+          )
         )
       )
-    )
-
-    // Limpiar suscripciones inválidas (410 Gone)
-    for (let i = 0; i < results.length; i++) {
-      const r = results[i]
-      if (r.status === 'rejected') {
-        const err = (r as PromiseRejectedResult).reason as { statusCode?: number }
-        if (err?.statusCode === 410) {
-          await prisma.pushSubscription.deleteMany({ where: { endpoint: subs[i].endpoint } })
+      for (let i = 0; i < results.length; i++) {
+        if (results[i].status === 'fulfilled') {
+          sent++
+        } else {
+          failed++
+          const err = (results[i] as PromiseRejectedResult).reason as { statusCode?: number }
+          if (err?.statusCode === 410) {
+            await prisma.pushSubscription.deleteMany({ where: { endpoint: subs[i].endpoint } })
+          }
         }
       }
     }
 
-    const failed = results.filter(r => r.status === 'rejected').length
-    return { sent: results.length - failed, failed }
+    // FCM (APK)
+    const settings = await prisma.userSettings.findUnique({ where: { userId: sub } })
+    if (settings?.fcmToken) {
+      const { sendFcmNotification, cleanInvalidFcmToken } = await import('../services/fcm')
+      const ok = await sendFcmNotification(
+        settings.fcmToken,
+        'Gym Tracker',
+        '¡Las notificaciones push están funcionando!',
+        { url: '/dashboard' }
+      )
+      if (ok) sent++
+      else { failed++; await cleanInvalidFcmToken(prisma, sub) }
+    }
+
+    if (sent === 0 && failed === 0) {
+      return reply.status(404).send({ error: 'No hay suscripciones activas.' })
+    }
+    return { sent, failed }
   })
   }) // fin sub-scope auth
 }

@@ -28,6 +28,7 @@ const updateSettingsSchema = z.object({
   aiProvider: z.string().nullable().optional(),
   aiKey: z.string().nullable().optional(),
   aiModel: z.string().nullable().optional(),
+  reminderTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
 })
 
 const usersRoutes: FastifyPluginAsync = async (fastify) => {

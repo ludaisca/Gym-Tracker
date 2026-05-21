@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom'
 import { challengesApi, type Challenge, type VersusData } from '../../api/challenges'
 import { useAuthStore } from '../../store'
 import { IconTrophy, IconCamera, IconStats, IconCheck } from '../ui/Icons'
+import { isNativePlatform, captureNativePhoto } from '../../lib/camera'
 
-// ── Canvas watermark helper ──────────────────────────────────────────────
+// ── Canvas watermark helper (web / getUserMedia path) ────────────────────
 async function captureWithWatermark(
   videoEl: HTMLVideoElement,
   userName: string,
@@ -370,12 +371,31 @@ function CheckInModal({
   const [error, setError] = useState('')
   const [step, setStep] = useState<'camera' | 'confirm' | 'done'>('camera')
   const [serverHash, setServerHash] = useState('')
+  const native = isNativePlatform()
+
+  // Nativo: abre la cámara del sistema inmediatamente al montar
+  async function captureNative() {
+    setError('')
+    try {
+      const dataUrl = await captureNativePhoto(userName)
+      setPreview(dataUrl)
+      setStep('confirm')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'No se pudo acceder a la cámara.')
+    }
+  }
 
   useEffect(() => {
+    if (native) {
+      captureNative()
+      return
+    }
+    // Web: flujo getUserMedia
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
       .then(s => { setStream(s); if (videoRef.current) videoRef.current.srcObject = s })
       .catch(() => setError('No se pudo acceder a la cámara. Verifica los permisos.'))
     return () => { stream?.getTracks().forEach(t => t.stop()) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function capture() {
@@ -421,7 +441,15 @@ function CheckInModal({
         <div style={{ marginTop: 'var(--space-4)' }}>
           {error && <div className="form-error" style={{ marginBottom: '1rem' }}>{error}</div>}
 
-          {step === 'camera' && (
+          {/* Nativo: mientras no hay preview mostramos spinner */}
+          {native && step === 'camera' && !error && (
+            <div style={{ textAlign: 'center', padding: '2rem 0', color: 'var(--color-text-muted)' }}>
+              Abriendo cámara…
+            </div>
+          )}
+
+          {/* Web: live video preview */}
+          {!native && step === 'camera' && (
             <video ref={videoRef} autoPlay playsInline muted
               style={{ width: '100%', borderRadius: 'var(--radius-lg)', background: '#000', aspectRatio: '4/3', objectFit: 'cover', display: 'block' }}
             />
@@ -447,7 +475,8 @@ function CheckInModal({
         </div>
 
         <div className="confirm-sheet-actions">
-          {step === 'camera' && (
+          {/* Web: botón de captura manual */}
+          {!native && step === 'camera' && (
             <button className="primary-btn" onClick={capture} disabled={!stream}>
               Tomar foto
             </button>
@@ -457,7 +486,11 @@ function CheckInModal({
               <button className="primary-btn" onClick={confirm} disabled={loading}>
                 {loading ? 'Enviando…' : 'Confirmar'}
               </button>
-              <button className="ghost-btn" onClick={() => { setPreview(null); setStep('camera') }}>
+              <button className="ghost-btn" onClick={() => {
+                setPreview(null)
+                setStep('camera')
+                if (native) captureNative()
+              }}>
                 Repetir foto
               </button>
             </>

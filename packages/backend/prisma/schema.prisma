@@ -59,6 +59,8 @@ model UserSettings {
   aiProvider    String?
   aiKey         String?
   aiModel       String?
+  fcmToken      String?           // FCM token del dispositivo Android (nullable = sin APK o sin permisos)
+  reminderTime  String?           // "HH:MM" hora del servidor (UTC) para recordatorio diario; null = desactivado
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -2,6 +2,9 @@ import { useEffect, lazy, Suspense } from 'react'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { useAuthStore, useUIStore } from './store'
 import { useOfflineSync } from './hooks/useOfflineSync'
+import { toast } from './lib/toast'
+import { initNativePush } from './lib/pushNative'
+import { pushApi } from './api/push'
 
 import LoginPage from './components/views/LoginPage'
 import RegisterPage from './components/views/RegisterPage'
@@ -81,13 +84,49 @@ const router = createBrowserRouter([
   },
 ])
 
+async function updateNativeStatusBar(theme: 'light' | 'dark') {
+  const { Capacitor } = await import('@capacitor/core')
+  if (!Capacitor.isNativePlatform()) return
+  const { StatusBar, Style } = await import('@capacitor/status-bar')
+  await StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light })
+  await StatusBar.setBackgroundColor({ color: theme === 'dark' ? '#171614' : '#f5f5f0' })
+}
+
+async function registerBackButton() {
+  const { Capacitor } = await import('@capacitor/core')
+  if (!Capacitor.isNativePlatform()) return
+  const { App } = await import('@capacitor/app')
+  let lastBackPress = 0
+  App.addListener('backButton', ({ canGoBack }) => {
+    if (canGoBack) {
+      window.history.back()
+    } else {
+      const now = Date.now()
+      if (now - lastBackPress < 2000) {
+        App.exitApp()
+      } else {
+        lastBackPress = now
+        toast('Presiona de nuevo para salir', 'info', 2000)
+      }
+    }
+  })
+}
+
 export default function App() {
   const { theme, accentTheme } = useUIStore()
   useOfflineSync()
 
+  // Registrar back button y push nativo una sola vez al montar
+  useEffect(() => {
+    registerBackButton()
+    initNativePush(async (token) => { await pushApi.registerFcmToken(token) })
+  }, [])
+
+  // Sincronizar status bar y atributos del DOM en cada cambio de tema
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     document.documentElement.setAttribute('data-accent', accentTheme)
+    updateNativeStatusBar(theme)
   }, [theme, accentTheme])
 
   return <RouterProvider router={router} />

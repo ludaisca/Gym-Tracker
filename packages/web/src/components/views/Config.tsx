@@ -11,6 +11,7 @@ import {
 import { toast } from '../../lib/toast'
 import { Dumbbell, Zap, Flame, Target, Trophy, Brain, Waves, Rocket } from 'lucide-react'
 import { subscribeToPush, unsubscribeFromPush, pushApi } from '../../api/push'
+import { isNativePlatform } from '../../lib/camera'
 
 const AVATARS = [
   { id: '1', icon: Dumbbell },
@@ -232,6 +233,11 @@ export default function Config() {
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default')
   const [pushSubscribed, setPushSubscribed] = useState(false)
   const [pushLoading, setPushLoading] = useState(false)
+  const [reminderTime, setReminderTime] = useState<string>(
+    (user?.settings as (UserSettings & { reminderTime?: string | null }) | undefined)?.reminderTime ?? ''
+  )
+  const [savingReminder, setSavingReminder] = useState(false)
+  const isNative = isNativePlatform()
 
   useEffect(() => {
     const supported = 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window
@@ -243,6 +249,21 @@ export default function Config() {
       ).catch(() => {})
     }
   }, [])
+
+  async function handleSaveReminder(time: string) {
+    setSavingReminder(true)
+    try {
+      const value = time.trim() === '' ? null : time
+      const updated = await usersApi.updateSettings({ reminderTime: value } as Partial<UserSettings>)
+      if (user) setAuth({ ...user, settings: updated }, accessToken ?? '')
+      setReminderTime(value ?? '')
+      toast(value ? `Recordatorio configurado a las ${value} (UTC)` : 'Recordatorio desactivado')
+    } catch {
+      toast('Error al guardar el recordatorio', 'error')
+    } finally {
+      setSavingReminder(false)
+    }
+  }
 
   async function handleDeleteAccount() {
     if (!deleteConfirm) { setDeleteConfirm(true); return }
@@ -631,6 +652,43 @@ export default function Config() {
           )}
         </div>
       </section>
+
+      {/* ── Recordatorio diario (solo APK Android) ───────────── */}
+      {isNative && (
+        <section className="card">
+          <div className="panel-head">
+            <div>
+              <h3>Recordatorio de entrenamiento</h3>
+              <p>Recibe una notificación diaria a la hora que elijas (hora UTC del servidor).</p>
+            </div>
+          </div>
+          <div className="panel-body" style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="time"
+              value={reminderTime}
+              onChange={e => setReminderTime(e.target.value)}
+              style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}
+            />
+            <button
+              className="primary-btn"
+              disabled={savingReminder}
+              onClick={() => handleSaveReminder(reminderTime)}
+            >
+              {savingReminder ? 'Guardando…' : 'Guardar hora'}
+            </button>
+            {reminderTime && (
+              <button
+                className="ghost-btn"
+                disabled={savingReminder}
+                onClick={() => handleSaveReminder('')}
+                style={{ color: 'var(--color-warning)' }}
+              >
+                Desactivar
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ── Sincronización Local ──────────────────────────────── */}
       <section className="card">

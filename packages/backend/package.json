@@ -24,6 +24,7 @@
     "bullmq": "^5.76.8",
     "fastify": "^5.4.0",
     "fastify-plugin": "^5.1.0",
+    "firebase-admin": "^13.10.0",
     "ioredis": "^5.10.1",
     "nodemailer": "^8.0.7",
     "stripe": "^22.1.1",

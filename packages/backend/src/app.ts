@@ -13,7 +13,7 @@ import prismaPlugin from './plugins/prisma'
 import redisPlugin from './plugins/redis'
 import authPlugin from './plugins/auth'
 import repositoriesPlugin from './plugins/repositories'
-import { initWorker, closeWorker, backgroundQueue } from './services/queue'
+import { initWorker, closeWorker, backgroundQueue, registerReminderJob } from './services/queue'
 
 import authRoutes from './routes/auth'
 import usersRoutes from './routes/users'
@@ -97,6 +97,7 @@ export async function buildApp() {
   await fastify.register(billingRoutes,     { prefix: '/billing' })
 
   initWorker() // Arrancar worker de colas
+  registerReminderJob().catch(() => {}) // Registrar job repeatable de recordatorios (idempotente)
 
   // ── Global Error Handler ──────────────────────────────────────────────────
   fastify.setErrorHandler((err: unknown, request, reply) => {

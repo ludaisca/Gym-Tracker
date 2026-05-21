@@ -12,6 +12,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/camera": "^8.2.0",
+    "@capacitor/status-bar": "^8.0.2",
     "@hello-pangea/dnd": "^18.0.1",
     "axios": "^1.16.0",
     "framer-motion": "^12.38.0",
