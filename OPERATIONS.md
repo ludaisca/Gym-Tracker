@@ -129,18 +129,77 @@ Con `moduleResolution: node`, TypeScript resuelve al entry CJS (`StripeConstruct
 
 Java 25 (instalado en el sistema) es incompatible con AGP/Gradle. Java 21 es requerido.
 
-**Solución**: ya configurado en `packages/android/android/gradle.properties` via `org.gradle.java.home`. Si falla, lanzar manualmente:
-
+**Solución**: ya configurado en `packages/android/android/gradle.properties`:
+```
+org.gradle.java.home=/home/luis/java/jdk-21.0.7+6
+```
+Si falla, lanzar manualmente:
 ```bash
-JAVA_HOME=~/java/jdk-21.0.11+10 ./gradlew assembleDebug
+JAVA_HOME=~/java/jdk-21.0.7+6 ANDROID_HOME=~/android-sdk ./gradlew assembleDebug
+```
+⚠️ La ruta correcta es `jdk-21.0.7+6`, no `jdk-21.0.11+10` (ese no existe en esta máquina).
+
+### Android SDK no encontrado (`native-run: ERR_SDK_NOT_FOUND`)
+
+`npx cap run android` no detecta el SDK si `ANDROID_HOME` no está exportado.
+
+**Solución**:
+```bash
+ANDROID_HOME=~/android-sdk npx cap run android
+```
+O instalar directamente con adb:
+```bash
+ANDROID_HOME=~/android-sdk /home/luis/android-sdk/platform-tools/adb install -r \
+  packages/android/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ### APK apuntando a localhost en producción
 
 `VITE_API_URL` en `packages/android/.env` debe apuntar a la URL pública del backend:
-
 ```
 VITE_API_URL=https://gym-tracker.ludaisca.ddns.net/api
 ```
 
-No a `localhost` ni a la IP de la LAN.
+### Status bar solapa el contenido (bug resuelto)
+
+**Causa**: Capacitor por defecto tiene `overlaysWebView: true` — el WebView se renderiza bajo la barra de estado. Sin CSS `env(safe-area-inset-top)`, el contenido queda oculto.
+
+**Solución aplicada**: `packages/android/capacitor.config.ts`:
+```typescript
+plugins: {
+  StatusBar: { overlaysWebView: false, style: 'dark', backgroundColor: '#171614' }
+}
+```
+Con esto Android reserva el espacio automáticamente. No se necesita CSS adicional para la parte superior.
+
+### Status bar no sincroniza con el tema de la app
+
+**Causa**: `overlaysWebView: false` fija el color inicialmente, pero al cambiar tema (oscuro ↔ claro) la barra del sistema no actualiza.
+
+**Solución aplicada** (`App.tsx`): `updateNativeStatusBar(theme)` llama a `StatusBar.setStyle()` y `StatusBar.setBackgroundColor()` en cada cambio de tema. Todos los imports de Capacitor son lazy (`await import(...)`) para no romper el bundle web.
+
+### `i.map is not a function` crash en pantalla Rutinas (sin resolver definitivamente)
+
+El crash ocurre en un `useMemo` de `Routines.tsx`. Se aplicaron guards defensivos:
+- `useRoutines.ts`: `Array.isArray(data) ? data : []` antes de `setCustomRoutines`
+- `Routines.tsx`: mismos guards en `load()` y en el useMemo de `customs`
+
+La causa raíz no está confirmada. Para depurar:
+```bash
+adb logcat | grep -i "gymtracker\|capacitor\|chromium"
+```
+
+### Firebase / FCM setup
+
+1. Proyecto Firebase: `gym-tracker-5b5ae` | Package: `com.ludaisca.gymtracker`
+2. `google-services.json` → `packages/android/android/app/` (ya en repo, gitignoreado ⚠️)
+3. Service account JSON → variable de entorno `FIREBASE_SERVICE_ACCOUNT` (en `.env` local + Coolify)
+4. En producción: añadir `FIREBASE_SERVICE_ACCOUNT` en Coolify → Environment Variables antes de deploy
+
+### Migración de DB para FCM (pendiente en producción)
+
+Los campos `fcmToken` y `reminderTime` se añadieron al schema pero la migración solo se aplicó en dev local. En producción ejecutar:
+```bash
+cd packages/backend && npx prisma migrate deploy
+```
+O desde el contenedor Coolify.

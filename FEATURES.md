@@ -134,12 +134,14 @@
 
 | # | Característica | Estado | Notas |
 |---|---------------|--------|-------|
-| 8.1 | Suscripción a notificaciones push (Web Push) | ✅ | VAPID, por usuario |
-| 8.2 | Cancelar suscripción | ✅ | |
-| 8.3 | Notificación de prueba | ✅ | |
-| 8.4 | Limpieza automática de suscripciones inválidas | ✅ | 410 Gone |
-| 8.5 | Notificaciones de recordatorio de sesión | 🔲 | Infraestructura lista, no hay trigger automático |
-| 8.6 | Notificaciones de check-in en retos | 🔲 | Infraestructura lista, no hay trigger automático |
+| 8.1 | Suscripción a notificaciones push (Web Push / VAPID) | ✅ | Navegador web |
+| 8.2 | Cancelar suscripción web | ✅ | |
+| 8.3 | Notificación de prueba (Web Push + FCM) | ✅ | |
+| 8.4 | Limpieza automática de suscripciones inválidas | ✅ | 410 Gone / token expirado |
+| 8.5 | Recordatorio diario configurable (APK) | ✅ | FCM · hora configurable en Config → solo APK |
+| 8.6 | Token FCM registrado en backend al arrancar la APK | ✅ | `POST /push/fcm-token` |
+| 8.7 | Notificaciones con app cerrada (Android) | ✅ | Firebase Cloud Messaging |
+| 8.8 | Notificaciones de check-in en retos | 🔲 | No implementado |
 
 ---
 
@@ -221,12 +223,20 @@
 | 14.1 | Wrapper nativo con Capacitor 8 | ✅ | AppId: com.ludaisca.gymtracker |
 | 14.2 | Mismo código fuente que la web | ✅ | Build `--mode android` |
 | 14.3 | Deep links `gymtracker://` | ✅ | Para retorno de Stripe |
-| 14.4 | Build con Java 21 (Gradle compatible) | ✅ | Configurado en gradle.properties |
-| 14.5 | Instalación directa en dispositivo (USB) | ✅ | `make android-run` |
+| 14.4 | Build con Java 21 (Gradle compatible) | ✅ | `~/java/jdk-21.0.7+6` en gradle.properties |
+| 14.5 | Instalación directa en dispositivo (USB) | ✅ | `adb install` / `make android-run` |
 | 14.6 | Plugin de Browser (Capacitor) para OAuth / Stripe | ✅ | |
-| 14.7 | Notificaciones push nativas | 🔲 | Requiere plugin nativo adicional |
-| 14.8 | Acceso a cámara nativo | 🔲 | Actualmente usa web camera API |
-| 14.9 | Publicación en Google Play Store | 🔲 | APK debug listo; falta firma + ficha |
+| 14.7 | Back button con doble toque para salir | ✅ | `@capacitor/app` — patrón doble-toque < 2 s |
+| 14.8 | Status bar sincronizada con el tema | ✅ | `@capacitor/status-bar` — no solapa WebView |
+| 14.9 | Cámara nativa en check-ins de Duelos | ✅ | `@capacitor/camera` — cámara del sistema Android |
+| 14.10 | Push notifications nativas FCM | ✅ | `@capacitor/push-notifications` + Firebase |
+| 14.11 | Recordatorio diario de entrenamiento (configurable) | ✅ | BullMQ repite cada 60 s, escanea `reminderTime` |
+| 14.12 | Publicación en Google Play Store | 🔲 | APK debug lista; falta firma release + ficha |
+
+> **Bugs activos en APK** (ver STATUS.md para detalle):
+> - `i.map is not a function` crash en pantalla Rutinas — parche defensivo aplicado, causa raíz no confirmada
+> - Config muestra "Usuario" con campos vacíos — fix aplicado, persiste en sesiones antiguas hasta re-login
+> - Status bar solapaba contenido — resuelto en APK nueva con `overlaysWebView: false`
 
 ---
 
@@ -277,7 +287,7 @@
 | Estadísticas | 10 | 0 | 0 |
 | Asistente IA | 4 | 3 | 0 |
 | Retos / Duelos | 9 | 0 | 0 |
-| Push notifications | 4 | 0 | 2 |
+| Push notifications | 7 | 0 | 1 |
 | Notas | 5 | 0 | 0 |
 | Auth y cuenta | 10 | 0 | 0 |
 | Perfil / Config | 8 | 0 | 0 |

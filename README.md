@@ -72,7 +72,7 @@ v1/
 
 - Node.js 20+
 - Docker y Docker Compose
-- Java 21 (solo para builds Android — ⚠️ sistema con Java 25 requiere path alternativo `~/java/jdk-21.0.11+10`)
+- Java 21 (solo para builds Android — ⚠️ sistema con Java 25 requiere path alternativo `~/java/jdk-21.0.7+6`)
 
 ## Desarrollo local
 
@@ -153,7 +153,7 @@ Para generar el APK firmado:
 
 ```bash
 cd packages/android
-JAVA_HOME=~/java/jdk-21.0.11+10 ./android/gradlew assembleDebug
+JAVA_HOME=~/java/jdk-21.0.7+6 ANDROID_HOME=~/android-sdk ./android/gradlew assembleDebug
 # APK → android/app/build/outputs/apk/debug/app-debug.apk
 ```
 

@@ -1,3 +1,2 @@
-<!-- stripe-projects-cli managed:claude-md:start -->
-look at AGENTS.md for your rules
-<!-- stripe-projects-cli managed:claude-md:end -->
+<!-- Este archivo está gestionado por Claude Code -->
+Ver CLAUDE.md en la raíz del monorepo para instrucciones completas.

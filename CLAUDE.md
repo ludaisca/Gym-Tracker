@@ -3,6 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 **Rama activa**: v1 | **Producción**: Coolify en `gym-tracker.ludaisca.ddns.net`
+**Estado técnico / bugs activos / pendientes**: ver `STATUS.md`
 
 ## Estructura del monorepo
 

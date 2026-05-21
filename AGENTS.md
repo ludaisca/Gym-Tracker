@@ -1,29 +1,39 @@
-# 🤖 Agent Instructions (AGENTS.md)
+# AGENTS.md — Contexto para agentes de IA
 
-This file contains high-signal, repo-specific context to help AI agents work effectively in this codebase.
+> Ver CLAUDE.md (raíz) para instrucciones completas y arquitectura detallada.
+> Este archivo es un resumen rápido para agentes que no cargan CLAUDE.md.
 
-## 🏗 Architecture & Routing
-- **Tech Stack**: React 19 (Frontend) + Fastify (Backend) + Prisma/PostgreSQL + Redis (Cache/Rate-Limiting) + BullMQ (Background Jobs).
-- **Prefix Stripping**: `nginx` (production) and `vite.config.ts` (dev) act as reverse proxies and **strip** the `/api` prefix. The frontend requests `/api/sessions`, but the Fastify backend receives `/sessions`. 
-- **Production Build**: Docker Compose handles the production orchestration (`nginx` -> `api` -> `db` + `redis`). The backend, DB, and Redis do not expose ports to the host in production.
-- **Path Aliases**: The frontend uses `@/` mapped to `frontend/src/` (configured in `vite.config.ts` and `tsconfig.app.json`). Always use absolute `@/` imports instead of deep relative paths (`../../..`).
+## Stack
 
-## 🛠 Local Development (Strict Commands)
-**Do not run `npm run dev` directly in subfolders.** The root `.env` must be injected properly. Always use the root `Makefile`:
-- `make db-up`: Starts local Postgres and Redis containers.
-- `make dev`: Loads `.env` variables and concurrently starts the Vite frontend (port 5173) and Fastify backend (port 3001).
-- `make db-migrate`: Runs Prisma migrations with the correct env injection.
+- **Backend**: Fastify v5 + Prisma + PostgreSQL (`:5440` dev) + Redis (`:6390` dev) + BullMQ
+- **Frontend**: React 19 + Vite 8 + Zustand + Axios — código en `packages/web/src/`
+- **Mobile**: Capacitor 8 — código en `packages/android/`, construye desde `packages/web/dist/`
 
-## 💻 Frontend Quirks (React / Vite)
-- **Code Splitting & Lazy Loading**: `App.tsx` uses `React.lazy()` for all protected routes to avoid Vite 500kB chunk warnings. Never revert views back to static imports.
-- **Offline / PWA Sync**: Mutating API calls are intercepted by Axios (`src/api/client.ts`) when offline and pushed to `useOfflineStore`. When back online, `useOfflineSync` replays them **serially** (to avoid race conditions) and automatically discards unrecoverable 4xx errors.
-- **PWA Updates**: The Service Worker is set to `prompt` mode. UI updates are handled by the `<ReloadPrompt />` component. Do not change it back to `autoUpdate`.
-- **Theming is strict**: `useUIStore` (Zustand) is the *only* source of truth for the `data-theme` and `data-accent` attributes on `<html>`. Do not manually mutate DOM attributes for themes.
-- **Data Fetching Patterns**: Historic/Global data uses direct API calls + local state (e.g., `sessionsApi.listAll()`), but current-week active data uses reactive hooks (`useSessions`). Don't mix them up.
+## Rutas críticas
 
-## ⚙️ Backend Quirks (Fastify)
-- **Background Jobs (BullMQ)**: Heavy operations (sending verification emails, large JSON imports) MUST be pushed to `backgroundQueue` (`src/services/queue.ts`). Avoid synchronous long-running tasks in HTTP endpoints. A Bull Board UI is available at `/api/admin/queues` for monitoring.
-- **AI Integration**: Keys for Anthropic, OpenAI, etc., are **not** in `.env`. They are stored *per user* in the `UserSettings` table. The backend acts as a proxy to protect them (`/ai/analyze`).
-- **Redis Caching**: The heavy `GET /sessions` endpoint caches full histories in Redis (compressed via `@fastify/compress`). If you mutate a session, you MUST call `invalidateSessionsCache(sub)` to clear the stale data.
-- **Error Handling**: Use Zod for validation. `fastify.setErrorHandler` globally catches Zod validation issues and Prisma duplicates (`P2002`), returning a clean `{ error: string }` JSON. Do not manually format validation errors in individual routes.
-- **Composite DB Keys**: `WorkoutSession` uses `[userId, weekNumber, dayId]`. `NutritionDay` and `BodyWeight` use `[userId, date]`. Use Prisma's `upsert` with these exact where-clauses for daily/weekly records.
+- Backend dev: `:3010` (NO `:3001`, ese puerto es Redis de Coolify)
+- Frontend dev: `:5173`
+- Path alias: `@/` → `packages/web/src/`
+
+## Convenciones
+
+- nginx y Vite proxy **eliminan** el prefijo `/api`. Las rutas Fastify NO llevan `/api`.
+- `useUIStore` es la única fuente de verdad para `data-theme` y `data-accent` en `<html>`.
+- `useOfflineStore` persiste la cola en localStorage. No mezclar con lógica de negocio.
+- Plugins Capacitor se importan **lazy** (`await import(...)`) para no romper el bundle web.
+- `isNativePlatform()` → `window.Capacitor?.isNativePlatform?.() === true` (síncrono).
+
+## Bugs activos — ver STATUS.md para detalles
+
+- `i.map is not a function` crash en Routines (parche aplicado, causa raíz desconocida)
+- Config muestra "Usuario" en sesiones antiguas (fix aplicado, requiere re-login)
+- Status bar Android: resuelto en APK nueva con `overlaysWebView: false`
+
+## Comandos rápidos
+
+```bash
+make dev             # frontend :5173 + backend :3010
+make android-build   # vite build --mode android + cap sync
+JAVA_HOME=~/java/jdk-21.0.7+6 ANDROID_HOME=~/android-sdk \
+  packages/android/android/gradlew assembleDebug
+```
