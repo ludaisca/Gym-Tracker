@@ -6,7 +6,9 @@ export function useRoutines(): Routine[] {
   const [customRoutines, setCustomRoutines] = useState<Routine[]>([])
 
   useEffect(() => {
-    routinesApi.list().then(setCustomRoutines).catch((err: unknown) => console.warn("[hook]", err))
+    routinesApi.list()
+      .then(data => setCustomRoutines(Array.isArray(data) ? data : []))
+      .catch((err: unknown) => console.warn("[hook]", err))
   }, [])
 
   return customRoutines

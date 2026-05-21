@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto'
 import type { UserRepository } from '../repositories/UserRepository'
 import { ucErr, UCError } from './errors'
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/email'
+import { sanitizeUser } from './users'
 
 export async function registerUser(
   users: UserRepository,
@@ -92,17 +93,7 @@ export async function loginUser(
   return {
     userId: user.id,
     userEmail: user.email,
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      avatar: user.avatar,
-      theme: user.theme,
-      accentTheme: user.accentTheme,
-      currentWeek: user.currentWeek,
-      activeRoutineId: user.activeRoutineId,
-      settings: user.settings,
-    },
+    user: sanitizeUser(user),
   }
 }
 

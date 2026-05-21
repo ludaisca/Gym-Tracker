@@ -58,6 +58,12 @@ export default function Config() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Sync form fields when user loads from store (handles stale localStorage)
+  useEffect(() => {
+    if (user?.name) setAccountName(user.name)
+    if (user?.email) setAccountEmail(user.email)
+  }, [user?.name, user?.email])
+
   async function handleManualSync() {
     if (syncingQueue || queue.length === 0) return
     setSyncingQueue(true)

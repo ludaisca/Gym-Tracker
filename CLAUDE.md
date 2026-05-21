@@ -48,10 +48,11 @@ make deploy                        # git pull + rebuild + up
 make android-build   # vite build --mode android + cap sync android
 make android-run     # Instala en dispositivo USB conectado
 ```
-APK final: `cd packages/android/android && JAVA_HOME=~/java/jdk-21.0.11+10 ./gradlew assembleDebug`  
+APK final: `cd packages/android/android && JAVA_HOME=~/java/jdk-21.0.7+6 ANDROID_HOME=~/android-sdk ./gradlew assembleDebug`  
 Salida: `packages/android/android/app/build/outputs/apk/debug/app-debug.apk`
 
-**Java 21 requerido**: el sistema tiene Java 25 (incompatible con Gradle/AGP). La ruta está configurada en `packages/android/android/gradle.properties` via `org.gradle.java.home`.
+**Java 21 requerido**: instalado en `~/java/jdk-21.0.7+6` (Temurin). Ruta configurada en `packages/android/android/gradle.properties` via `org.gradle.java.home`.  
+**Android SDK**: instalado en `~/android-sdk` (API 36, build-tools 36.0.0). Ruta en `packages/android/android/local.properties`.
 
 ### Backend
 ```bash

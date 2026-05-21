@@ -43,7 +43,7 @@ export default function Routines() {
   const [marketplaceRoutines, setMarketplaceRoutines] = useState<MarketplaceRoutine[]>([])
   const [loadingMarket, setLoadingMarket] = useState(false)
 
-  const load = () => routinesApi.list().then(setCustomRoutines).catch((err: unknown) => console.warn("[load]", err))
+  const load = () => routinesApi.list().then(data => setCustomRoutines(Array.isArray(data) ? data : [])).catch((err: unknown) => console.warn("[load]", err))
   useEffect(() => { load() }, [])
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function Routines() {
   const activeId = user?.activeRoutineId ?? null
 
   const presets = useMemo(() => Object.values(PRESET_ROUTINES).map(r => ({ ...r, userId: 'preset', isCustom: false, isPreset: true })), [])
-  const customs = useMemo(() => customRoutines.map(r => ({ ...r, isPreset: false, isCustom: true, description: r.description ?? '' })), [customRoutines])
+  const customs = useMemo(() => (Array.isArray(customRoutines) ? customRoutines : []).map(r => ({ ...r, isPreset: false, isCustom: true, description: r.description ?? '' })), [customRoutines])
 
   async function activate(id: string) {
     if (!user) return
