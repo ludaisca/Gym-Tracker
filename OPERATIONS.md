@@ -203,3 +203,82 @@ Los campos `fcmToken` y `reminderTime` se añadieron al schema pero la migració
 cd packages/backend && npx prisma migrate deploy
 ```
 O desde el contenedor Coolify.
+
+---
+
+## 6. Errores del primer deploy en Coolify (2026-05-22)
+
+### Lock file mismatch en Docker build (`npm ci` falla)
+
+**Causa**: npm workspaces gestiona los paquetes desde el lock file de la raíz (`/package-lock.json`), no desde `packages/web/package-lock.json`. Los Dockerfiles copiaban el lock file del paquete (`package*.json`) que estaba desincronizado.
+
+**Síntoma**:
+```
+npm error Missing: @capacitor/camera@8.2.0 from lock file
+npm error Missing: @capacitor/status-bar@8.0.2 from lock file
+```
+
+**Solución**: Cambiar `npm ci` → `npm install` en ambos Dockerfiles y copiar solo `package.json` (no `package*.json`). Eliminar el lock file stale `packages/web/package-lock.json`.
+
+---
+
+### Módulos `@capacitor/*` no resueltos en build de Docker
+
+**Causa**: Los packages de Capacitor usados en `packages/web/src/` (`@capacitor/app`, `@capacitor/core`, `@capacitor/push-notifications`, `@capacitor/browser`) no estaban declarados en `packages/web/package.json`. En dev funcionaban vía workspace heredado de `packages/android/`, pero el Docker build instala solo lo que hay en el `package.json` del paquete.
+
+**Síntoma**:
+```
+Error: [vite]: Rolldown failed to resolve import "@capacitor/app" from "/app/src/App.tsx".
+```
+
+**Solución**: Añadir los 4 packages faltantes a `dependencies` de `packages/web/package.json` con las mismas versiones que en `packages/android/package.json`.
+
+---
+
+### Columna `UserSettings.fcmToken` no existe en producción
+
+**Causa**: La migración de FCM (`fcmToken`, `reminderTime`) se creó localmente con `prisma migrate dev` pero el archivo SQL no se commiteó al repositorio. `prisma migrate deploy` en producción no la encontró.
+
+**Síntoma**:
+```
+PrismaClientKnownRequestError: The column `UserSettings.fcmToken` does not exist in the current database.
+```
+Todos los logins devolvían 500. El job `reminder-scan` fallaba cada 60s.
+
+**Solución**: Crear manualmente el archivo de migración `prisma/migrations/20260522000000_add_fcm_fields/migration.sql` con:
+```sql
+ALTER TABLE "UserSettings" ADD COLUMN IF NOT EXISTS "fcmToken" TEXT;
+ALTER TABLE "UserSettings" ADD COLUMN IF NOT EXISTS "reminderTime" TEXT;
+```
+Commitear y redesplegar. `prisma migrate deploy` lo aplica al arrancar el contenedor.
+
+**Prevención**: Siempre commitear los archivos de migración generados por `prisma migrate dev` junto con el cambio de schema.
+
+---
+
+### Rate limit acumulado entre deploys bloquea login
+
+**Causa**: `@fastify/rate-limit` guarda contadores en Redis. Al redesplegar sin reiniciar Redis, los contadores de intentos fallidos (del deploy roto anterior) persisten. La ventana de login es 3 intentos / 15 minutos.
+
+**Síntoma**: "Demasiadas peticiones. Intenta en un momento." nada más arrancar el nuevo contenedor, aunque la BD ya está bien.
+
+**Solución rápida**: Limpiar contadores de Redis en el VPS:
+```bash
+docker exec $(docker ps --filter "name=redis-l7qk" -q) \
+  redis-cli -a "$REDIS_PASSWORD" --no-auth-warning FLUSHDB
+```
+O esperar 15 minutos a que expire la ventana.
+
+**Bug asociado**: El error handler de Fastify recibía el error 429 del plugin y lo re-enviaba como 500 (el plugin ya había enviado 429 al cliente). Corregido añadiendo guard `if (!reply.sent)` en el error handler para el caso `statusCode === 429`.
+
+---
+
+### `packages/web/.env.android` — archivo necesario para APK
+
+**Causa**: `vite build --mode android` carga `packages/web/.env.android`, no `packages/android/.env`. Sin este archivo `VITE_API_URL` no se inyecta y el APK apunta a la URL incorrecta.
+
+**Solución**: Crear `packages/web/.env.android` con:
+```
+VITE_API_URL=https://gym-tracker.ludaisca.ddns.net/api
+```
+Este archivo **no debe commitearse** (contiene la URL de producción hardcoded).

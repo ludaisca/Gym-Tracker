@@ -5,6 +5,64 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Rama activa**: v1 | **Producción**: Coolify en `gym-tracker.ludaisca.ddns.net`
 **Estado técnico / bugs activos / pendientes**: ver `STATUS.md`
 
+## Regla de documentación — obligatoria
+
+**Cada vez que se encuentre y resuelva un error, hay que documentarlo en `OPERATIONS.md` antes de cerrar la sesión.** El formato mínimo es:
+
+```
+### Título del problema
+**Causa**: qué lo provoca.
+**Síntoma**: qué ve el usuario / qué aparece en el log.
+**Solución**: comando o cambio de código exacto.
+```
+
+Esto aplica a errores de build, errores de runtime en producción, problemas de infraestructura, bugs de migración, etc. Si ya existe una sección relevante en `OPERATIONS.md`, se extiende ahí en lugar de crear una nueva.
+
+## Infraestructura del proyecto
+
+### VPS (producción)
+
+| Campo | Valor |
+|---|---|
+| URL pública | `https://gym-tracker.ludaisca.ddns.net` |
+| SO del host | Rocky Linux 10 (kernel 6.12) |
+| PaaS | **Coolify 4.x** (auto-gestiona Traefik + Docker) |
+| Repositorio | `github.com/ludaisca/Gym-Tracker`, rama `v1` |
+| Contenedores | `nginx`, `api`, `db`, `redis`, `db-backup` |
+| Red Docker | `l7qk2ugr39hiwl57t5v0l9nn` (externa, gestionada por Coolify) |
+
+**Routing en producción**: `Internet → Traefik (Coolify) → nginx → api (Fastify :3001)`.  
+Traefik termina SSL (Let's Encrypt). Nginx hace strip de `/api` antes de reenviar al backend.
+
+**Puertos ocupados en el host** (no usar):
+- `5432` — PostgreSQL de producción (Coolify)
+- `6379` — Redis de producción (Coolify)
+- `3001` — mapeado a Redis interno de Coolify
+- `80` / `443` — Traefik
+
+### Desarrollo local (en el mismo VPS)
+
+| Servicio | Puerto local |
+|---|---|
+| PostgreSQL dev | `127.0.0.1:5440` |
+| Redis dev | `127.0.0.1:6390` |
+| Backend (tsx watch) | `:3010` |
+| Frontend (Vite) | `:5173` |
+
+El Makefile reescribe las URLs automáticamente. Abrir puertos en firewalld si se accede desde LAN/Tailscale:
+```bash
+sudo firewall-cmd --zone=public --add-port=5173/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=3010/tcp --permanent
+sudo firewall-cmd --reload
+```
+
+### APK Android
+
+- Archivo generado: `packages/android/android/app/build/outputs/apk/debug/app-debug.apk`
+- `VITE_API_URL` del APK: `https://gym-tracker.ludaisca.ddns.net/api` (en `packages/web/.env.android`)
+- Java requerido: `~/java/jdk-21.0.7+6` (Temurin 21)
+- Android SDK: `~/android-sdk` (API 36)
+
 ## Estructura del monorepo
 
 ```
