@@ -1,0 +1,2 @@
+ALTER TABLE "UserSettings" ADD COLUMN IF NOT EXISTS "fcmToken" TEXT;
+ALTER TABLE "UserSettings" ADD COLUMN IF NOT EXISTS "reminderTime" TEXT;
