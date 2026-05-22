@@ -1,6 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { requirePro } from '../plugins/requirePro'
 import { isUCError } from '../use-cases/errors'
 import {
   listChallenges, createChallenge, joinChallenge,
@@ -23,7 +22,6 @@ const checkinSchema = z.object({
 
 const challengesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('onRequest', fastify.authenticate)
-  fastify.addHook('onRequest', requirePro(fastify))
 
   fastify.get('/challenges', async (req) => {
     const userId = (req.user as { sub: string }).sub

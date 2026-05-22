@@ -1,7 +1,5 @@
 import type { User, UserSettings, RefreshToken, BodyWeight } from '@prisma/client'
 
-export type PlanInfo = Pick<User, 'plan' | 'planExpiresAt' | 'trialEndsAt'>
-
 export interface UserWithSettings extends User {
   settings: UserSettings | null
 }
@@ -12,9 +10,6 @@ export interface UserRepository {
   findByEmail(email: string): Promise<User | null>
   findByVerificationToken(token: string): Promise<User | null>
   findByResetToken(token: string): Promise<User | null>
-  findByStripeCustomerId(customerId: string): Promise<User | null>
-  findPlanInfo(id: string): Promise<PlanInfo | null>
-
   create(data: {
     email: string
     passwordHash: string

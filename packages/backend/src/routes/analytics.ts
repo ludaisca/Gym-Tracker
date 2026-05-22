@@ -1,11 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { requirePro } from '../plugins/requirePro'
 import { isUCError } from '../use-cases/errors'
 import { getWeekAnalytics, getExerciseProgress } from '../use-cases/analytics'
 
 const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('onRequest', fastify.authenticate)
-  fastify.addHook('onRequest', requirePro(fastify))
 
   fastify.get<{ Params: { week: string } }>('/week/:week', async (req, reply) => {
     const { sub } = req.user as { sub: string }

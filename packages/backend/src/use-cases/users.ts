@@ -31,30 +31,6 @@ export async function getMe(
   return sanitizeUser(user)
 }
 
-export async function activateTrial(
-  users: UserRepository,
-  userId: string
-): Promise<ReturnType<typeof sanitizeUser> | UCError> {
-  const user = await users.findPlanInfo(userId)
-  if (!user) return ucErr('Usuario no encontrado.', 404)
-  if (user.plan === 'pro') return ucErr('Ya tienes plan Pro activo.', 409)
-  if (user.trialEndsAt) return ucErr('Ya utilizaste tu período de prueba.', 409)
-
-  const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-  const updated = await users.updateWithSettings(userId, { trialEndsAt })
-  return sanitizeUser(updated)
-}
-
-export async function grantPro(
-  users: UserRepository,
-  userId: string,
-  months: number
-): Promise<{ ok: boolean; user: ReturnType<typeof sanitizeUser> } | UCError> {
-  const planExpiresAt = months === 0 ? null : new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000)
-  const updated = await users.updateWithSettings(userId, { plan: 'pro', planExpiresAt })
-  return { ok: true, user: sanitizeUser(updated) }
-}
-
 export async function updateMe(
   users: UserRepository,
   userId: string,

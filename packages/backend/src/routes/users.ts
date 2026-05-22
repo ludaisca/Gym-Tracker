@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { isUCError } from '../use-cases/errors'
-import { getMe, activateTrial, grantPro, updateMe, updateSettings, exportUserData, deleteAccount } from '../use-cases/users'
+import { getMe, updateMe, updateSettings, exportUserData, deleteAccount } from '../use-cases/users'
 
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
@@ -37,29 +37,6 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/me', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const result = await getMe(fastify.repos.users, sub)
-    if (isUCError(result)) return reply.status(result.statusCode).send({ error: result.error })
-    return result
-  })
-
-  fastify.post('/me/trial', async (request, reply) => {
-    const { sub } = request.user as { sub: string }
-    const result = await activateTrial(fastify.repos.users, sub)
-    if (isUCError(result)) return reply.status(result.statusCode).send({ error: result.error })
-    return result
-  })
-
-  fastify.post('/admin/grant-pro', {
-    onRequest: async (req, reply) => {
-      const adminToken = process.env.ADMIN_TOKEN
-      if (!adminToken || req.headers.authorization !== `Bearer ${adminToken}`) {
-        return reply.status(401).send({ error: 'No autorizado.' })
-      }
-    },
-  }, async (request, reply) => {
-    const body = z.object({ userId: z.string(), months: z.number().int().min(0) }).safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: body.error.issues[0].message })
-
-    const result = await grantPro(fastify.repos.users, body.data.userId, body.data.months)
     if (isUCError(result)) return reply.status(result.statusCode).send({ error: result.error })
     return result
   })

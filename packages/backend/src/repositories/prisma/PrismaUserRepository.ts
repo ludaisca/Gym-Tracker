@@ -1,5 +1,5 @@
 import type { PrismaClient, User, UserSettings, RefreshToken, BodyWeight } from '@prisma/client'
-import type { UserRepository, UserWithSettings, PlanInfo } from '../UserRepository'
+import type { UserRepository, UserWithSettings } from '../UserRepository'
 
 export class PrismaUserRepository implements UserRepository {
   constructor(private prisma: PrismaClient) {}
@@ -25,17 +25,6 @@ export class PrismaUserRepository implements UserRepository {
 
   findByResetToken(token: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { resetToken: token } })
-  }
-
-  findByStripeCustomerId(customerId: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { stripeCustomerId: customerId } })
-  }
-
-  findPlanInfo(id: string): Promise<PlanInfo | null> {
-    return this.prisma.user.findUnique({
-      where: { id },
-      select: { plan: true, planExpiresAt: true, trialEndsAt: true },
-    })
   }
 
   create(data: {

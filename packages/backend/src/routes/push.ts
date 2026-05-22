@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import webpush from 'web-push'
 import { getVapidKeys } from '../services/vapid'
-import { requirePro } from '../plugins/requirePro'
 
 const subscribeSchema = z.object({
   endpoint: z.string().url(),
@@ -29,7 +28,6 @@ const pushRoutes: FastifyPluginAsync = async (fastify) => {
   // ── Rutas protegidas — sub-scope con auth ────────────────────────────────
   await fastify.register(async (auth) => {
     auth.addHook('onRequest', fastify.authenticate)
-    auth.addHook('onRequest', requirePro(fastify))
 
   // ── POST /push/subscribe — registra suscripción del navegador ─────────────
   auth.post('/subscribe', async (req, reply) => {

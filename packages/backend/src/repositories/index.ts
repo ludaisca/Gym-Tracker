@@ -1,4 +1,4 @@
-export type { UserRepository, PlanInfo, UserWithSettings } from './UserRepository'
+export type { UserRepository, UserWithSettings } from './UserRepository'
 export type { RoutineRepository } from './RoutineRepository'
 export type { SessionRepository } from './SessionRepository'
 export type { NutritionRepository } from './NutritionRepository'

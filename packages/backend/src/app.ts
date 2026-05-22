@@ -27,24 +27,11 @@ import challengesRoutes from './routes/challenges'
 import pushRoutes from './routes/push'
 import analyticsRoutes from './routes/analytics'
 import marketplaceRoutes from './routes/marketplace'
-import billingRoutes from './routes/billing'
-
 export async function buildApp() {
   const fastify = Fastify({
     logger: process.env.NODE_ENV !== 'test',
     trustProxy: true,
     bodyLimit: 15 * 1024 * 1024,
-  })
-
-  // rawBody necesario para verificar la firma de webhooks de Stripe
-  fastify.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
-    try {
-      const json = JSON.parse(body.toString())
-      ;(req as unknown as Record<string, unknown>).rawBody = body
-      done(null, json)
-    } catch (err) {
-      done(err as Error, undefined)
-    }
   })
 
   const productionOrigins: string[] = ['capacitor://localhost']
@@ -57,17 +44,7 @@ export async function buildApp() {
     credentials: true,
   })
 
-  await fastify.register(helmet, {
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc:  ["'self'", 'https://js.stripe.com'],
-        frameSrc:   ['https://js.stripe.com', 'https://hooks.stripe.com'],
-        connectSrc: ["'self'", 'https://api.stripe.com'],
-        imgSrc:     ["'self'", 'data:', 'https://*.stripe.com'],
-      },
-    },
-  })
+  await fastify.register(helmet)
   await fastify.register(compress, { global: true })
   await fastify.register(redisPlugin)
   await fastify.register(rateLimit, {
@@ -94,7 +71,6 @@ export async function buildApp() {
   await fastify.register(pushRoutes,        { prefix: '/push' })
   await fastify.register(analyticsRoutes,   { prefix: '/analytics' })
   await fastify.register(marketplaceRoutes, { prefix: '/marketplace' })
-  await fastify.register(billingRoutes,     { prefix: '/billing' })
 
   initWorker() // Arrancar worker de colas
   registerReminderJob().catch(() => {}) // Registrar job repeatable de recordatorios (idempotente)

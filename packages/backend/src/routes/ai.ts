@@ -1,6 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { requirePro } from '../plugins/requirePro'
 import { isUCError } from '../use-cases/errors'
 import { analyzeFood, analyzeWorkout, chatWithAI, type ChatMessage } from '../use-cases/ai'
 
@@ -15,7 +14,6 @@ const chatSchema = z.object({
 
 const aiRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('onRequest', fastify.authenticate)
-  fastify.addHook('onRequest', requirePro(fastify))
 
   fastify.post('/analyze-food', {
     bodyLimit: 10 * 1024 * 1024,
