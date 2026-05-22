@@ -52,7 +52,10 @@ export async function buildApp() {
     max: 200,
     timeWindow: '1 minute',
     redis: fastify.redis ? fastify.redis : undefined,
-    errorResponseBuilder: () => ({ error: 'Demasiadas peticiones. Intenta en un momento.' }),
+    errorResponseBuilder: (_req, context) => {
+      return { error: 'Demasiadas peticiones. Intenta en un momento.', retryAfter: context.after }
+    },
+    keyGenerator: (request) => request.ip,
   })
 
   await fastify.register(prismaPlugin)
@@ -94,6 +97,11 @@ export async function buildApp() {
     }
     if (error.code === 'P2025') {
       return reply.status(404).send({ error: 'Registro no encontrado.' })
+    }
+    // Rate limit (el plugin ya envió 429, solo evitar re-envío como 500)
+    if (error.statusCode === 429) {
+      if (!reply.sent) reply.status(429).send({ error: 'Demasiadas peticiones. Intenta en un momento.' })
+      return
     }
     // Errores HTTP estándar (lanzados con statusCode)
     if (error.statusCode) {
