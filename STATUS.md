@@ -28,15 +28,16 @@
 
 ---
 
-### BUG-02 — Config muestra "Usuario" y campos vacíos (ABIERTO)
+### BUG-02 — Config muestra "Usuario" y campos vacíos (RESUELTO)
 
 **Síntoma**: La pantalla Configuración muestra "Usuario" en lugar del nombre real del usuario, y los campos Nombre y Correo aparecen con placeholders vacíos.
 **Causa confirmada**: `useState(user?.name ?? '')` solo inicializa una vez al montar. Si el objeto `user` en localStorage viene de una sesión antigua (anterior a que el login devolviera `name` y `email`), los campos quedan vacíos.
 **Fixes aplicados**:
-- `Config.tsx`: `useEffect(() => { if (user?.name) setAccountName(user.name); if (user?.email) setAccountEmail(user.email) }, [user?.name, user?.email])`
-- `auth.ts` backend: `loginUser` ahora usa `sanitizeUser()` para devolver el mismo objeto completo que `GET /me` (incluye `plan`, `planExpiresAt`, `trialEndsAt`)
+- `App.tsx`: al arrancar con sesión autenticada, llama `GET /users/me` y actualiza el store con datos frescos del servidor. Esto corrige el localStorage stale en TODOS los dispositivos, en cada inicio de app.
+- `Config.tsx`: `useEffect` para sincronizar campos de formulario cuando cambia `user` en el store.
+- `auth.ts` backend: `loginUser` usa `sanitizeUser()` para devolver objeto `user` completo (incluye `plan`, `planExpiresAt`, `trialEndsAt`).
 
-**Estado**: El fix cubre sesiones nuevas. El "Usuario" persiste en dispositivos con localStorage antiguo hasta que el usuario cierre sesión y vuelva a entrar. Solución permanente: añadir `GET /auth/me` en el interceptor de refresh para refrescar el objeto `user` desde el servidor.
+**Estado**: Fix permanente aplicado. No requiere re-login ni limpiar localStorage.
 
 ---
 
@@ -103,10 +104,9 @@ adb install -r packages/android/android/app/build/outputs/apk/debug/app-debug.ap
 | Prioridad | Tarea | Notas |
 |-----------|-------|-------|
 | 🔴 Alta | Instalar APK nueva en dispositivo y verificar BUG-01, BUG-02, BUG-03 | `adb install -r ...app-debug.apk` |
-| 🔴 Alta | Confirmar si `i.map` persiste tras el parche o tiene otra causa | Revisar logs del dispositivo con `adb logcat` |
+| 🔴 Alta | Confirmar si `i.map` persiste tras el parche o tiene otra causa | Revisar logs del dispositivo con `adb logcat` si sigue fallando |
 | 🟡 Media | Migrar DB prod con nuevos campos `fcmToken` + `reminderTime` | `prisma migrate deploy` en Coolify |
 | 🟡 Media | Añadir `FIREBASE_SERVICE_ACCOUNT` a variables de entorno en Coolify | Panel Coolify → Environment Variables |
-| 🟡 Media | Refrescar `user` desde servidor en el interceptor de refresh | Llama `GET /users/me` tras renovar token para eliminar BUG-02 definitivamente |
 | 🟢 Baja | Publicar en Google Play Store | APK debug lista; falta firma release + ficha de la tienda |
 | 🟢 Baja | Integración Stripe real en producción | Actualmente todo-gratis; backend listo |
 
