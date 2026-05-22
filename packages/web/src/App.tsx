@@ -5,6 +5,7 @@ import { useOfflineSync } from './hooks/useOfflineSync'
 import { toast } from './lib/toast'
 import { initNativePush } from './lib/pushNative'
 import { pushApi } from './api/push'
+import { usersApi } from './api/users'
 
 import LoginPage from './components/views/LoginPage'
 import RegisterPage from './components/views/RegisterPage'
@@ -116,8 +117,17 @@ export default function App() {
   const { theme, accentTheme } = useUIStore()
   useOfflineSync()
 
-  // Registrar back button y push nativo una sola vez al montar
+  // Registrar back button y push nativo una sola vez al montar.
+  // También refresca el objeto user desde el servidor para corregir localStorage stale.
   useEffect(() => {
+    const { isAuthenticated } = useAuthStore.getState()
+    if (isAuthenticated) {
+      usersApi.me()
+        .then(freshUser => {
+          useAuthStore.getState().setAuth(freshUser, useAuthStore.getState().accessToken ?? '')
+        })
+        .catch(() => {})
+    }
     registerBackButton()
     initNativePush(async (token) => { await pushApi.registerFcmToken(token) })
   }, [])

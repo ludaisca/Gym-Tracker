@@ -29,7 +29,7 @@ make db-migrate   # prisma migrate dev (requiere TTY)
 make db-studio    # Prisma Studio
 ```
 
-**⚠️ Puerto en dev local vs Makefile**: `make dev` usa el default del servidor (`:3001`). Si se lanza manualmente con `PORT=3010`, actualizar el proxy en `packages/web/vite.config.ts` a ese puerto. El Vite proxy apunta actualmente a `:3010`.
+**⚠️ Puerto en dev local**: el Makefile arranca el backend en `PORT=3010`. El proxy Vite apunta a `:3010`. Si se lanza el backend manualmente sin el Makefile, exportar `PORT=3010` explícitamente.
 
 **⚠️ tsx watch pierde env vars al reiniciar**: Si se arranca el backend manualmente (sin Makefile), exportar todas las variables explícitamente antes de `npm run dev`; de lo contrario, los reinicios automáticos de tsx pierden las vars de entorno.
 
@@ -86,9 +86,10 @@ cd packages/web && npm run lint
 - `repositories/` — interfaces de dominio (`UserRepository`, `SessionRepository`, etc.) + implementaciones Prisma en `repositories/prisma/`
 - `use-cases/` — lógica de negocio desacoplada de Fastify (un archivo por dominio)
 - `routes/` — validación Zod + orquestación; delega en use-cases o repos directamente
-- `services/queue.ts` — BullMQ, cola `gym-tracker-bg-jobs`; monitoreo en `/api/admin/queues`
+- `services/queue.ts` — BullMQ, cola `gym-tracker-bg-jobs`; monitoreo en `/api/admin/queues`. Incluye job repeatable `reminder-scan` (cada 60 s) que envía FCM a usuarios con `reminderTime == HH:MM UTC actual`.
 - `services/email.ts` — Nodemailer; sin SMTP configurado imprime en consola
-- `services/vapid.ts` — claves VAPID para push: lee de env vars o genera y persiste en `SystemConfig`
+- `services/vapid.ts` — claves VAPID para Web Push: lee de env vars o genera y persiste en `SystemConfig`
+- `services/fcm.ts` — Firebase Admin SDK para push nativo Android. Inicialización lazy desde `FIREBASE_SERVICE_ACCOUNT` (JSON en env var). Limpia tokens inválidos automáticamente.
 
 **`fastify.repos` decorator** (`plugins/repositories.ts`): expone instancias únicas de todos los repositorios. Acceder como `fastify.repos.users`, `fastify.repos.sessions`, etc. en lugar de instanciar repos directamente en las rutas.
 
@@ -116,6 +117,8 @@ await fastify.register(async (scoped) => {
 **TypeScript — Stripe v22 + moduleResolution: node**: El backend usa `moduleResolution: node`, que resuelve el entry CJS de Stripe y expone `StripeConstructor` sin los tipos `Stripe.Subscription`, `Stripe.Event`, etc. Solución: definir interfaces locales y castear con `as unknown as LocalType`. No cambiar el tsconfig.
 
 **Keys de IA por usuario**: las API keys de Anthropic/OpenAI se almacenan *por usuario* en `UserSettings.aiKey`, cifradas con `ENCRYPTION_KEY`. El backend actúa como proxy en `/ai/analyze` — nunca se exponen al frontend.
+
+**`sanitizeUser()`** (`use-cases/users.ts`): función central que elimina campos sensibles (`passwordHash`, tokens de verificación/reset) y enmascara `aiKey` → `aiKeySet: boolean`. Usar **siempre** esta función al devolver un objeto `user` al cliente — incluido el login. No construir manualmente el objeto de respuesta seleccionando campos.
 
 ### Web frontend (`packages/web/src/`)
 
@@ -172,7 +175,10 @@ JWT de corta duración (access token) + refresh token en `localStorage`. El acce
 - `packages/android/capacitor.config.ts`: `appId: com.ludaisca.gymtracker`, `webDir: ../web/dist`
 - Variables para la APK: `packages/android/.env` (`VITE_API_URL` → URL pública del backend, no localhost)
 - El WebView usa origen `capacitor://localhost` — debe estar en la lista CORS de producción en `app.ts`
-- Plugins instalados: `@capacitor/browser`, `@capacitor/app` (importados lazy para evitar bundle en la web)
+- Plugins instalados: `@capacitor/app`, `@capacitor/browser`, `@capacitor/status-bar`, `@capacitor/camera`, `@capacitor/push-notifications` — todos importados **lazy** (`await import(...)`) para no romper el bundle web
+- `lib/camera.ts` — `isNativePlatform()` (síncrono vía `window.Capacitor?.isNativePlatform?.() === true`), `captureNativePhoto()`, `applyWatermarkToBase64()`
+- `lib/pushNative.ts` — inicialización de FCM en Capacitor: solicita permisos, registra token, maneja tap en notificación
+- `StatusBar.overlaysWebView: false` en config — Android reserva el espacio de la barra de sistema; no se necesita CSS `safe-area-inset-top`
 
 ### Docker / despliegue
 
@@ -197,5 +203,6 @@ JWT de corta duración (access token) + refresh token en `localStorage`. El acce
 | `STRIPE_PRICE_ANNUAL` | Price ID de Stripe para plan anual |
 | `APP_URL` | URL base para redirects web de Stripe (fallback si no hay `Origin` header) |
 | `APP_DOMAIN` | Dominio de producción para CORS (ej. `gym-tracker.ludaisca.ddns.net`) |
+| `FIREBASE_SERVICE_ACCOUNT` | JSON completo de la service account de Firebase (para FCM). En `.env` como string en una sola línea. |
 
 @OPERATIONS.md

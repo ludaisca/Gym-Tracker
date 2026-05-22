@@ -50,7 +50,7 @@ export default function Routines() {
     if (tab !== 'mercado' || marketplaceRoutines.length > 0) return
     setLoadingMarket(true)
     api.get<MarketplaceRoutine[]>('/marketplace')
-      .then(r => setMarketplaceRoutines(r.data))
+      .then(r => setMarketplaceRoutines(Array.isArray(r.data) ? r.data : []))
       .catch((err: unknown) => console.warn('[marketplace]', err))
       .finally(() => setLoadingMarket(false))
   }, [tab, marketplaceRoutines.length])
