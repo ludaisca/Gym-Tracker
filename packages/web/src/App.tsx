@@ -86,16 +86,12 @@ const router = createBrowserRouter([
 ])
 
 async function updateNativeStatusBar(theme: 'light' | 'dark') {
-  const { Capacitor } = await import('@capacitor/core')
-  if (!Capacitor.isNativePlatform()) return
   const { StatusBar, Style } = await import('@capacitor/status-bar')
   await StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light })
   await StatusBar.setBackgroundColor({ color: theme === 'dark' ? '#171614' : '#f5f5f0' })
 }
 
 async function registerBackButton() {
-  const { Capacitor } = await import('@capacitor/core')
-  if (!Capacitor.isNativePlatform()) return
   const { App } = await import('@capacitor/app')
   let lastBackPress = 0
   App.addListener('backButton', ({ canGoBack }) => {

@@ -1,6 +1,6 @@
 # STATUS.md — Gym Tracker v1
 
-> Estado técnico real del proyecto. Documento vivo actualizado a 2026-05-21.
+> Estado técnico real del proyecto. Documento vivo actualizado a 2026-05-26.
 > Sustituye a PLAN.md.
 
 ---
@@ -103,12 +103,33 @@ adb install -r packages/android/android/app/build/outputs/apk/debug/app-debug.ap
 
 | Prioridad | Tarea | Notas |
 |-----------|-------|-------|
-| 🔴 Alta | Instalar APK nueva en dispositivo y verificar BUG-01, BUG-02, BUG-03 | `adb install -r ...app-debug.apk` |
-| 🔴 Alta | Confirmar si `i.map` persiste tras el parche o tiene otra causa | Revisar logs del dispositivo con `adb logcat` si sigue fallando |
-| 🟡 Media | Migrar DB prod con nuevos campos `fcmToken` + `reminderTime` | `prisma migrate deploy` en Coolify |
-| 🟡 Media | Añadir `FIREBASE_SERVICE_ACCOUNT` a variables de entorno en Coolify | Panel Coolify → Environment Variables |
+| 🔴 Alta | Actualizar routing en Coolify (apuntar Traefik a `api:3001` en lugar de `nginx:80`) | Panel Coolify → Service → Port |
+| 🔴 Alta | Compilar APK con live reload y probar en dispositivo | `make android-dev-build` (requiere teléfono conectado por USB) |
+| 🔴 Alta | Confirmar si BUG-01 (`i.map is not a function`) persiste con la refactorización | `adb logcat` si sigue fallando |
+| 🟡 Media | Migrar DB prod con nuevos campos `fcmToken` + `reminderTime` | `prisma migrate deploy` en Coolify (pendiente desde sesión anterior) |
+| 🟡 Media | Añadir `FIREBASE_SERVICE_ACCOUNT` a variables de entorno en Coolify | Panel Coolify → Environment Variables (pendiente) |
 | 🟢 Baja | Publicar en Google Play Store | APK debug lista; falta firma release + ficha de la tienda |
 | 🟢 Baja | Integración Stripe real en producción | Actualmente todo-gratis; backend listo |
+
+---
+
+## Sesión 2026-05-26 — Refactorización Android-only + Live Reload
+
+### Eliminado (código web-only)
+- PWA: `vite-plugin-pwa`, service worker, `ReloadPrompt`, `push-handler.js`, meta tags Apple
+- Web Push (VAPID): `services/vapid.ts`, `use-cases/push.ts`, endpoints `/push/subscribe`, `/push/unsubscribe`, `/push/vapid-public-key`, `PushRepository`, `web-push` npm package
+- Rama `getUserMedia` en Duelos.tsx (cámara web); guard `isNativePlatform()` en todos los archivos — ahora siempre es Android
+- Sección "Notificaciones Push" en Config.tsx
+
+### Añadido
+- **Capacitor Live Reload** (`packages/android/capacitor.config.ts`): bloque `server` condicional activado con `LIVE_RELOAD_IP=<ip> npx cap sync android`
+- **`make android-dev-build`**: compila APK con live reload (detecta IP Tailscale/LAN automáticamente) e instala en dispositivo. Solo necesita ejecutarse UNA VEZ; después `make dev` da HMR instantáneo.
+- `network_security_config.xml`: cleartext permitido globalmente (debug APK)
+
+### Infraestructura simplificada
+- Eliminado contenedor `nginx` de Docker Compose
+- Eliminados `Dockerfile.nginx` y `nginx/nginx.conf`
+- Traefik de Coolify debe apuntar ahora a `api:3001` directamente
 
 ---
 
@@ -116,21 +137,24 @@ adb install -r packages/android/android/app/build/outputs/apk/debug/app-debug.ap
 
 ```bash
 # Desarrollo local
-make db-up           # PostgreSQL :5440 + Redis :6390
-make dev             # Vite :5173 + backend :3010
+make db-up                  # PostgreSQL :5440 + Redis :6390
+make dev                    # Vite :5173 + backend :3010
 
-# Android
-make android-build   # vite build --mode android + cap sync
+# Android — Live Reload (primera vez o al cambiar plugins nativos)
+make android-dev-build      # detecta IP, compila APK con live reload, instala en USB
+# Después solo: make dev → abrir app en el teléfono → HMR instantáneo
+
+# Android — Producción (APK con assets bundleados y API de producción)
+make android-build          # vite build --mode android + cap sync
 JAVA_HOME=~/java/jdk-21.0.7+6 ANDROID_HOME=~/android-sdk \
   ./packages/android/android/gradlew assembleDebug
-adb install -r packages/android/android/app/build/outputs/apk/debug/app-debug.apk
 
 # DB
-make db-migrate      # prisma migrate dev (TTY requerido)
-make db-studio       # Prisma Studio
+make db-migrate             # prisma migrate dev (TTY requerido)
+make db-studio              # Prisma Studio
 
 # Producción
-make deploy          # git pull + rebuild + up
+make deploy                 # git pull + rebuild + up
 ```
 
 ---

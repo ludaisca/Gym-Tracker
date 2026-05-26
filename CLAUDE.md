@@ -28,11 +28,11 @@ Esto aplica a errores de build, errores de runtime en producción, problemas de 
 | SO del host | Rocky Linux 10 (kernel 6.12) |
 | PaaS | **Coolify 4.x** (auto-gestiona Traefik + Docker) |
 | Repositorio | `github.com/ludaisca/Gym-Tracker`, rama `v1` |
-| Contenedores | `nginx`, `api`, `db`, `redis`, `db-backup` |
+| Contenedores | `api`, `db`, `redis`, `db-backup` |
 | Red Docker | `l7qk2ugr39hiwl57t5v0l9nn` (externa, gestionada por Coolify) |
 
-**Routing en producción**: `Internet → Traefik (Coolify) → nginx → api (Fastify :3001)`.  
-Traefik termina SSL (Let's Encrypt). Nginx hace strip de `/api` antes de reenviar al backend.
+**Routing en producción**: `Internet → Traefik (Coolify) → api (Fastify :3001)`.  
+Traefik termina SSL (Let's Encrypt) y enruta directamente al contenedor API. Ya no hay nginx.
 
 **Puertos ocupados en el host** (no usar):
 - `5432` — PostgreSQL de producción (Coolify)
@@ -68,11 +68,12 @@ sudo firewall-cmd --reload
 ```
 packages/
 ├── backend/    ← API Fastify v5 + Prisma + PostgreSQL + Redis
-├── web/        ← React 19 PWA (fuente única para web y APK)
+├── web/        ← React 19 (UI de la APK Android; ya no es PWA web)
 └── android/    ← Wrapper Capacitor 8 + proyecto nativo Android
 ```
 
-El código React vive **solo** en `packages/web/src/`. La APK Android construye desde `packages/web/` con `--mode android`; Capacitor en `packages/android/` apunta a ese `dist/`.
+El código React vive **solo** en `packages/web/src/`. La APK Android construye desde `packages/web/`; Capacitor en `packages/android/` apunta a ese `dist/`.  
+**No hay app web**: el único cliente es la APK Android.
 
 ## Comandos esenciales
 
@@ -96,13 +97,25 @@ En entornos no-interactivos (CI/scripts), usar `prisma migrate deploy` en lugar 
 ### Producción (Docker Compose)
 ```bash
 make up / make down / make build   # Gestión de contenedores
-make logs                          # Logs en vivo de nginx y api
-make restart                       # Reinicia solo api y nginx
+make logs                          # Logs en vivo de api
+make restart                       # Reinicia solo api
 make backup                        # Dump PostgreSQL → ./backups/
 make deploy                        # git pull + rebuild + up
 ```
 
 ### Android (APK)
+
+**Flujo de desarrollo con live reload** (HMR instantáneo, compilar APK solo una vez):
+```bash
+make db-up              # Levanta PostgreSQL + Redis
+make android-dev-build  # Compila APK con live reload y la instala por USB
+make dev                # Arranca Vite :5173 + backend :3010
+# Abrir la app en el teléfono → carga desde Vite → cambios al instante
+```
+El Makefile detecta la IP automáticamente (Tailscale si está disponible, si no la interfaz principal).  
+Para forzar una IP específica: `make android-dev-build DEV_IP=192.168.1.x`
+
+**Build de producción** (assets bundleados, API de producción):
 ```bash
 make android-build   # vite build --mode android + cap sync android
 make android-run     # Instala en dispositivo USB conectado
@@ -123,8 +136,8 @@ cd packages/backend && npm run build  # tsc — solo verificación de tipos, no 
 ```bash
 cd packages/web && npm run dev            # Vite dev server, proxy /api → :3010
 cd packages/web && npm run build          # tsc -b + vite build
-cd packages/web && npm run build:docker   # Solo vite build (sin tsc, usado en Dockerfile.nginx)
-cd packages/web && npm run build:android  # vite build --mode android
+cd packages/web && npm run build:docker   # Solo vite build (sin tsc, usado en android-dev-build)
+cd packages/web && npm run build:android  # vite build --mode android (producción, VITE_API_URL hardcoded)
 cd packages/web && npm run lint
 ```
 
@@ -132,9 +145,8 @@ cd packages/web && npm run lint
 
 ### Stack
 - **Backend**: Fastify v5 + Prisma + PostgreSQL + Redis + BullMQ
-- **Web**: React 19 + Vite 8 + Zustand + Axios + vite-plugin-pwa
-- **Android**: Capacitor 8 wrappea el build de `packages/web/`
-- **Infra**: Docker Compose + nginx reverse proxy (Coolify en producción)
+- **Android**: React 19 + Vite 8 + Zustand + Axios, wrapeado con Capacitor 8 (único cliente)
+- **Infra**: Docker Compose; Traefik de Coolify enruta directamente al contenedor API (sin nginx)
 
 ### Backend (`packages/backend/src/`)
 
@@ -146,7 +158,6 @@ cd packages/web && npm run lint
 - `routes/` — validación Zod + orquestación; delega en use-cases o repos directamente
 - `services/queue.ts` — BullMQ, cola `gym-tracker-bg-jobs`; monitoreo en `/api/admin/queues`. Incluye job repeatable `reminder-scan` (cada 60 s) que envía FCM a usuarios con `reminderTime == HH:MM UTC actual`.
 - `services/email.ts` — Nodemailer; sin SMTP configurado imprime en consola
-- `services/vapid.ts` — claves VAPID para Web Push: lee de env vars o genera y persiste en `SystemConfig`
 - `services/fcm.ts` — Firebase Admin SDK para push nativo Android. Inicialización lazy desde `FIREBASE_SERVICE_ACCOUNT` (JSON en env var). Limpia tokens inválidos automáticamente.
 
 **`fastify.repos` decorator** (`plugins/repositories.ts`): expone instancias únicas de todos los repositorios. Acceder como `fastify.repos.users`, `fastify.repos.sessions`, etc. en lugar de instanciar repos directamente en las rutas.
@@ -168,7 +179,7 @@ await fastify.register(async (scoped) => {
 })
 ```
 
-**Prefix stripping**: nginx (producción) y el proxy de Vite (dev) **eliminan** el prefijo `/api`. El frontend hace `GET /api/sessions`; el backend recibe `GET /sessions`. Las rutas en Fastify no llevan `/api`.
+**Prefix stripping**: el proxy de Vite (dev) **elimina** el prefijo `/api`. El frontend hace `GET /api/sessions`; el backend recibe `GET /sessions`. Las rutas en Fastify no llevan `/api`.
 
 **rawBody para Stripe webhooks**: el content-type parser en `app.ts` adjunta `req.rawBody` como `Buffer` antes de parsear JSON. El webhook en `/billing/webhook` accede a él via cast explícito.
 
@@ -197,8 +208,6 @@ await fastify.register(async (scoped) => {
 - No mezclar los dos patrones para el mismo recurso.
 
 **Code splitting**: todas las vistas protegidas usan `React.lazy()` en `App.tsx`. No revertir a imports estáticos — evita el warning de chunk >500kB de Vite.
-
-**PWA / Service Worker**: el SW está en modo `prompt`. Las actualizaciones las gestiona `<ReloadPrompt />`. No cambiar a `autoUpdate`.
 
 **Offline sync**: `useOfflineStore` acumula escrituras fallidas; `useOfflineSync` las reproduce en **serie** al reconectar (evita race conditions). No cambiar a reproducción paralela.
 
@@ -240,11 +249,12 @@ JWT de corta duración (access token) + refresh token en `localStorage`. El acce
 
 ### Docker / despliegue
 
-- `docker-compose.yml` — base; nginx usa `expose: ["80"]` (sin bind al host)
-- `docker-compose.override.yml` — agrega `ports: ["80:80"]` para dev local (Coolify lo ignora)
+- `docker-compose.yml` — 4 servicios: `api`, `db`, `redis`, `db-backup` (sin nginx)
+- `docker-compose.override.yml` — expone `db:5440` y `redis:6390` al host para dev local (Coolify lo ignora)
 - `Dockerfile.backend` — multi-stage; builder usa `npm ci --include=dev` para que `tsc` esté disponible aunque Coolify inyecte `NODE_ENV=production`
-- `Dockerfile.nginx` — usa `npm run build:docker` (sin tsc)
-- Coolify enruta `gym-tracker.ludaisca.ddns.net` a través de Traefik al contenedor nginx
+- Coolify enruta `gym-tracker.ludaisca.ddns.net` a través de Traefik directamente al contenedor `api:3001`
+
+**⚠️ Cambio en Coolify tras este deploy**: actualizar el enrutamiento en la UI de Coolify para apuntar al servicio `api` (puerto 3001) en lugar de a `nginx` (puerto 80).
 
 ### Variables de entorno
 

@@ -1,8 +1,4 @@
-import { isNativePlatform } from './camera'
-
 export async function initNativePush(onToken: (token: string) => Promise<void>): Promise<void> {
-  if (!isNativePlatform()) return
-
   const { PushNotifications } = await import('@capacitor/push-notifications')
 
   const permResult = await PushNotifications.requestPermissions()

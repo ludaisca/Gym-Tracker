@@ -6,7 +6,6 @@ import { useUIStore, useAuthStore, useOfflineStore } from '../../store'
 import { getRoutineDays } from '../../lib/fitness'
 import { useRoutines } from '../../hooks/useRoutines'
 import Toaster from '../ui/Toaster'
-import ReloadPrompt from '../ui/ReloadPrompt'
 import {
   ModuleIcon,
   IconMenu, IconClose, IconSun, IconMoon,
@@ -452,7 +451,6 @@ export default function AppShell() {
         />
       )}
 
-      <ReloadPrompt />
       <Toaster />
     </div>
   )

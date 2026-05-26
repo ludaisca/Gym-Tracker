@@ -8,7 +8,6 @@ import { PrismaSessionRepository } from '../repositories/prisma/PrismaSessionRep
 import { PrismaNutritionRepository } from '../repositories/prisma/PrismaNutritionRepository'
 import { PrismaNoteRepository } from '../repositories/prisma/PrismaNoteRepository'
 import { PrismaChallengeRepository } from '../repositories/prisma/PrismaChallengeRepository'
-import { PrismaPushRepository } from '../repositories/prisma/PrismaPushRepository'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -28,7 +27,6 @@ const repositoriesPlugin: FastifyPluginAsync = fp(async (fastify) => {
     nutrition:  new PrismaNutritionRepository(prisma),
     notes:      new PrismaNoteRepository(prisma),
     challenges: new PrismaChallengeRepository(prisma),
-    push:       new PrismaPushRepository(prisma),
   } satisfies Repositories)
 })
 

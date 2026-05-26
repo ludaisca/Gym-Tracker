@@ -23,12 +23,7 @@ export async function applyWatermarkToBase64(base64: string, userName: string): 
   })
 }
 
-// Returns the data URL with watermark if on native platform, null if on web (caller uses getUserMedia).
 export async function captureNativePhoto(userName: string): Promise<string> {
-  const { Capacitor } = await import('@capacitor/core')
-  if (!Capacitor.isNativePlatform()) {
-    throw new Error('captureNativePhoto called on non-native platform')
-  }
   const { Camera, CameraResultType, CameraSource } = await import('@capacitor/camera')
   const perms = await Camera.requestPermissions({ permissions: ['camera'] })
   if (perms.camera !== 'granted') {
@@ -41,11 +36,4 @@ export async function captureNativePhoto(userName: string): Promise<string> {
     source: CameraSource.Camera,
   })
   return applyWatermarkToBase64(image.base64String!, userName)
-}
-
-export function isNativePlatform(): boolean {
-  // Capacitor sets window.Capacitor when running inside a native WebView
-  return typeof window !== 'undefined' &&
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).Capacitor?.isNativePlatform?.() === true
 }

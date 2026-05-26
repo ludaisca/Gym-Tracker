@@ -282,3 +282,72 @@ O esperar 15 minutos a que expire la ventana.
 VITE_API_URL=https://gym-tracker.ludaisca.ddns.net/api
 ```
 Este archivo **no debe commitearse** (contiene la URL de producción hardcoded).
+
+---
+
+## 7. Refactorización Android-only (2026-05-26)
+
+### Activar live reload de Capacitor (HMR en el teléfono sin recompilar APK)
+
+**Problema**: Cada cambio en la UI requería recompilar la APK (~2-3 min).
+
+**Solución**: Capacitor soporta un bloque `server` en `capacitor.config.ts` que hace que el WebView cargue desde el Vite dev server en lugar de los assets bundleados. Solo hay que compilar la APK UNA VEZ con esa config; después cualquier cambio en React aparece instantáneamente.
+
+**Cómo activar**:
+```bash
+make android-dev-build        # detecta IP (Tailscale > LAN), compila e instala APK
+make dev                      # arranca Vite :5173 + backend :3010
+# Abrir la app → carga desde http://<ip>:5173 → HMR instantáneo
+```
+
+Para forzar una IP específica: `make android-dev-build DEV_IP=100.x.x.x`
+
+**Archivos clave**:
+- `packages/android/capacitor.config.ts` — bloque `server` condicional con `LIVE_RELOAD_IP`
+- `packages/android/android/app/src/main/res/xml/network_security_config.xml` — cleartext permitido para que HTTP a la IP local funcione
+- `Makefile` — target `android-dev-build`, detección automática de IP Tailscale/LAN
+
+**Nota**: `android-build` (sin `dev`) genera la APK de producción con assets bundleados y `VITE_API_URL` de producción (no activa live reload).
+
+---
+
+### Eliminar nginx de producción
+
+**Problema**: El contenedor nginx era el único propósito era servir la web PWA y actuar como proxy hacia la API. Al eliminar la app web, nginx se volvió innecesario.
+
+**Cambios**:
+- Eliminados: `Dockerfile.nginx`, `nginx/nginx.conf`, servicio `nginx` de `docker-compose.yml` y `docker-compose.override.yml`
+- Traefik de Coolify debe enrutar `gym-tracker.ludaisca.ddns.net` directamente a `api:3001`
+
+**⚠️ Acción requerida en Coolify tras deploy**: En la UI de Coolify, actualizar el servicio para que Traefik apunte al contenedor `api` en el puerto `3001` (antes apuntaba a `nginx:80`).
+
+**Funciones de nginx compensadas por el backend** (ya estaban activas):
+- Rate limiting: `@fastify/rate-limit` (Redis-backed)
+- Compresión: `@fastify/compress`
+- Seguridad: `@fastify/helmet`
+
+**Rate limit de auth más estricto**: nginx tenía 5 req/min para `/api/auth/`. Si se necesita en el backend, agregar en `routes/auth.ts`:
+```typescript
+{ config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }
+```
+
+---
+
+### Eliminar Web Push (VAPID) y código web-only
+
+**Archivos eliminados**:
+- `packages/backend/src/services/vapid.ts`
+- `packages/backend/src/use-cases/push.ts`
+- `packages/backend/src/repositories/PushRepository.ts`
+- `packages/backend/src/repositories/prisma/PrismaPushRepository.ts`
+- `packages/web/src/components/ui/ReloadPrompt.tsx`
+- `packages/web/public/push-handler.js`
+- `packages/web/public/apple-touch-icon.png`
+- `web-push` npm package (backend), `vite-plugin-pwa` + `workbox-window` (frontend)
+
+**Endpoints eliminados del backend**: `GET /push/vapid-public-key`, `POST /push/subscribe`, `DELETE /push/unsubscribe`
+
+**Simplificaciones**:
+- `isNativePlatform()` eliminado de todos los archivos (siempre Android)
+- Duelos.tsx: eliminada rama `getUserMedia` (solo cámara nativa Capacitor)
+- Config.tsx: eliminada sección "Notificaciones Push" (VAPID); sección "Recordatorio" ahora siempre visible

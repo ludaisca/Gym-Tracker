@@ -1,236 +1,185 @@
 # Gym Tracker
 
-Aplicación de seguimiento de entrenamiento y nutrición. PWA mobile-first con soporte offline, IA integrada, sistema de monetización Pro y generación de APK nativa para Android.
+Aplicación de seguimiento de entrenamiento y nutrición para Android. Construida con React 19 + Capacitor 8, con API Fastify en producción (Coolify).
 
-**Estado actual**: v1 rama activa. Producción lista en Coolify. Mayoría de features y correcciones implementadas (ver PLAN.md).
+**Producción**: `https://gym-tracker.ludaisca.ddns.net`  
+**Rama activa**: `v1`
+
+---
 
 ## Stack
 
 | Capa | Tecnología |
 |------|-----------|
 | Backend | Fastify v5 · Prisma · PostgreSQL · Redis · BullMQ |
-| Frontend | React 19 · Vite 8 · Zustand · Axios · PWA (vite-plugin-pwa) |
-| Mobile | Capacitor 8 (APK nativa desde el mismo código web) |
-| Infra | Docker Compose · nginx reverse proxy · Coolify (producción) |
+| Frontend (APK) | React 19 · Vite 8 · Zustand · Axios · Capacitor 8 |
+| Infra | Docker Compose · Coolify + Traefik (producción) |
 
-## Estructura del monorepo
+La app corre en un WebView de Android gestionado por Capacitor. No hay app web — el único cliente es la APK.
+
+---
+
+## Monorepo
 
 ```
-v1/
-├── packages/
-│   ├── backend/          # API Fastify
-│   │   ├── src/
-│   │   │   ├── app.ts         # Plugins y rutas de Fastify
-│   │   │   ├── routes/        # Un archivo por dominio
-│   │   │   ├── plugins/       # prisma, redis, auth
-│   │   │   └── services/      # queue (BullMQ), email, importTask
-│   │   └── prisma/
-│   │       └── schema.prisma
-│   ├── web/              # PWA React
-│   │   └── src/
-│   │       ├── api/           # Axios + interceptores
-│   │       ├── store/         # Zustand (auth, UI, offline)
-│   │       ├── hooks/         # useOfflineSync, useSessions, etc.
-│   │       ├── components/
-│   │       │   ├── layout/    # AppShell, bottom nav
-│   │       │   ├── views/     # Una vista por pantalla
-│   │       │   └── ui/        # Iconos, toasts
-│   │       └── styles/        # globals.css (design tokens)
-│   └── android/          # Wrapper Capacitor (sin código React)
-│       └── capacitor.config.ts
-├── docker-compose.yml
-├── docker-compose.override.yml   # Bind :80 solo en dev local
-├── Dockerfile.backend
-├── Dockerfile.nginx
-├── nginx/nginx.conf
-└── Makefile
+packages/
+├── backend/    → API Fastify v5 + Prisma + PostgreSQL + Redis
+├── web/        → Código React (UI de la APK; también sirve como dev server con HMR)
+└── android/    → Wrapper Capacitor 8 + proyecto nativo Android
 ```
 
-## Funcionalidades
-
-### Core
-- **Entrenamientos** — Sesiones por semana/día, autofill del entrenamiento anterior, múltiples sets con kg y reps, cardio, timer integrado
-- **Rutinas** — Presets estándar (Bro Split, Push Pull Legs, Full Body…) + rutinas custom + compartir con link
-- **Nutrición** — Registro de comidas y macros por día, análisis de fotos con IA, tracking de agua, promedio semanal
-- **IA** — Análisis de progreso, recomendaciones de entrenamiento, chat contextual (OpenAI / Anthropic / Google)
-- **Peso corporal** — Historial + gráfica de tendencia
-
-### Premium (Pro)
-- **Duelos** — Challenges entre usuarios con check-ins fotográficos y ranking
-- **Analytics avanzado** — Volumen por semana, PRs, proyecciones de 1RM
-- **Marketplace** — Publicar y clonar rutinas de la comunidad
-- **Push notifications** — Recordatorios de entrenamientos
-- **Progresión automática** — Sugiere +2.5 kg cuando reps consistentes
-
-### Todos
-- **Offline-first** — Cola de escrituras pendientes que se reproduce al reconectar
-- **Temas** — Modo claro/oscuro + 5 colores de acento (teal, verde, azul, naranja, violeta)
-- **Export/Import** — Backup completo en JSON
-- **Trial Pro** — 7 días gratis (una vez por usuario)
-
-## Requisitos previos
-
-- Node.js 20+
-- Docker y Docker Compose
-- Java 21 (solo para builds Android — ⚠️ sistema con Java 25 requiere path alternativo `~/java/jdk-21.0.7+6`)
+---
 
 ## Desarrollo local
 
-### 1. Variables de entorno
+### Requisitos
+
+- Node.js 20+
+- Docker y Docker Compose
+- Java 21 en `~/java/jdk-21.0.7+6` (Temurin — para builds Android)
+- Android SDK en `~/android-sdk` (API 36)
+
+### Variables de entorno
 
 ```bash
 cp .env.example .env   # editar con tus valores
 ```
 
-Variables requeridas:
+Variables mínimas requeridas:
 
 ```env
-DATABASE_URL=postgresql://gymtracker:gymtracker@localhost:5432/gymtracker
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=<mínimo 32 chars aleatorios>
-JWT_REFRESH_SECRET=<mínimo 32 chars aleatorios>
-ENCRYPTION_KEY=<exactamente 32 chars — cifra las API keys de IA>
-
-# Opcionales
-SMTP_HOST=
-SMTP_PORT=
-SMTP_USER=
-SMTP_PASS=
-SMTP_FROM=
-ADMIN_TOKEN=<token para Bull Board>
+DATABASE_URL=postgresql://gymtracker:pass@localhost:5440/gymtracker
+REDIS_URL=redis://:pass@localhost:6390
+JWT_SECRET=<32+ chars>
+JWT_REFRESH_SECRET=<32+ chars>
+ENCRYPTION_KEY=<exactamente 32 chars>
+DB_USER=gymtracker
+DB_PASSWORD=pass
+DB_NAME=gymtracker
+REDIS_PASSWORD=pass
 ```
 
-### 2. Instalar dependencias
+### Levantar el entorno
 
 ```bash
 npm install          # instala todos los workspaces
+make db-up           # PostgreSQL :5440 + Redis :6390 en Docker
+make db-migrate      # migraciones Prisma (requiere TTY)
+make dev             # Vite :5173 + backend :3010 en paralelo
 ```
 
-### 3. Levantar servicios y migrar la base de datos
+---
+
+## Desarrollo Android con Live Reload
+
+Compila la APK **una sola vez** con la IP del servidor de desarrollo. Después cualquier cambio en el código React aparece al instante en el teléfono (HMR) sin recompilar.
 
 ```bash
-make db-up           # PostgreSQL + Redis en Docker
-make db-migrate      # ejecuta migraciones Prisma
+# Teléfono conectado por USB + make dev corriendo
+make android-dev-build   # detecta IP (Tailscale > LAN), compila APK e instala
+make dev                 # arranca Vite :5173 + backend :3010
+# Abrir la app en el teléfono → carga desde http://<ip>:5173
 ```
 
-### 4. Arrancar el servidor de desarrollo
+Para forzar una IP específica:
 
 ```bash
-make dev             # frontend :5173 + backend :3001 en paralelo
+make android-dev-build DEV_IP=100.x.x.x
 ```
 
-Comandos individuales:
+Recompilar la APK solo cuando cambien plugins nativos (Capacitor, Firebase, cámara...).
+
+---
+
+## Build de producción (APK)
 
 ```bash
-cd packages/backend && npm run dev    # tsx watch
-cd packages/web && npm run dev        # Vite dev server
+make android-build   # vite build --mode android + cap sync
+# Luego compilar con Gradle:
+cd packages/android/android
+JAVA_HOME=~/java/jdk-21.0.7+6 ANDROID_HOME=~/android-sdk ./gradlew assembleDebug
+# APK → app/build/outputs/apk/debug/app-debug.apk
 ```
+
+---
 
 ## Producción con Docker Compose
 
 ```bash
-make build           # rebuild completo sin caché
-make up              # levantar todos los contenedores
-make logs            # logs en vivo de nginx y api
-make restart         # reiniciar api y nginx (sin tocar BD)
+make up              # levantar contenedores (api, db, redis, db-backup)
 make down            # parar todo
-make backup          # dump de PostgreSQL → ./backups/
+make build           # rebuild sin caché
+make deploy          # git pull + rebuild + up
+make logs            # logs en vivo de la API
+make restart         # reiniciar api
+make backup          # dump PostgreSQL → ./backups/
 ```
 
-El archivo `docker-compose.override.yml` añade `ports: ["80:80"]` para dev local. En producción (Coolify) no se carga y Traefik enruta el tráfico.
-
-## Android (APK)
-
-El paquete `packages/android/` es solo el wrapper de Capacitor. Todo el código React vive en `packages/web/`.
-
-```bash
-make android-build   # build web con --mode android + cap sync
-make android-open    # abre en Android Studio
-make android-run     # instala en dispositivo USB
-```
-
-Para generar el APK firmado:
-
-```bash
-cd packages/android
-JAVA_HOME=~/java/jdk-21.0.7+6 ANDROID_HOME=~/android-sdk ./android/gradlew assembleDebug
-# APK → android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-La variable `VITE_API_URL` del archivo `packages/android/.env` apunta a la API de producción para la APK.
-
-## Migraciones de base de datos
-
-```bash
-make db-migrate                        # aplicar migraciones existentes
-cd packages/backend && npx prisma migrate dev --name nombre   # crear nueva migración
-make db-studio                         # Prisma Studio en el navegador
-```
-
-## API Reference
-
-| Prefijo | Descripción |
-|---------|-------------|
-| `POST /api/auth/register` | Crear cuenta |
-| `POST /api/auth/login` | Iniciar sesión |
-| `POST /api/auth/refresh` | Renovar access token |
-| `POST /api/auth/logout` | Invalidar tokens |
-| `GET/PUT /api/users/me` | Perfil de usuario |
-| `GET/PUT /api/users/me/settings` | Configuración |
-| `GET/PUT /api/sessions/:week/:day` | Sesión de entrenamiento |
-| `CRUD /api/routines` | Rutinas custom |
-| `CRUD /api/nutrition/:date` | Días de nutrición |
-| `CRUD /api/notes` | Notas globales |
-| `POST /api/ai/analyze-food` | Análisis de foto con IA |
-| `POST /api/ai/analyze` | Análisis de progreso con IA |
-| `POST /api/ai/chat` | Chat contextual con IA |
-| `CRUD /api/challenges` | Duelos |
-| `POST /api/migrate/localstorage` | Importar datos legacy |
-
-Panel de colas (Bull Board): `GET /admin/queues` con header `Authorization: <ADMIN_TOKEN>`
-
-## Autenticación
-
-- **Access token** JWT de 15 min (solo en memoria, no persiste)
-- **Refresh token** de 30 días en `localStorage`, guardado también en PostgreSQL + lista negra en Redis
-- Al recargar la app, el interceptor de Axios renueva automáticamente el access token usando el refresh token
-- Un singleton `refreshPromise` serializa múltiples peticiones 401 simultáneas para evitar refresh loops
+---
 
 ## Despliegue en Coolify
 
-1. Crear proyecto en Coolify apuntando a este repositorio
-2. Seleccionar `docker-compose.yml` como archivo de compose (no carga el `.override.yml`)
-3. Configurar las variables de entorno en el panel de Coolify
-4. Traefik de Coolify enruta el dominio al contenedor nginx automáticamente
+1. Crear proyecto en Coolify apuntando a este repositorio, rama `v1`
+2. Seleccionar `docker-compose.yml` (Coolify ignora el `.override.yml`)
+3. Configurar variables de entorno en el panel (ver tabla en `CLAUDE.md`)
+4. **Routing**: Traefik de Coolify debe apuntar a `api:3001` (ya no hay nginx)
+5. El origen `capacitor://localhost` está en la lista CORS del backend — no requiere configuración adicional
 
-El dominio de producción debe estar en la lista CORS del backend (`APP_DOMAIN` en producción o la URL del frontend).
+---
 
-## Scripts disponibles
+## Base de datos
 
 ```bash
-# Desde la raíz
-make dev            # desarrollo completo
-make db-up          # solo bases de datos
-make db-migrate     # migraciones
-make db-studio      # Prisma Studio
-make up             # producción Docker
-make down           # parar Docker
-make build          # rebuild Docker
-make logs           # logs Docker
-make restart        # reiniciar api+nginx
-make backup         # backup PostgreSQL
-make android-build  # build APK web
-make android-open   # Android Studio
-make android-run    # instalar en dispositivo
-
-# Desde packages/backend
-npm run dev         # tsx watch
-npm run build       # tsc (verificar tipos)
-
-# Desde packages/web
-npm run dev         # Vite dev server
-npm run build       # build producción (web)
-npm run build:android  # build para APK
-npm run build:docker   # build sin tsc (Dockerfile)
-npm run lint        # ESLint
+make db-migrate                              # aplicar migraciones en dev
+make db-studio                               # Prisma Studio en el navegador
+# Producción:
+npx prisma migrate deploy                    # dentro del contenedor api (lo hace automáticamente el entrypoint)
 ```
+
+---
+
+## Push notifications (FCM)
+
+Setup Firebase:
+1. Proyecto Firebase: `gym-tracker-5b5ae` | Package: `com.ludaisca.gymtracker`
+2. `google-services.json` → `packages/android/android/app/` (gitignoreado)
+3. `FIREBASE_SERVICE_ACCOUNT` → variable de entorno en Coolify (JSON completo en una línea)
+
+---
+
+## Funcionalidades
+
+- **Entrenamientos** — Sesiones por semana/día, autofill del anterior, sets con kg/reps, cardio, timer
+- **Rutinas** — Presets estándar + custom + compartir con link
+- **Nutrición** — Comidas y macros por día, análisis de fotos con IA, agua, promedio semanal
+- **IA** — Análisis de progreso, recomendaciones, chat contextual (OpenAI / Anthropic / Google)
+- **Peso corporal** — Historial + gráfica de tendencia
+- **Duelos** — Challenges con check-ins fotográficos nativos y ranking
+- **Analytics** — Volumen semanal, PRs, proyecciones de 1RM
+- **Push notifications** — Recordatorios FCM con hora configurable
+- **Offline-first** — Cola de escrituras que se reproduce al reconectar
+- **Temas** — Claro/oscuro + 5 colores de acento
+- **Export/Import** — Backup completo en JSON
+
+---
+
+## API Reference
+
+| Ruta | Descripción |
+|------|-------------|
+| `POST /auth/register` | Crear cuenta |
+| `POST /auth/login` | Iniciar sesión |
+| `POST /auth/refresh` | Renovar access token |
+| `GET/PUT /users/me` | Perfil de usuario |
+| `GET/PUT /users/me/settings` | Configuración + recordatorio FCM |
+| `GET/PUT /sessions/:week/:day` | Sesión de entrenamiento |
+| `CRUD /routines` | Rutinas custom |
+| `CRUD /nutrition/:date` | Días de nutrición |
+| `CRUD /notes` | Notas |
+| `POST /ai/analyze` | Análisis de progreso con IA |
+| `POST /ai/chat` | Chat contextual con IA |
+| `CRUD /challenges` | Duelos |
+| `POST /push/fcm-token` | Registrar token FCM |
+| `POST /push/test` | Notificación de prueba |
+
+Panel de colas (BullMQ): `GET /admin/queues` con `Authorization: <ADMIN_TOKEN>`

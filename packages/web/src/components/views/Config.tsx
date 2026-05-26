@@ -10,8 +10,6 @@ import {
 } from '../ui/Icons'
 import { toast } from '../../lib/toast'
 import { Dumbbell, Zap, Flame, Target, Trophy, Brain, Waves, Rocket } from 'lucide-react'
-import { subscribeToPush, unsubscribeFromPush, pushApi } from '../../api/push'
-import { isNativePlatform } from '../../lib/camera'
 
 const AVATARS = [
   { id: '1', icon: Dumbbell },
@@ -234,27 +232,10 @@ export default function Config() {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // Push notifications state
-  const [pushSupported, setPushSupported] = useState(false)
-  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default')
-  const [pushSubscribed, setPushSubscribed] = useState(false)
-  const [pushLoading, setPushLoading] = useState(false)
   const [reminderTime, setReminderTime] = useState<string>(
     (user?.settings as (UserSettings & { reminderTime?: string | null }) | undefined)?.reminderTime ?? ''
   )
   const [savingReminder, setSavingReminder] = useState(false)
-  const isNative = isNativePlatform()
-
-  useEffect(() => {
-    const supported = 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window
-    setPushSupported(supported)
-    if (supported) {
-      setPushPermission(Notification.permission)
-      navigator.serviceWorker.ready.then(reg =>
-        reg.pushManager.getSubscription().then(sub => setPushSubscribed(!!sub))
-      ).catch(() => {})
-    }
-  }, [])
 
   async function handleSaveReminder(time: string) {
     setSavingReminder(true)
@@ -569,132 +550,40 @@ export default function Config() {
         </div>
       </section>
 
-      {/* ── Notificaciones Push ───────────────────────────────── */}
+      {/* ── Recordatorio de entrenamiento ────────────────────── */}
       <section className="card">
         <div className="panel-head">
           <div>
-            <h3>Notificaciones Push</h3>
-            <p>Recibe recordatorios de entrenamiento directamente en tu dispositivo.</p>
+            <h3>Recordatorio de entrenamiento</h3>
+            <p>Recibe una notificación diaria a la hora que elijas (hora UTC del servidor).</p>
           </div>
-          {pushSubscribed && (
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success)', fontWeight: 700 }}>
-              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'currentColor', marginRight: '6px' }} />
-              Activas
-            </span>
-          )}
         </div>
-        <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          {!pushSupported ? (
-            <p className="tiny muted">Tu navegador no soporta notificaciones push.</p>
-          ) : pushPermission === 'denied' ? (
-            <p className="tiny muted">Has bloqueado las notificaciones. Cámbialas en la configuración del navegador.</p>
-          ) : (
-            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-              {!pushSubscribed ? (
-                <button
-                  className="primary-btn"
-                  disabled={pushLoading}
-                  onClick={async () => {
-                    setPushLoading(true)
-                    try {
-                      const sub = await subscribeToPush()
-                      if (sub) {
-                        setPushSubscribed(true)
-                        setPushPermission(Notification.permission)
-                        toast('Notificaciones activadas')
-                      } else {
-                        toast('No fue posible activar las notificaciones', 'error')
-                      }
-                    } catch {
-                      toast('Error al activar notificaciones', 'error')
-                    } finally {
-                      setPushLoading(false)
-                    }
-                  }}
-                >
-                  {pushLoading ? 'Activando…' : 'Activar notificaciones'}
-                </button>
-              ) : (
-                <>
-                  <button
-                    className="ghost-btn"
-                    disabled={pushLoading}
-                    onClick={async () => {
-                      setPushLoading(true)
-                      try {
-                        await unsubscribeFromPush()
-                        setPushSubscribed(false)
-                        toast('Notificaciones desactivadas')
-                      } catch {
-                        toast('Error al desactivar notificaciones', 'error')
-                      } finally {
-                        setPushLoading(false)
-                      }
-                    }}
-                    style={{ color: 'var(--color-warning)' }}
-                  >
-                    Desactivar
-                  </button>
-                  <button
-                    className="ghost-btn"
-                    disabled={pushLoading}
-                    onClick={async () => {
-                      setPushLoading(true)
-                      try {
-                        const result = await pushApi.test()
-                        toast(`Notificación enviada (${result.sent} dispositivo${result.sent !== 1 ? 's' : ''})`)
-                      } catch {
-                        toast('Error al enviar notificación de prueba', 'error')
-                      } finally {
-                        setPushLoading(false)
-                      }
-                    }}
-                  >
-                    Enviar prueba
-                  </button>
-                </>
-              )}
-            </div>
+        <div className="panel-body" style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="time"
+            value={reminderTime}
+            onChange={e => setReminderTime(e.target.value)}
+            style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}
+          />
+          <button
+            className="primary-btn"
+            disabled={savingReminder}
+            onClick={() => handleSaveReminder(reminderTime)}
+          >
+            {savingReminder ? 'Guardando…' : 'Guardar hora'}
+          </button>
+          {reminderTime && (
+            <button
+              className="ghost-btn"
+              disabled={savingReminder}
+              onClick={() => handleSaveReminder('')}
+              style={{ color: 'var(--color-warning)' }}
+            >
+              Desactivar
+            </button>
           )}
         </div>
       </section>
-
-      {/* ── Recordatorio diario (solo APK Android) ───────────── */}
-      {isNative && (
-        <section className="card">
-          <div className="panel-head">
-            <div>
-              <h3>Recordatorio de entrenamiento</h3>
-              <p>Recibe una notificación diaria a la hora que elijas (hora UTC del servidor).</p>
-            </div>
-          </div>
-          <div className="panel-body" style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              type="time"
-              value={reminderTime}
-              onChange={e => setReminderTime(e.target.value)}
-              style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}
-            />
-            <button
-              className="primary-btn"
-              disabled={savingReminder}
-              onClick={() => handleSaveReminder(reminderTime)}
-            >
-              {savingReminder ? 'Guardando…' : 'Guardar hora'}
-            </button>
-            {reminderTime && (
-              <button
-                className="ghost-btn"
-                disabled={savingReminder}
-                onClick={() => handleSaveReminder('')}
-                style={{ color: 'var(--color-warning)' }}
-              >
-                Desactivar
-              </button>
-            )}
-          </div>
-        </section>
-      )}
 
       {/* ── Sincronización Local ──────────────────────────────── */}
       <section className="card">
