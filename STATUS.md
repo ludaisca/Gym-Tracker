@@ -104,10 +104,10 @@ adb install -r packages/android/android/app/build/outputs/apk/debug/app-debug.ap
 | Prioridad | Tarea | Notas |
 |-----------|-------|-------|
 | 🔴 Alta | Actualizar routing en Coolify (apuntar Traefik a `api:3001` en lugar de `nginx:80`) | Panel Coolify → Service → Port |
-| 🔴 Alta | Compilar APK con live reload y probar en dispositivo | `make android-dev-build` (requiere teléfono conectado por USB) |
-| 🔴 Alta | Confirmar si BUG-01 (`i.map is not a function`) persiste con la refactorización | `adb logcat` si sigue fallando |
-| 🟡 Media | Migrar DB prod con nuevos campos `fcmToken` + `reminderTime` | `prisma migrate deploy` en Coolify (pendiente desde sesión anterior) |
-| 🟡 Media | Añadir `FIREBASE_SERVICE_ACCOUNT` a variables de entorno en Coolify | Panel Coolify → Environment Variables (pendiente) |
+| 🔴 Alta | Añadir variables SMTP a Coolify | Ver sección 8 de OPERATIONS.md |
+| 🟡 Media | Migrar DB prod con nuevos campos `fcmToken` + `reminderTime` | `prisma migrate deploy` en Coolify |
+| 🟡 Media | Añadir `FIREBASE_SERVICE_ACCOUNT` a variables de entorno en Coolify | Panel Coolify → Environment Variables |
+| 🟢 Baja | Confirmar si BUG-01 (`i.map is not a function`) persiste | `adb logcat` si aparece |
 | 🟢 Baja | Publicar en Google Play Store | APK debug lista; falta firma release + ficha de la tienda |
 | 🟢 Baja | Integración Stripe real en producción | Actualmente todo-gratis; backend listo |
 
@@ -164,5 +164,30 @@ make deploy                 # git pull + rebuild + up
 | Variable | Descripción | Dónde configurar |
 |----------|-------------|-----------------|
 | `FIREBASE_SERVICE_ACCOUNT` | JSON completo de la service account de Firebase | `.env` local + Coolify prod |
+| `SMTP_HOST` | `mail.ludaisca.com` | `.env` local + Coolify prod |
+| `SMTP_PORT` | `465` | `.env` local + Coolify prod |
+| `SMTP_SECURE` | `true` | `.env` local + Coolify prod |
+| `SMTP_USER` | `test@ludaisca.com` | `.env` local + Coolify prod |
+| `SMTP_PASS` | contraseña del buzón | `.env` local + Coolify prod |
+| `SMTP_FROM` | `Gym Tracker <test@ludaisca.com>` | `.env` local + Coolify prod |
 
-**Nota**: La clave privada de Firebase está en `.env` (gitignoreado). Nunca exponerla en código ni commits.
+**Nota**: Las claves privadas están en `.env` (gitignoreado). Nunca exponerlas en código ni commits.
+
+---
+
+## Sesión 2026-05-26 — SMTP + fixes
+
+### SMTP configurado
+- Servidor propio: `mail.ludaisca.com:465` (SSL)
+- Remitente: `test@ludaisca.com`
+- `APP_URL` en dev apunta a `http://100.113.48.59:5173` (Tailscale) para que links funcionen en el teléfono
+
+### Bug fix: bucle de login al aceptar notificaciones
+- **Causa**: `initNativePush` registraba el token FCM sin verificar si había sesión activa
+- **Fix**: guard `isAuthenticated` en `App.tsx` antes de llamar `pushApi.registerFcmToken`
+- **También**: `updateNativeStatusBar` envuelto en `try/catch`
+
+### Limpieza
+- Eliminadas imágenes WhatsApp y carpeta `Errores Detectados/` (basura)
+- `AGENTS.md` actualizado (removidas referencias a nginx e `isNativePlatform`)
+- `coolify.env` actualizado con SMTP; añadido a `.gitignore`

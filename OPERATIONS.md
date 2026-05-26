@@ -351,3 +351,46 @@ Para forzar una IP específica: `make android-dev-build DEV_IP=100.x.x.x`
 - `isNativePlatform()` eliminado de todos los archivos (siempre Android)
 - Duelos.tsx: eliminada rama `getUserMedia` (solo cámara nativa Capacitor)
 - Config.tsx: eliminada sección "Notificaciones Push" (VAPID); sección "Recordatorio" ahora siempre visible
+
+---
+
+## 8. SMTP — Configuración de correo (2026-05-26)
+
+### Configuración de envío de emails
+
+**Servidor**: `mail.ludaisca.com:465` (SSL directo)
+**Cuenta remitente**: `test@ludaisca.com`
+
+Variables de entorno requeridas (`.env` local y Coolify):
+
+```env
+SMTP_HOST=mail.ludaisca.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=test@ludaisca.com
+SMTP_PASS=<contraseña>
+SMTP_FROM=Gym Tracker <test@ludaisca.com>
+```
+
+**APP_URL en dev local**: `http://100.113.48.59:5173` (IP Tailscale del VPS) para que los links de verificación funcionen al abrirlos desde el teléfono.
+
+**APP_URL en producción**: `https://gym-tracker.ludaisca.ddns.net`
+
+---
+
+### Bug: bucle de login por registro de token FCM antes de autenticar
+
+**Causa**: Al eliminar el guard `isNativePlatform()` en `App.tsx`, `initNativePush` se ejecutaba siempre. Si el usuario aceptaba permisos de notificación en la pantalla de login (antes de autenticarse), `pushApi.registerFcmToken(token)` devolvía 401, el interceptor Axios llamaba a `clearAuth()` y navegaba a `/login`, generando un bucle infinito de recargas.
+
+**Síntoma**: La pantalla de login no dejaba de recargarse nada más aceptar las notificaciones.
+
+**Solución** (`App.tsx`):
+```typescript
+initNativePush(async (token) => {
+  if (useAuthStore.getState().isAuthenticated) {
+    await pushApi.registerFcmToken(token)
+  }
+})
+```
+
+**También**: `updateNativeStatusBar` envuelto en `try/catch` para evitar errores en entornos sin status bar nativa (ej. al abrir la app en navegador de escritorio durante desarrollo).

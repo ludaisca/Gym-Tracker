@@ -32,6 +32,15 @@ Thumbs.db
 # Claude Code (configuración local)
 .claude/
 
+# Archivos de entorno de Coolify (contienen secretos)
+coolify.env
+
+# Imágenes sueltas en la raíz (screenshots, etc.)
+*.jpeg
+*.jpg
+*.png
+!packages/web/public/**
+
 # stripe-projects-cli + Cursor (artefactos locales, no código fuente)
 .agents/
 .cursor/

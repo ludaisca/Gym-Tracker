@@ -6,8 +6,9 @@
 ## Stack
 
 - **Backend**: Fastify v5 + Prisma + PostgreSQL (`:5440` dev) + Redis (`:6390` dev) + BullMQ
-- **Frontend**: React 19 + Vite 8 + Zustand + Axios — código en `packages/web/src/`
+- **Frontend (APK)**: React 19 + Vite 8 + Zustand + Axios — código en `packages/web/src/`
 - **Mobile**: Capacitor 8 — código en `packages/android/`, construye desde `packages/web/dist/`
+- **No hay app web** — el único cliente es la APK Android
 
 ## Rutas críticas
 
@@ -17,23 +18,23 @@
 
 ## Convenciones
 
-- nginx y Vite proxy **eliminan** el prefijo `/api`. Las rutas Fastify NO llevan `/api`.
+- El proxy Vite **elimina** el prefijo `/api`. Las rutas Fastify NO llevan `/api`.
 - `useUIStore` es la única fuente de verdad para `data-theme` y `data-accent` en `<html>`.
 - `useOfflineStore` persiste la cola en localStorage. No mezclar con lógica de negocio.
 - Plugins Capacitor se importan **lazy** (`await import(...)`) para no romper el bundle web.
-- `isNativePlatform()` → `window.Capacitor?.isNativePlatform?.() === true` (síncrono).
+- No hay `isNativePlatform()` — la app siempre corre en Android.
+- No hay nginx — Traefik de Coolify enruta directamente a `api:3001`.
 
 ## Bugs activos — ver STATUS.md para detalles
 
 - `i.map is not a function` crash en Routines (parche aplicado, causa raíz desconocida)
-- Config muestra "Usuario" en sesiones antiguas (fix aplicado, requiere re-login)
-- Status bar Android: resuelto en APK nueva con `overlaysWebView: false`
 
 ## Comandos rápidos
 
 ```bash
-make dev             # frontend :5173 + backend :3010
-make android-build   # vite build --mode android + cap sync
+make dev                  # frontend :5173 + backend :3010
+make android-dev-build    # APK con live reload (Capacitor → Vite HMR)
+make android-build        # APK de producción (assets bundleados)
 JAVA_HOME=~/java/jdk-21.0.7+6 ANDROID_HOME=~/android-sdk \
   packages/android/android/gradlew assembleDebug
 ```

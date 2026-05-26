@@ -86,9 +86,11 @@ const router = createBrowserRouter([
 ])
 
 async function updateNativeStatusBar(theme: 'light' | 'dark') {
-  const { StatusBar, Style } = await import('@capacitor/status-bar')
-  await StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light })
-  await StatusBar.setBackgroundColor({ color: theme === 'dark' ? '#171614' : '#f5f5f0' })
+  try {
+    const { StatusBar, Style } = await import('@capacitor/status-bar')
+    await StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light })
+    await StatusBar.setBackgroundColor({ color: theme === 'dark' ? '#171614' : '#f5f5f0' })
+  } catch { /* no-op en entornos sin status bar nativa */ }
 }
 
 async function registerBackButton() {
@@ -125,7 +127,11 @@ export default function App() {
         .catch(() => {})
     }
     registerBackButton()
-    initNativePush(async (token) => { await pushApi.registerFcmToken(token) })
+    initNativePush(async (token) => {
+      if (useAuthStore.getState().isAuthenticated) {
+        await pushApi.registerFcmToken(token)
+      }
+    })
   }, [])
 
   // Sincronizar status bar y atributos del DOM en cada cambio de tema
