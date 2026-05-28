@@ -5,9 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Rama activa**: v1 | **Producción**: Coolify en `gym-tracker.ludaisca.ddns.net`
 **Estado técnico / bugs activos / pendientes**: ver `STATUS.md`
 
+---
+
 ## Regla de documentación — obligatoria
 
-**Cada vez que se encuentre y resuelva un error, hay que documentarlo en `OPERATIONS.md` antes de cerrar la sesión.** El formato mínimo es:
+**Cada vez que se encuentre y resuelva un error, documentarlo en `OPERATIONS.md` antes de cerrar la sesión.** Formato mínimo:
 
 ```
 ### Título del problema
@@ -16,276 +18,276 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Solución**: comando o cambio de código exacto.
 ```
 
-Esto aplica a errores de build, errores de runtime en producción, problemas de infraestructura, bugs de migración, etc. Si ya existe una sección relevante en `OPERATIONS.md`, se extiende ahí en lugar de crear una nueva.
+---
 
-## Infraestructura del proyecto
-
-### VPS (producción)
+## Infraestructura
 
 | Campo | Valor |
 |---|---|
 | URL pública | `https://gym-tracker.ludaisca.ddns.net` |
 | SO del host | Rocky Linux 10 (kernel 6.12) |
-| PaaS | **Coolify 4.x** (auto-gestiona Traefik + Docker) |
-| Repositorio | `github.com/ludaisca/Gym-Tracker`, rama `v1` |
+| PaaS | Coolify 4.x (auto-gestiona Traefik + Docker) |
+| Routing prod | Internet → Traefik → `api:3001` (sin nginx) |
 | Contenedores | `api`, `db`, `redis`, `db-backup` |
-| Red Docker | `l7qk2ugr39hiwl57t5v0l9nn` (externa, gestionada por Coolify) |
 
-**Routing en producción**: `Internet → Traefik (Coolify) → api (Fastify :3001)`.  
-Traefik termina SSL (Let's Encrypt) y enruta directamente al contenedor API. Ya no hay nginx.
+**Puertos ocupados en host** (no usar): `5432` (PostgreSQL prod), `6379`/`3001` (Redis Coolify), `80`/`443` (Traefik).
 
-**Puertos ocupados en el host** (no usar):
-- `5432` — PostgreSQL de producción (Coolify)
-- `6379` — Redis de producción (Coolify)
-- `3001` — mapeado a Redis interno de Coolify
-- `80` / `443` — Traefik
+**Dev local** en el mismo VPS:
 
-### Desarrollo local (en el mismo VPS)
-
-| Servicio | Puerto local |
+| Servicio | Puerto |
 |---|---|
 | PostgreSQL dev | `127.0.0.1:5440` |
 | Redis dev | `127.0.0.1:6390` |
-| Backend (tsx watch) | `:3010` |
+| Backend (`tsx watch`) | `:3010` |
 | Frontend (Vite) | `:5173` |
 
-El Makefile reescribe las URLs automáticamente. Abrir puertos en firewalld si se accede desde LAN/Tailscale:
+---
+
+## Comandos esenciales
+
 ```bash
-sudo firewall-cmd --zone=public --add-port=5173/tcp --permanent
-sudo firewall-cmd --zone=public --add-port=3010/tcp --permanent
-sudo firewall-cmd --reload
+# Desarrollo local
+make db-up          # Levanta PostgreSQL :5440 + Redis :6390 en Docker
+make dev            # Vite :5173 + backend :3010 en paralelo (carga .env y reescribe URLs)
+make db-migrate     # prisma migrate dev (requiere TTY)
+make db-studio      # Prisma Studio
+
+# Android — Live Reload (compilar APK UNA SOLA VEZ, luego HMR instantáneo)
+make android-dev-build          # Detecta IP (Tailscale > LAN), compila e instala APK
+make android-dev-build DEV_IP=x # Forzar IP específica
+# Luego: make dev → abrir app → cambios en React se reflejan al instante
+
+# Android — Producción
+make android-build  # vite build --mode android + cap sync
+make android-run    # Instala en dispositivo USB
+
+# Producción (Docker)
+make deploy         # git pull + rebuild + up
+make logs           # Logs en vivo de api
+make restart        # Reinicia solo api
+make backup         # Dump PostgreSQL → ./backups/
 ```
 
-### APK Android
+**⚠️ `make dev` es obligatorio para dev local** — reescribe `@db:5432→@localhost:5440` y `@redis:6379→@localhost:6390`, y exporta `PORT=3010`. Sin él, el backend puede conectarse a la BD de producción.
 
-- Archivo generado: `packages/android/android/app/build/outputs/apk/debug/app-debug.apk`
-- `VITE_API_URL` del APK: `https://gym-tracker.ludaisca.ddns.net/api` (en `packages/web/.env.android`)
-- Java requerido: `~/java/jdk-21.0.7+6` (Temurin 21)
-- Android SDK: `~/android-sdk` (API 36)
+**Backend manual** (sin Makefile): `set -a && . .env && set +a && npm run dev` — `tsx watch` pierde env vars al reiniciarse si no se exportan antes.
+
+---
 
 ## Estructura del monorepo
 
 ```
 packages/
 ├── backend/    ← API Fastify v5 + Prisma + PostgreSQL + Redis
-├── web/        ← React 19 (UI de la APK Android; ya no es PWA web)
+├── web/        ← React 19 + Vite (UI de la APK Android; no es PWA web)
 └── android/    ← Wrapper Capacitor 8 + proyecto nativo Android
 ```
 
-El código React vive **solo** en `packages/web/src/`. La APK Android construye desde `packages/web/`; Capacitor en `packages/android/` apunta a ese `dist/`.  
-**No hay app web**: el único cliente es la APK Android.
+El único cliente es la **APK Android**. `packages/web/dist/` se empaqueta en la APK vía Capacitor. No hay app web.
 
-## Comandos esenciales
+---
 
-### Desarrollo local
+## Backend (`packages/backend/src/`)
 
-> El Makefile carga `.env` de la raíz y convierte `@db:5432` → `@localhost:5440` y `@redis:6379` → `@localhost:6390` automáticamente para aislar el dev local de la DB de producción (Coolify ocupa el `127.0.0.1:5432` del host).
+### Capas
 
-```bash
-make db-up        # Levanta PostgreSQL local (:5440) + Redis local (:6390) en Docker
-make dev          # Web (Vite :5173) + backend (tsx watch :3010) en paralelo
-make db-migrate   # prisma migrate dev (requiere TTY)
-make db-studio    # Prisma Studio
+```
+server.ts → app.ts          Punto de entrada; app.ts registra plugins y rutas
+plugins/                    Fastify decorators: prisma, redis, authenticate, repos
+repositories/               Interfaces de dominio + implementaciones Prisma (repositories/prisma/)
+use-cases/                  Lógica de negocio desacoplada de Fastify
+routes/                     Validación Zod + orquestación → delega en use-cases o repos
+services/queue.ts           BullMQ — cola gym-tracker-bg-jobs + job reminder-scan (cada 60s)
+services/fcm.ts             Firebase Admin SDK para push nativo Android
+services/email.ts           Nodemailer (imprime en consola sin SMTP configurado)
 ```
 
-**⚠️ Puerto en dev local**: el Makefile arranca el backend en `PORT=3010`. El proxy Vite apunta a `:3010`. Si se lanza el backend manualmente sin el Makefile, exportar `PORT=3010` explícitamente.
+### Plugins (`fastify.X`)
 
-**⚠️ tsx watch pierde env vars al reiniciar**: Si se arranca el backend manualmente (sin Makefile), exportar todas las variables explícitamente antes de `npm run dev`; de lo contrario, los reinicios automáticos de tsx pierden las vars de entorno.
+- `fastify.prisma` — cliente Prisma
+- `fastify.redis` — cliente ioredis
+- `fastify.authenticate` — decorator JWT para `addHook('onRequest', ...)`
+- `fastify.repos` — instancias únicas de todos los repositorios: `users`, `routines`, `sessions`, `nutrition`, `notes`, `challenges`. Usar siempre en lugar de instanciar repos directamente.
 
-En entornos no-interactivos (CI/scripts), usar `prisma migrate deploy` en lugar de `migrate dev`.
+### Rutas registradas
 
-### Producción (Docker Compose)
-```bash
-make up / make down / make build   # Gestión de contenedores
-make logs                          # Logs en vivo de api
-make restart                       # Reinicia solo api
-make backup                        # Dump PostgreSQL → ./backups/
-make deploy                        # git pull + rebuild + up
-```
+| Prefix | Archivo |
+|---|---|
+| `/auth` | `routes/auth.ts` |
+| `/users` | `routes/users.ts` |
+| `/sessions` | `routes/sessions.ts` |
+| `/routines` | `routes/routines.ts` |
+| `/notes` | `routes/notes.ts` |
+| `/nutrition` | `routes/nutrition.ts` |
+| `/ai` | `routes/ai.ts` |
+| `/goals` | `routes/goals.ts` |
+| `/push` | `routes/push.ts` |
+| `/analytics` | `routes/analytics.ts` |
+| `/marketplace` | `routes/marketplace.ts` |
+| `/` | `routes/challenges.ts` |
+| `/admin/queues` | Bull Board (requiere `ADMIN_TOKEN`) |
 
-### Android (APK)
+### Claves compuestas en BD
 
-**Flujo de desarrollo con live reload** (HMR instantáneo, compilar APK solo una vez):
-```bash
-make db-up              # Levanta PostgreSQL + Redis
-make android-dev-build  # Compila APK con live reload y la instala por USB
-make dev                # Arranca Vite :5173 + backend :3010
-# Abrir la app en el teléfono → carga desde Vite → cambios al instante
-```
-El Makefile detecta la IP automáticamente (Tailscale si está disponible, si no la interfaz principal).  
-Para forzar una IP específica: `make android-dev-build DEV_IP=192.168.1.x`
+- `WorkoutSession`: `@@unique([userId, weekNumber, dayId])`
+- `NutritionDay` / `BodyWeight`: `@@unique([userId, date])`
+- `LiftGoal`: `@@unique([userId, exerciseName])`
 
-**Build de producción** (assets bundleados, API de producción):
-```bash
-make android-build   # vite build --mode android + cap sync android
-make android-run     # Instala en dispositivo USB conectado
-```
-APK final: `cd packages/android/android && JAVA_HOME=~/java/jdk-21.0.7+6 ANDROID_HOME=~/android-sdk ./gradlew assembleDebug`  
-Salida: `packages/android/android/app/build/outputs/apk/debug/app-debug.apk`
+Usar `prisma.upsert` con los where-clauses exactos.
 
-**Java 21 requerido**: instalado en `~/java/jdk-21.0.7+6` (Temurin). Ruta configurada en `packages/android/android/gradle.properties` via `org.gradle.java.home`.  
-**Android SDK**: instalado en `~/android-sdk` (API 36, build-tools 36.0.0). Ruta en `packages/android/android/local.properties`.
+### Gotchas críticos de backend
 
-### Backend
-```bash
-cd packages/backend && npm run dev    # tsx watch (recarga automática)
-cd packages/backend && npm run build  # tsc — solo verificación de tipos, no produce artefacto usado
-```
+**Redis cache de sesiones**: `GET /sessions` (historial) se cachea por usuario. Tras cualquier mutación, llamar `invalidateSessionsCache(userId)` — si no, el cliente recibe datos stale.
 
-### Web frontend
-```bash
-cd packages/web && npm run dev            # Vite dev server, proxy /api → :3010
-cd packages/web && npm run build          # tsc -b + vite build
-cd packages/web && npm run build:docker   # Solo vite build (sin tsc, usado en android-dev-build)
-cd packages/web && npm run build:android  # vite build --mode android (producción, VITE_API_URL hardcoded)
-cd packages/web && npm run lint
-```
-
-## Arquitectura
-
-### Stack
-- **Backend**: Fastify v5 + Prisma + PostgreSQL + Redis + BullMQ
-- **Android**: React 19 + Vite 8 + Zustand + Axios, wrapeado con Capacitor 8 (único cliente)
-- **Infra**: Docker Compose; Traefik de Coolify enruta directamente al contenedor API (sin nginx)
-
-### Backend (`packages/backend/src/`)
-
-**Capas de la aplicación**:
-- `server.ts` → `app.ts` — punto de entrada; `app.ts` registra todos los plugins y rutas
-- `plugins/` — decorators de Fastify: `fastify.prisma`, `fastify.redis`, `fastify.authenticate`, `fastify.repos`
-- `repositories/` — interfaces de dominio (`UserRepository`, `SessionRepository`, etc.) + implementaciones Prisma en `repositories/prisma/`
-- `use-cases/` — lógica de negocio desacoplada de Fastify (un archivo por dominio)
-- `routes/` — validación Zod + orquestación; delega en use-cases o repos directamente
-- `services/queue.ts` — BullMQ, cola `gym-tracker-bg-jobs`; monitoreo en `/api/admin/queues`. Incluye job repeatable `reminder-scan` (cada 60 s) que envía FCM a usuarios con `reminderTime == HH:MM UTC actual`.
-- `services/email.ts` — Nodemailer; sin SMTP configurado imprime en consola
-- `services/fcm.ts` — Firebase Admin SDK para push nativo Android. Inicialización lazy desde `FIREBASE_SERVICE_ACCOUNT` (JSON en env var). Limpia tokens inválidos automáticamente.
-
-**`fastify.repos` decorator** (`plugins/repositories.ts`): expone instancias únicas de todos los repositorios. Acceder como `fastify.repos.users`, `fastify.repos.sessions`, etc. en lugar de instanciar repos directamente en las rutas.
-
-**Claves compuestas en BD**:
-- `WorkoutSession`: `[userId, weekNumber, dayId]`
-- `NutritionDay` / `BodyWeight`: `[userId, date]`
-- Usar `prisma.upsert` con estos where-clauses exactos para records diarios/semanales.
-
-**⚠️ Redis cache**: `GET /sessions` (historial completo) se cachea en Redis por usuario. Después de cualquier mutación de sesión, llamar `invalidateSessionsCache(userId)` — si no se hace, el cliente recibe datos stale.
-
-**⚠️ Jobs en background**: Operaciones pesadas (emails, importaciones JSON grandes) deben ir a `backgroundQueue` (`services/queue.ts`). No bloquear el event loop del HTTP endpoint.
-
-**⚠️ Fastify hook scope**: `addHook` dentro de un plugin afecta **todas** las rutas del scope, incluyendo las registradas antes del hook. Para rutas mixtas usar sub-scope:
+**Fastify hook scope**: `addHook` dentro de un plugin afecta todas las rutas del scope, incluidas las registradas antes del hook. Para rutas mixtas (protegidas y públicas), usar sub-scope:
 ```typescript
 await fastify.register(async (scoped) => {
-  scoped.addHook('preHandler', requirePro(fastify))
+  scoped.addHook('onRequest', fastify.authenticate)
   // rutas protegidas aquí
 })
 ```
 
-**Prefix stripping**: el proxy de Vite (dev) **elimina** el prefijo `/api`. El frontend hace `GET /api/sessions`; el backend recibe `GET /sessions`. Las rutas en Fastify no llevan `/api`.
+**Prefix stripping**: Vite proxy elimina `/api` antes de reenviar al backend. El frontend llama `GET /api/sessions`; el backend recibe `GET /sessions`. Las rutas en Fastify no llevan `/api`.
 
-**rawBody para Stripe webhooks**: el content-type parser en `app.ts` adjunta `req.rawBody` como `Buffer` antes de parsear JSON. El webhook en `/billing/webhook` accede a él via cast explícito.
+**`sanitizeUser()`** (`use-cases/users.ts`): elimina `passwordHash`, tokens internos, y enmascara `aiKey` → `aiKeySet: boolean`. Usar siempre al devolver un objeto `user` al cliente.
 
-**TypeScript — Stripe v22 + moduleResolution: node**: El backend usa `moduleResolution: node`, que resuelve el entry CJS de Stripe y expone `StripeConstructor` sin los tipos `Stripe.Subscription`, `Stripe.Event`, etc. Solución: definir interfaces locales y castear con `as unknown as LocalType`. No cambiar el tsconfig.
+**Jobs en background**: emails e imports pesados deben ir a `backgroundQueue` — no bloquear el event loop del endpoint HTTP.
 
-**Keys de IA por usuario**: las API keys de Anthropic/OpenAI se almacenan *por usuario* en `UserSettings.aiKey`, cifradas con `ENCRYPTION_KEY`. El backend actúa como proxy en `/ai/analyze` — nunca se exponen al frontend.
+**TypeScript + Stripe v22 + `moduleResolution: node`**: usar interfaces locales y castear con `as unknown as LocalType`. No cambiar el tsconfig.
 
-**`sanitizeUser()`** (`use-cases/users.ts`): función central que elimina campos sensibles (`passwordHash`, tokens de verificación/reset) y enmascara `aiKey` → `aiKeySet: boolean`. Usar **siempre** esta función al devolver un objeto `user` al cliente — incluido el login. No construir manualmente el objeto de respuesta seleccionando campos.
+**Keys de IA por usuario**: `UserSettings.aiKey` cifrada con `ENCRYPTION_KEY`. El backend actúa de proxy en `/ai/analyze` — nunca se exponen al frontend.
 
-### Web frontend (`packages/web/src/`)
+---
 
-**Path alias**: `@/` mapea a `packages/web/src/`. Usar imports absolutos `@/api/...`, `@/components/...` en lugar de rutas relativas profundas.
+## Frontend (`packages/web/src/`)
 
-**API layer**
-- `api/client.ts` — Axios con `baseURL = VITE_API_URL ?? '/api'`; interceptor de refresh con singleton `refreshPromise` para serializar múltiples 401 simultáneos. **No dejar `VITE_API_URL=""`** — string vacío no activa el nullish coalescing y rompe el proxy.
-- Cada dominio tiene su módulo en `api/`: `sessionsApi`, `routinesApi`, `nutritionApi`, etc.
+### Path alias
 
-**Estado global** (`store/index.ts`)
-- `useAuthStore` — auth + user completo + `accessToken` (solo en memoria, no persiste)
-- `useUIStore` — **única** fuente de verdad para `data-theme` y `data-accent` en `<html>`. No mutar estos atributos del DOM directamente.
-- `useOfflineStore` — cola de escrituras pendientes para replay al reconectar
+`@/` → `packages/web/src/`. Usar imports absolutos.
 
-**Patrones de data fetching**:
-- Datos históricos/globales: llamadas directas a la API + estado local (ej. `sessionsApi.listAll()`)
-- Datos reactivos de la semana activa: hooks (`useSessions`, `useRoutines`)
-- No mezclar los dos patrones para el mismo recurso.
+### API layer
 
-**Code splitting**: todas las vistas protegidas usan `React.lazy()` en `App.tsx`. No revertir a imports estáticos — evita el warning de chunk >500kB de Vite.
+- `api/client.ts` — Axios con `baseURL = VITE_API_URL ?? '/api'`. Interceptor de refresh con singleton `refreshPromise`. **`VITE_API_URL=""` rompe el proxy** — `??` no activa con string vacío; omitirla completamente para usar el default.
+- Un módulo por dominio: `sessionsApi`, `routinesApi`, `goalsApi`, etc.
 
-**Offline sync**: `useOfflineStore` acumula escrituras fallidas; `useOfflineSync` las reproduce en **serie** al reconectar (evita race conditions). No cambiar a reproducción paralela.
+### Estado global (`store/index.ts`)
 
-**Sistema de iconos** (`components/ui/Icons.tsx`)  
-Todos los iconos son SVG inline con `stroke="currentColor"` (monocromáticos, se adaptan al tema). No usar emojis ni iconos de colores. Exporta `ModuleIcon` para el nav. Añadir nuevos iconos siguiendo el mismo patrón (`def()` helper + `IconProps`).
+| Store | Responsabilidad |
+|---|---|
+| `useAuthStore` | auth + `user` completo + `accessToken` (solo memoria, no persiste) |
+| `useUIStore` | única fuente de verdad para `data-theme` y `data-accent` en `<html>` |
+| `useOfflineStore` | cola de escrituras pendientes (hasta 200, TTL 7d) |
 
-**Sistema de diseño (CSS)** — `packages/web/src/styles/globals.css`  
-Fuentes: `--font-body: Lexend`, `--font-mono: JetBrains Mono`.  
+No mutar `data-theme`/`data-accent` directamente — pasar siempre por `useUIStore`.
 
-Tokens de diseño premium (definidos en `:root`):
-- Tipografía: `--text-xs` (0.6875rem) … `--text-2xl` (1.625rem)
-- Colores: `--color-bg`, `--color-surface`, `--color-surface-2`, `--color-border`, `--color-divider`, `--color-text`, `--color-text-muted`
-- Radios: `--radius-sm` (0.25rem) / `--radius-md` / `--radius-lg` / `--radius-xl` (0.875rem) / `--radius-2xl` (1.25rem) / `--radius-full`
-- Sombras: `--shadow-sm`, `--shadow-md` (dos capas: difusa + dura)
-- Transición: `--transition: 140ms cubic-bezier(0.16, 1, 0.3, 1)`
+### Data fetching
 
-Clases de layout principales: `.card`, `.panel-head`, `.panel-body`, `.summary-card` (con `.status-done/.status-partial/.status-active`), `.split`, `.triple`.  
-Para inputs de código/share usar `.code-input` (monoespaciado, letra espaciada, focus-ring primario).  
-Para botones de iconos en cards: `.icon-btn-subtle`.  
-Para tabs scrollables de página: `.routines-tab-bar` / `.routines-tab-btn` (no reutilizar `.stats-tabs` que usa `flex: 1` y desborda en móvil).
+- Semana activa: hooks (`useSessions`, `useRoutines`) con optimistic update
+- Datos históricos/globales: llamadas directas a la API + estado local
+- No mezclar los dos patrones para el mismo recurso
 
-**Layout móvil (crítico)**:
-- `.topbar` usa `position: fixed; top: env(safe-area-inset-top)` en `@media (max-width: 700px)` — NO `position: sticky`. Chrome Android rompe `sticky` cuando un ancestro tiene `overflow-x: hidden`.
-- `.main` tiene `padding-top: calc(56px + env(safe-area-inset-top))` para compensar el header fijo.
-- `body::before` (`position: fixed; height: env(safe-area-inset-top); z-index: 1001`) rellena la zona de status bar con `--color-bg`.
-- `.fullscreen-menu` usa `top: env(safe-area-inset-top)` (no `top: 0`) para no quedar detrás de la barra de sistema.
+`useEnsuredSession`: carga o construye la sesión del día actual; debounce de 800ms antes de persistir.
 
-### Monetización
+### Offline sync
 
-Todas las features son **gratuitas** (`isPro` siempre true en el contexto actual). El backend tiene rutas gateadas con `requirePro` (`analytics.*`, `ai.*`, `challenges.*`, `push.subscribe`, `routines.publish`) pero el gate no se activa desde el frontend.
+`useOfflineStore` acumula escrituras fallidas; `useOfflineSync` las reproduce en **serie** al reconectar. No cambiar a reproducción paralela (race conditions).
 
-**Gestión de plan (backend)**:
-- `POST /users/me/trial` — 7 días de prueba
-- `POST /users/admin/grant-pro` — `Authorization: Bearer {ADMIN_TOKEN}`; `months: 0` = Pro vitalicio
-- `POST /billing/checkout` — Stripe Checkout Session; acepta `platform: 'android'` para deep links `gymtracker://`
-- `POST /billing/webhook` — eventos Stripe con signature verificada
+### Code splitting
 
-**Stripe webhook**: `current_period_end` puede ser `undefined` con la API `2026-04-22.dahlia`. Usar `safePeriodEnd(sub)` definida en `billing.ts`.
+Todas las vistas protegidas usan `React.lazy()` en `App.tsx`. No revertir a imports estáticos.
 
-### Autenticación
+### Sistema de iconos
 
-JWT de corta duración (access token) + refresh token en `localStorage`. El access token **no se persiste** en Zustand; al recargar la app se renueva automáticamente vía `/auth/refresh`. El interceptor de Axios serializa múltiples 401 simultáneos con un singleton `refreshPromise`.
+`components/ui/Icons.tsx` — SVG inline con `stroke="currentColor"`. Añadir nuevos con el helper `def()`.
 
-### Capacitor / Android
+### Sistema de diseño (`styles/globals.css`)
+
+Fuentes: `--font-body: Lexend`, `--font-mono: JetBrains Mono`.
+
+Tokens clave: `--color-bg/surface/surface-2/border/divider/text/text-muted`, `--radius-sm/md/lg/xl/2xl/full`, `--shadow-sm/md`, `--transition`.
+
+Clases de layout: `.card`, `.panel-head`, `.panel-body`, `.split`, `.triple`, `.kpis`, `.summary-card`.
+Clases especiales: `.code-input`, `.icon-btn-subtle`, `.routines-tab-bar/.routines-tab-btn`, `.pr-table`, `.empty-state`, `.achievement-card`, `.plate-calc-overlay`.
+
+**`.card` en dark mode**: `border-color: transparent; box-shadow: var(--shadow-md)`. No añadir `box-shadow` al `.card` base (ruido visual en claro).
+
+### Layout móvil crítico
+
+En `@media (max-width: 700px)`:
+- `.topbar`: `position: fixed; top: env(safe-area-inset-top)` — NO `sticky` (Chrome Android lo rompe cuando un ancestro tiene `overflow-x: hidden`)
+- `.main`: `padding-top: calc(56px + env(safe-area-inset-top))`
+- `body::before`: `position: fixed; height: env(safe-area-inset-top); z-index: 1001` — rellena la zona de status bar con `--color-bg`
+- `.fullscreen-menu`: `top: env(safe-area-inset-top)` (no `top: 0`)
+
+---
+
+## Capacitor / Android
 
 - `packages/android/capacitor.config.ts`: `appId: com.ludaisca.gymtracker`, `webDir: ../web/dist`
-- Variables para la APK: `packages/android/.env` (`VITE_API_URL` → URL pública del backend, no localhost)
-- El WebView usa origen `capacitor://localhost` — debe estar en la lista CORS de producción en `app.ts`
-- Plugins instalados: `@capacitor/app`, `@capacitor/browser`, `@capacitor/status-bar`, `@capacitor/camera`, `@capacitor/push-notifications` — todos importados **lazy** (`await import(...)`) para no romper el bundle web
-- `lib/camera.ts` — `isNativePlatform()` (síncrono vía `window.Capacitor?.isNativePlatform?.() === true`), `captureNativePhoto()`, `applyWatermarkToBase64()`
-- `lib/pushNative.ts` — inicialización de FCM en Capacitor: solicita permisos, registra token, maneja tap en notificación
-- `StatusBar.overlaysWebView: true` en config — Android 15+ (API 35+) fuerza edge-to-edge e ignora `setStatusBarColor()`. El WebView se extiende bajo la status bar; el espacio se compensa con `env(safe-area-inset-top)` en CSS. Un `body::before` fijo con `height: env(safe-area-inset-top)` actúa de fondo universal.
-- `StatusBar.setStyle({ style })`: `Style.Light` = iconos blancos (para fondo oscuro), `Style.Dark` = iconos oscuros (para fondo claro). El mapeo es **inverso** al nombre del tema de la app.
+- WebView usa origen `capacitor://localhost` — debe estar en CORS de producción en `app.ts`
+- Plugins: `@capacitor/app`, `@capacitor/browser`, `@capacitor/status-bar`, `@capacitor/camera`, `@capacitor/push-notifications` — todos importados **lazy** para no romper el bundle web
 
-### Docker / despliegue
+### Status bar (crítico — `Style` enum es contra-intuitivo)
 
-- `docker-compose.yml` — 4 servicios: `api`, `db`, `redis`, `db-backup` (sin nginx)
-- `docker-compose.override.yml` — expone `db:5440` y `redis:6390` al host para dev local (Coolify lo ignora)
-- `Dockerfile.backend` — multi-stage; builder usa `npm ci --include=dev` para que `tsc` esté disponible aunque Coolify inyecte `NODE_ENV=production`
-- Coolify enruta `gym-tracker.ludaisca.ddns.net` a través de Traefik directamente al contenedor `api:3001`
+`Style.Dark` = "Light text for dark backgrounds" → **iconos blancos** → usar con tema oscuro  
+`Style.Light` = "Dark text for light backgrounds" → **iconos negros** → usar con tema claro
 
-**⚠️ Pendiente en Coolify**: actualizar el enrutamiento en la UI de Coolify para apuntar al servicio `api` (puerto 3001). Nginx ya fue eliminado.
+```typescript
+await StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light })
+```
 
-### Variables de entorno
+Config inicial en `capacitor.config.ts`: `style: 'dark'` (app default es tema oscuro → iconos blancos).
+
+Android 15+ (API 35+) fuerza edge-to-edge. `overlaysWebView: true` es la configuración correcta; compensar con CSS `env(safe-area-inset-top)`.
+
+### Live reload en desarrollo
+
+`capacitor.config.ts` tiene bloque `server` condicional activado con `LIVE_RELOAD_IP`. `make android-dev-build` detecta IP automáticamente y compila e instala la APK. Después `make dev` da HMR instantáneo sin recompilar la APK.
+
+### Java y Android SDK
+
+- Java 21 requerido: `~/java/jdk-21.0.7+6` (Temurin). Configurado en `gradle.properties`.
+- Android SDK: `~/android-sdk` (API 36). Configurado en `local.properties`.
+- APK final: `packages/android/android/app/build/outputs/apk/debug/app-debug.apk`
+
+### FCM / Push
+
+`lib/pushNative.ts` — inicialización FCM en Capacitor. Token guardado en `UserSettings.fcmToken`. Job `reminder-scan` (BullMQ, cada 60s) escanea usuarios con `reminderTime == HH:MM UTC` actual y envía notificación.
+
+---
+
+## Docker / Producción
+
+```yaml
+# Servicios: api, db, redis, db-backup (sin nginx)
+# docker-compose.override.yml expone db:5440 y redis:6390 al host (Coolify lo ignora)
+# Dockerfile.backend: npm ci --include=dev (para que tsc esté disponible con NODE_ENV=production)
+```
+
+Migraciones en producción: `npx prisma migrate deploy` (no `migrate dev` — requiere TTY).
+
+---
+
+## Variables de entorno
 
 | Variable | Uso |
 |---|---|
-| `DATABASE_URL` | PostgreSQL (`db:5432` en Docker, `localhost:5432` en dev) |
+| `DATABASE_URL` | PostgreSQL (`db:5432` en Docker, `localhost:5440` en dev) |
 | `REDIS_URL` | Redis |
-| `JWT_SECRET` / `JWT_REFRESH_SECRET` | Tokens de acceso y refresco |
-| `ENCRYPTION_KEY` | Cifrado de API keys de IA en `UserSettings.aiKey` |
-| `ADMIN_TOKEN` | `POST /users/admin/grant-pro` |
-| `STRIPE_SECRET_KEY` | Clave Stripe (test `sk_test_...` o Restricted Key `rk_live_...`) |
-| `STRIPE_WEBHOOK_SECRET` | Signing secret del webhook (`whsec_...`) |
-| `STRIPE_PRICE_MONTHLY` | Price ID de Stripe para plan mensual |
-| `STRIPE_PRICE_ANNUAL` | Price ID de Stripe para plan anual |
-| `APP_URL` | URL base para redirects web de Stripe (fallback si no hay `Origin` header) |
-| `APP_DOMAIN` | Dominio de producción para CORS (ej. `gym-tracker.ludaisca.ddns.net`) |
-| `FIREBASE_SERVICE_ACCOUNT` | JSON completo de la service account de Firebase (para FCM). En `.env` como string en una sola línea. |
+| `JWT_SECRET` / `JWT_REFRESH_SECRET` | Access y refresh tokens |
+| `ENCRYPTION_KEY` | Cifrado de `UserSettings.aiKey` |
+| `ADMIN_TOKEN` | Acceso a Bull Board y `POST /users/admin/grant-pro` |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Pagos Stripe |
+| `STRIPE_PRICE_MONTHLY` / `STRIPE_PRICE_ANNUAL` | Price IDs de Stripe |
+| `APP_URL` | URL base para links de email y redirects Stripe |
+| `APP_DOMAIN` | Dominio de prod para CORS (ej. `gym-tracker.ludaisca.ddns.net`) |
+| `FIREBASE_SERVICE_ACCOUNT` | JSON completo de service account Firebase (FCM) — una sola línea |
+| `SMTP_HOST/PORT/SECURE/USER/PASS/FROM` | Nodemailer (`mail.ludaisca.com:465`) |
+
+---
+
+## Monetización
+
+Todas las features son **gratuitas** (`isPro` siempre true en el cliente actual). El backend tiene `requirePro` gateando `analytics.*`, `ai.*`, `challenges.*`, `push.subscribe`, `routines.publish`, pero no se activa desde el frontend.
 
 @OPERATIONS.md
