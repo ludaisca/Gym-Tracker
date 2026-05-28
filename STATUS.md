@@ -1,6 +1,6 @@
 # STATUS.md — Gym Tracker v1
 
-> Estado técnico real del proyecto. Documento vivo actualizado a 2026-05-26.
+> Estado técnico real del proyecto. Documento vivo actualizado a 2026-05-27.
 > Sustituye a PLAN.md.
 
 ---
@@ -8,7 +8,7 @@
 ## Estado general
 
 **Rama activa**: `v1` | **Producción**: Coolify en `gym-tracker.ludaisca.ddns.net`
-**APK debug**: `packages/android/android/app/build/outputs/apk/debug/app-debug.apk` (10 MB, compilada 2026-05-21)
+**APK debug**: `packages/android/android/app/build/outputs/apk/debug/app-debug.apk` (9.9 MB, compilada 2026-05-27)
 
 ---
 
@@ -103,13 +103,39 @@ adb install -r packages/android/android/app/build/outputs/apk/debug/app-debug.ap
 
 | Prioridad | Tarea | Notas |
 |-----------|-------|-------|
+| 🔴 Alta | Compilar APK nueva + instalar en dispositivo | Fix status bar requiere recompilar. `make android-dev-build` o producción |
+| 🔴 Alta | Aplicar migración `20260527100000_add_lift_goals` en producción | `cd packages/backend && npx prisma migrate deploy` |
 | 🔴 Alta | Actualizar routing en Coolify (apuntar Traefik a `api:3001` en lugar de `nginx:80`) | Panel Coolify → Service → Port |
-| 🔴 Alta | Añadir variables SMTP a Coolify | Ver sección 8 de OPERATIONS.md |
-| 🟡 Media | Migrar DB prod con nuevos campos `fcmToken` + `reminderTime` | `prisma migrate deploy` en Coolify |
-| 🟡 Media | Añadir `FIREBASE_SERVICE_ACCOUNT` a variables de entorno en Coolify | Panel Coolify → Environment Variables |
+| 🔴 Alta | Añadir variables SMTP + FIREBASE_SERVICE_ACCOUNT a Coolify | Panel Coolify → Environment Variables |
+| 🔴 Alta | Deploy a producción | `make deploy` o botón Redeploy en Coolify |
 | 🟢 Baja | Confirmar si BUG-01 (`i.map is not a function`) persiste | `adb logcat` si aparece |
 | 🟢 Baja | Publicar en Google Play Store | APK debug lista; falta firma release + ficha de la tienda |
-| 🟢 Baja | Integración Stripe real en producción | Actualmente todo-gratis; backend listo |
+
+---
+
+## Sesión 2026-05-27 — UI/UX refresh + fix status bar
+
+### Fix crítico: status bar icons invertidos
+- `App.tsx`: `Style.Dark` → iconos blancos (para fondo oscuro); `Style.Light` → iconos oscuros (para fondo claro). El código tenía los enums al revés.
+- `capacitor.config.ts`: `style: 'dark'` como valor inicial (default theme es dark → necesita iconos blancos antes del primer render).
+
+### Nuevos features (todos completos, sin commitear)
+- **PlateCalcModal**: calculadora de discos para la barra. Activa manteniendo pulsado el campo kg en SetBox.
+- **Stats enriquecido** — 5 nuevos tabs:
+  - _Progreso_: gráfica de volumen semanal, progreso por ejercicio, tabla PRs, proyección 1RM, top volumen, sugerencias de progresión
+  - _Músculos_: body heatmap SVG (`BodySvg`) con opacidad proporcional al volumen por grupo muscular
+  - _Metas 1RM_: `LiftGoal` model — usuarios definen su objetivo kg por ejercicio; barra de progreso muestra % alcanzado
+  - _Peso corporal_: gráfica de evolución
+  - _Logros_: 10 achievements desbloqueables (sesiones, racha, volumen, notas)
+- **EmptyState**: componente reutilizable para vistas sin datos
+- **Dashboard**: empty state cuando no hay rutina activa; WeeklyBriefCard con AI
+- **Notes**: swipe-to-delete con Framer Motion + filtros all/pending/done
+- **ExerciseCard/SetBox**: swipe-to-complete en cabecera del ejercicio + haptic feedback en PR
+
+### Backend
+- `routes/goals.ts`: CRUD de `LiftGoal` — GET, POST (upsert), DELETE `/:exerciseName`
+- `schema.prisma`: modelo `LiftGoal` con unique index `(userId, exerciseName)`
+- Migración `20260527100000_add_lift_goals` lista — ⚠️ aplicar en producción
 
 ---
 

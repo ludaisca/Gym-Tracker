@@ -1,13 +1,21 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { z } from 'zod'
+
+const querySchema = z.object({
+  search: z.string().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+})
 
 const marketplaceRoutes: FastifyPluginAsync = async (fastify) => {
   const { prisma } = fastify
 
   // ── GET /marketplace — listado público sin autenticación ─────────────────
   fastify.get('/', async (req) => {
-    const { search, limit, offset } = req.query as { search?: string; limit?: string; offset?: string }
-    const take = Math.min(parseInt(limit ?? '20', 10) || 20, 50)
-    const skip = parseInt(offset ?? '0', 10) || 0
+    const q = querySchema.parse(req.query)
+    const take = q.limit ?? 20
+    const skip = q.offset ?? 0
+    const search = q.search
 
     return prisma.routine.findMany({
       where: {

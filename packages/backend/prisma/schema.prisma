@@ -39,6 +39,7 @@ model User {
   challengesOpponent Challenge[]        @relation("ChallengeOpponent")
   checkIns           CheckIn[]
   pushSubscriptions  PushSubscription[]
+  liftGoals          LiftGoal[]
 }
 
 model UserSettings {
@@ -214,6 +215,19 @@ model CheckIn {
 
   @@unique([challengeId, userId, serverTime])
   @@index([challengeId])
+  @@index([userId])
+}
+
+model LiftGoal {
+  id           String   @id @default(cuid())
+  userId       String
+  exerciseName String
+  targetKg     Float
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, exerciseName])
   @@index([userId])
 }
 

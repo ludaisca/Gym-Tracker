@@ -13,6 +13,9 @@ const migrateRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.addHook('onRequest', fastify.authenticate)
 
+  // Hard limits to prevent DoS via oversized migration payloads
+  const MIGRATE_LIMITS = { sessions: 500, nutritionDays: 500, notes: 300, routines: 50, savedFoods: 500 }
+
   fastify.post('/localstorage', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const data = request.body as LegacyState
@@ -21,6 +24,18 @@ const migrateRoutes: FastifyPluginAsync = async (fastify) => {
     const userId = data.currentUserId ?? Object.keys(data.users ?? {})[0]
     const legacy = data.users?.[userId]
     if (!legacy) return reply.status(400).send({ error: 'Datos no válidos' })
+
+    // Reject oversized payloads early
+    const sessionCount = Object.keys(legacy.sessions ?? {}).length
+    const nutritionCount = Object.keys(legacy.nutritionLog ?? {}).length
+    const noteCount = (legacy.globalNotes ?? []).length
+    const routineCount = Object.keys(legacy.customRoutines ?? {}).length
+    const foodCount = (legacy.savedFoods ?? []).length
+    if (sessionCount > MIGRATE_LIMITS.sessions || nutritionCount > MIGRATE_LIMITS.nutritionDays ||
+        noteCount > MIGRATE_LIMITS.notes || routineCount > MIGRATE_LIMITS.routines ||
+        foodCount > MIGRATE_LIMITS.savedFoods) {
+      return reply.status(400).send({ error: 'Datos demasiado grandes para importar.' })
+    }
 
     const imported = { sessions: 0, nutritionDays: 0, notes: 0, routines: 0 }
 
@@ -63,12 +78,14 @@ const migrateRoutes: FastifyPluginAsync = async (fastify) => {
       imported.routines++
     }
 
-    // Settings + week
+    // Settings + week — strip aiKey to avoid bypassing the encryption flow
     if (legacy.settings) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { aiKey: _stripped, ...safeSettings } = legacy.settings
       await prisma.userSettings.upsert({
         where: { userId: sub },
-        update: legacy.settings,
-        create: { userId: sub, ...legacy.settings },
+        update: safeSettings,
+        create: { userId: sub, ...safeSettings },
       })
     }
     if (legacy.week || legacy.activeRoutineId) {

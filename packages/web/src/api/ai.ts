@@ -1,5 +1,6 @@
 import { api } from './client'
 
+
 export interface FoodAnalysisResult {
   dish_name: string
   items: Array<{
@@ -64,5 +65,9 @@ export const aiApi = {
   },
   clearChat: async (): Promise<void> => {
     await api.delete('/ai/chat')
+  },
+  getWeeklyBrief: async (): Promise<string> => {
+    const { data } = await api.post<{ analysis: string }>('/ai/analyze')
+    return data.analysis ?? ''
   },
 }

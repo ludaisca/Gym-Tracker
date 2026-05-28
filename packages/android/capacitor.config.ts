@@ -15,9 +15,8 @@ const config: CapacitorConfig = {
       backgroundColor: '#171614',
     },
     StatusBar: {
-      style: 'dark',
-      backgroundColor: '#171614',
-      overlaysWebView: false,
+      style: 'dark',      // dark = light/white icons; default theme is dark
+      overlaysWebView: true,
     },
   },
   // Live reload: apunta el WebView al Vite dev server en lugar de los assets bundleados.

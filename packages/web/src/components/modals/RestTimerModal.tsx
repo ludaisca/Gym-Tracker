@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { hapticSessionComplete } from '../../lib/haptics'
 
 interface Props {
   seconds: number
@@ -40,6 +41,7 @@ export default function RestTimerModal({ seconds, label, onClose }: Props) {
           playBeep(880, 0.3)
           setTimeout(() => playBeep(880, 0.3), 350)
           setTimeout(() => playBeep(1100, 0.5), 700)
+          hapticSessionComplete()
           return 0
         }
         if (prev <= 4) playBeep(660, 0.15)

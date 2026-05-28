@@ -394,3 +394,148 @@ initNativePush(async (token) => {
 ```
 
 **También**: `updateNativeStatusBar` envuelto en `try/catch` para evitar errores en entornos sin status bar nativa (ej. al abrir la app en navegador de escritorio durante desarrollo).
+
+---
+
+## 9. Android 16 / API 36 — Status bar y layout edge-to-edge (2026-05-27)
+
+### Status bar transparente en Android 16 con `overlaysWebView: false`
+
+**Causa**: Android 15+ (API 35+) fuerza edge-to-edge obligatoriamente. `Window.setStatusBarColor()` y `setNavigationBarColor()` son ignorados. Con `overlaysWebView: false`, Capacitor llama a esas APIs deprecadas — el resultado es una barra transparente con el contenido visible detrás.
+
+**Síntoma**: La zona de status bar se veía transparente, mostrando el fondo de la app (degradado oscuro) en lugar del color sólido esperado.
+
+**Solución** — `packages/android/capacitor.config.ts`:
+```typescript
+plugins: {
+  StatusBar: {
+    style: 'light',
+    overlaysWebView: true,   // ← correcto para Android 15+
+    // backgroundColor eliminado (ignorado en API 35+)
+  },
+}
+```
+Y en `packages/web/src/styles/globals.css`:
+```css
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: env(safe-area-inset-top);
+  background: var(--color-bg);
+  z-index: 1001;
+  pointer-events: none;
+}
+```
+El padding de compensación va en `.main` y `.topbar` vía `env(safe-area-inset-top)`.
+
+---
+
+### `StatusBar.setStyle()` — el enum es inverso al nombre del tema
+
+**Causa**: `Style.Dark` en Capacitor significa "iconos oscuros" (para fondos claros), y `Style.Light` significa "iconos claros/blancos" (para fondos oscuros). El nombre del enum describe los **iconos**, no el fondo.
+
+**Síntoma**: Con tema oscuro, la barra mostraba iconos invisibles (oscuros sobre fondo oscuro).
+
+**Solución** (`App.tsx`):
+```typescript
+await StatusBar.setStyle({
+  style: theme === 'dark' ? Style.Dark : Style.Light
+  // Style.Dark = iconos blancos/claros (para fondos oscuros)
+  // Style.Light = iconos oscuros (para fondos claros)
+  // El nombre del enum describe los ICONOS, no el fondo:
+  //   Style.Dark → "Light text for use on dark backgrounds"
+  //   Style.Light → "Dark text for use on light backgrounds"
+})
+```
+También actualizar `capacitor.config.ts` con `style: 'dark'` si el tema por defecto es oscuro (equivale a `Style.Dark`).
+
+
+---
+
+### Header se desplaza con el contenido en Chrome Android (`position: sticky` roto)
+
+**Causa**: `position: sticky` no funciona cuando algún ancestro tiene `overflow-x: hidden` o `overflow-x: auto`. El componente `.app` tiene `overflow-x: hidden` para prevenir scroll horizontal en móvil, lo que rompe `sticky` en Chrome Android.
+
+**Síntoma**: La barra superior (`.topbar`) y el botón de cambio de modo se desplazaban junto al contenido al hacer scroll.
+
+**Solución** — en `@media (max-width: 700px)`:
+```css
+.topbar {
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0; right: 0;
+  z-index: 100;
+}
+.main {
+  padding-top: calc(56px + env(safe-area-inset-top));
+}
+```
+
+---
+
+### Menú fullscreen quedaba detrás de la status bar
+
+**Causa**: `.fullscreen-menu` usaba `inset: 0` (equivale a `top: 0`). Con `overlaysWebView: true`, `top: 0` incluye la zona de la barra de sistema — el menú aparecía partido por la mitad en la parte superior.
+
+**Síntoma**: Al abrir el menú hamburguesa, la parte superior del menú quedaba oculta bajo la status bar.
+
+**Solución**:
+```css
+.fullscreen-menu {
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0; right: 0; bottom: 0;
+  z-index: 999;
+}
+```
+
+---
+
+## 10. UI/UX Refresh (2026-05-27)
+
+### Swipe-to-complete en ExerciseCard: `touchAction: 'pan-y'` es crítico
+
+**Causa**: Al usar `drag="x"` de Framer Motion en el header del ejercicio, el scroll vertical se bloquea si no se especifica `touchAction`.
+**Síntoma**: El usuario no puede hacer scroll en el listado de ejercicios.
+**Solución**: `style={{ touchAction: 'pan-y' }}` en el `motion.div` con `drag="x"`.
+
+### PR haptic: `useRef` para detectar cambio false→true
+
+**Causa**: `hasPR` es un `useMemo` que se recalcula en cada render. Sin ref, `hapticPR()` se dispararía múltiples veces.
+**Solución**: Usar `const prevHasPR = useRef(false)` y comparar en `useEffect`: solo disparar haptic cuando `hasPR && !prevHasPR.current`.
+
+### Empty state en Dashboard: guarda `!activeRoutineId` primero
+
+**Causa**: Si no hay rutina activa, `todayId` también es `undefined`. Sin verificar `activeRoutineId` primero, muestra "Día de descanso" en lugar del empty state.
+**Solución**: La condición es `!activeRoutineId ? <EmptyState> : todayId ? <widget> : <descanso>`.
+
+### CSS cards: evitar doble decoración borde+sombra
+
+**Causa**: El patrón anterior usaba `border + box-shadow` en `.card`, generando ruido visual en modo claro.
+**Solución**: Quitar `box-shadow` de `.card` base; añadir solo en dark mode con `[data-theme="dark"] .card { border-color: transparent; box-shadow: var(--shadow-md); }`.
+
+---
+
+## 11. Status bar icons — enum invertido (2026-05-27)
+
+### `StatusBar.setStyle()` usaba `Style.Light` y `Style.Dark` al revés
+
+**Causa**: El código anterior asignaba `Style.Light` para tema oscuro y `Style.Dark` para tema claro — al revés de lo que significan según la documentación de Capacitor.
+
+**Síntoma**: Con tema claro, los iconos de la status bar se veían blancos (perdidos sobre fondo blanco). Con tema oscuro, los iconos se veían negros (perdidos sobre fondo oscuro). Ambos casos invertidos.
+
+**Causa raíz**: Los nombres del enum describen el TEXTO/ICONO, no el fondo:
+- `Style.Dark` → "Light text for use on dark backgrounds" → iconos blancos → usar con tema oscuro
+- `Style.Light` → "Dark text for use on light backgrounds" → iconos negros → usar con tema claro
+
+**Solución** (`App.tsx`):
+```typescript
+await StatusBar.setStyle({
+  style: theme === 'dark' ? Style.Dark : Style.Light
+})
+```
+
+También en `capacitor.config.ts`: `style: 'dark'` si el tema por defecto es oscuro (equivale a `Style.Dark` = iconos blancos antes del primer render).
+
+**Nota**: El error anterior estaba documentado incorrectamente en OPERATIONS.md. La clave es que "Dark" y "Light" describen los **iconos**, no el fondo.

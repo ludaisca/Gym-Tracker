@@ -214,12 +214,26 @@ await fastify.register(async (scoped) => {
 **Sistema de iconos** (`components/ui/Icons.tsx`)  
 Todos los iconos son SVG inline con `stroke="currentColor"` (monocromáticos, se adaptan al tema). No usar emojis ni iconos de colores. Exporta `ModuleIcon` para el nav. Añadir nuevos iconos siguiendo el mismo patrón (`def()` helper + `IconProps`).
 
-**Sistema de diseño (CSS)**  
+**Sistema de diseño (CSS)** — `packages/web/src/styles/globals.css`  
 Fuentes: `--font-body: Lexend`, `--font-mono: JetBrains Mono`.  
+
+Tokens de diseño premium (definidos en `:root`):
+- Tipografía: `--text-xs` (0.6875rem) … `--text-2xl` (1.625rem)
+- Colores: `--color-bg`, `--color-surface`, `--color-surface-2`, `--color-border`, `--color-divider`, `--color-text`, `--color-text-muted`
+- Radios: `--radius-sm` (0.25rem) / `--radius-md` / `--radius-lg` / `--radius-xl` (0.875rem) / `--radius-2xl` (1.25rem) / `--radius-full`
+- Sombras: `--shadow-sm`, `--shadow-md` (dos capas: difusa + dura)
+- Transición: `--transition: 140ms cubic-bezier(0.16, 1, 0.3, 1)`
+
 Clases de layout principales: `.card`, `.panel-head`, `.panel-body`, `.summary-card` (con `.status-done/.status-partial/.status-active`), `.split`, `.triple`.  
 Para inputs de código/share usar `.code-input` (monoespaciado, letra espaciada, focus-ring primario).  
 Para botones de iconos en cards: `.icon-btn-subtle`.  
 Para tabs scrollables de página: `.routines-tab-bar` / `.routines-tab-btn` (no reutilizar `.stats-tabs` que usa `flex: 1` y desborda en móvil).
+
+**Layout móvil (crítico)**:
+- `.topbar` usa `position: fixed; top: env(safe-area-inset-top)` en `@media (max-width: 700px)` — NO `position: sticky`. Chrome Android rompe `sticky` cuando un ancestro tiene `overflow-x: hidden`.
+- `.main` tiene `padding-top: calc(56px + env(safe-area-inset-top))` para compensar el header fijo.
+- `body::before` (`position: fixed; height: env(safe-area-inset-top); z-index: 1001`) rellena la zona de status bar con `--color-bg`.
+- `.fullscreen-menu` usa `top: env(safe-area-inset-top)` (no `top: 0`) para no quedar detrás de la barra de sistema.
 
 ### Monetización
 
@@ -245,7 +259,8 @@ JWT de corta duración (access token) + refresh token en `localStorage`. El acce
 - Plugins instalados: `@capacitor/app`, `@capacitor/browser`, `@capacitor/status-bar`, `@capacitor/camera`, `@capacitor/push-notifications` — todos importados **lazy** (`await import(...)`) para no romper el bundle web
 - `lib/camera.ts` — `isNativePlatform()` (síncrono vía `window.Capacitor?.isNativePlatform?.() === true`), `captureNativePhoto()`, `applyWatermarkToBase64()`
 - `lib/pushNative.ts` — inicialización de FCM en Capacitor: solicita permisos, registra token, maneja tap en notificación
-- `StatusBar.overlaysWebView: false` en config — Android reserva el espacio de la barra de sistema; no se necesita CSS `safe-area-inset-top`
+- `StatusBar.overlaysWebView: true` en config — Android 15+ (API 35+) fuerza edge-to-edge e ignora `setStatusBarColor()`. El WebView se extiende bajo la status bar; el espacio se compensa con `env(safe-area-inset-top)` en CSS. Un `body::before` fijo con `height: env(safe-area-inset-top)` actúa de fondo universal.
+- `StatusBar.setStyle({ style })`: `Style.Light` = iconos blancos (para fondo oscuro), `Style.Dark` = iconos oscuros (para fondo claro). El mapeo es **inverso** al nombre del tema de la app.
 
 ### Docker / despliegue
 
@@ -254,7 +269,7 @@ JWT de corta duración (access token) + refresh token en `localStorage`. El acce
 - `Dockerfile.backend` — multi-stage; builder usa `npm ci --include=dev` para que `tsc` esté disponible aunque Coolify inyecte `NODE_ENV=production`
 - Coolify enruta `gym-tracker.ludaisca.ddns.net` a través de Traefik directamente al contenedor `api:3001`
 
-**⚠️ Cambio en Coolify tras este deploy**: actualizar el enrutamiento en la UI de Coolify para apuntar al servicio `api` (puerto 3001) en lugar de a `nginx` (puerto 80).
+**⚠️ Pendiente en Coolify**: actualizar el enrutamiento en la UI de Coolify para apuntar al servicio `api` (puerto 3001). Nginx ya fue eliminado.
 
 ### Variables de entorno
 

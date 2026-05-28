@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store'
 import { useSessions } from '../../hooks/useSessions'
@@ -6,14 +6,107 @@ import { useUser } from '../../hooks/useUser'
 import { useRoutines } from '../../hooks/useRoutines'
 import { usersApi } from '../../api/users'
 import { sessionsApi } from '../../api/sessions'
-import { getRoutineDays, getDayIds, calcStreak, getTodayDayId } from '../../lib/fitness'
+import { aiApi } from '../../api/ai'
+import { getRoutineDays, getDayIds, calcStreak, getTodayDayId, calcWeekVolume } from '../../lib/fitness'
 import { PRESET_ROUTINES } from '../../lib/presetRoutines'
 import MigrationModal from '../modals/MigrationModal'
 import { IconFire, IconRocket, IconMoon, IconTarget, IconCheck } from '../ui/Icons'
+import EmptyState from '../ui/EmptyState'
 import type { WorkoutSession } from '../../types/domain'
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+function WeeklyBriefCard({ weekNumber, sessions, dayIds, hasAI, completedSessions }: {
+  weekNumber: number
+  sessions: WorkoutSession[]
+  dayIds: string[]
+  hasAI: boolean
+  completedSessions: number
+}) {
+  const [brief, setBrief] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const load = useCallback(async () => {
+    const cacheKey = `weekly-brief-${weekNumber}`
+    const cached = sessionStorage.getItem(cacheKey)
+    if (cached) { setBrief(cached); return }
+    setLoading(true)
+    try {
+      const text = await aiApi.getWeeklyBrief()
+      if (text) { sessionStorage.setItem(cacheKey, text); setBrief(text) }
+    } catch { /* no-op: brief is optional */ } finally { setLoading(false) }
+  }, [weekNumber])
+
+  useEffect(() => {
+    if (hasAI && completedSessions >= 3) load()
+  }, [hasAI, completedSessions, load])
+
+  if (hasAI && completedSessions >= 3) {
+    return (
+      <section className="card">
+        <div className="panel-head">
+          <div>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+              </svg>
+              Brief de la semana
+            </h3>
+            <p>Análisis de tu entrenamiento</p>
+          </div>
+        </div>
+        <div className="panel-body">
+          {loading ? (
+            <>
+              <div className="skeleton" style={{ height: 14, borderRadius: 4, marginBottom: 8 }} />
+              <div className="skeleton" style={{ height: 14, borderRadius: 4, marginBottom: 8, width: '85%' }} />
+              <div className="skeleton" style={{ height: 14, borderRadius: 4, width: '70%' }} />
+            </>
+          ) : brief ? (
+            <p style={{ fontSize: 'var(--text-sm)', lineHeight: 1.65, color: 'var(--color-text-muted)', whiteSpace: 'pre-wrap' }}>{brief}</p>
+          ) : (
+            <p className="tiny muted">No se pudo cargar el análisis. Verifica tu clave de IA en Configuración.</p>
+          )}
+        </div>
+      </section>
+    )
+  }
+
+  // Static stats fallback (shown when no AI or fewer than 3 sessions)
+  const totalVolume = Math.round(calcWeekVolume(sessions, weekNumber, dayIds))
+  const doneExercises = sessions
+    .filter(s => s.weekNumber === weekNumber)
+    .reduce((a, s) => a + s.exercises.filter(e => e.done).length, 0)
+
+  if (completedSessions === 0) return null
+
+  return (
+    <section className="card">
+      <div className="panel-head">
+        <div><h3>Resumen de la semana</h3><p>Semana {weekNumber}</p></div>
+      </div>
+      <div className="panel-body">
+        <div style={{ display: 'flex', gap: 'var(--space-4)' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--color-primary)' }}>{completedSessions}</div>
+            <div className="tiny muted">Sesiones</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800 }}>{doneExercises}</div>
+            <div className="tiny muted">Ejercicios</div>
+          </div>
+          {totalVolume > 0 && (
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800 }}>{totalVolume.toLocaleString()}</div>
+              <div className="tiny muted">kg×reps</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
 }
 
 export default function Dashboard() {
@@ -157,17 +250,37 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Widget de hoy */}
-      {todayId ? (
+      {/* Widget de hoy / empty state si no hay rutina */}
+      {!activeRoutineId ? (
+        <EmptyState
+          icon={<IconTarget size={36} />}
+          title="Sin rutina activa"
+          body="Elige un programa de entrenamiento para ver tu plan aquí y empezar a registrar sesiones."
+          action={{ label: 'Ver rutinas', href: '/rutinas' }}
+        />
+      ) : todayId ? (
         <div className="today-widget">
           <div>
             <div className="today-widget-chip">Entrenamiento de hoy</div>
             <div className="today-widget-name">
               {capitalize(todayId)} · {(routineDays[todayId] as { label?: string })?.label ?? todayId}
             </div>
-            <div className="today-widget-sub" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              {sessions.find(s => s.dayId === todayId)?.exercises.filter(e => e.done).length ?? 0}/{routineDays[todayId]?.exercises.length ?? 0} ejercicios · {sessions.find(s => s.dayId === todayId)?.complete ? <><IconCheck size={14} /> completado</> : 'pendiente'}
-            </div>
+            {(() => {
+              const todaySess = sessions.find(s => s.dayId === todayId)
+              const todayDone = todaySess?.exercises.filter(e => e.done).length ?? 0
+              const todayTotal = routineDays[todayId]?.exercises.length ?? 0
+              const todayPct = todayTotal ? Math.round(todayDone / todayTotal * 100) : 0
+              return (
+                <>
+                  <div className="today-widget-sub" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {todayDone}/{todayTotal} ejercicios · {todaySess?.complete ? <><IconCheck size={14} /> completado</> : 'pendiente'}
+                  </div>
+                  <div className="progress" style={{ width: '100%', marginTop: '.5rem' }}>
+                    <span style={{ width: `${todayPct}%` }} />
+                  </div>
+                </>
+              )
+            })()}
           </div>
           <button className="primary-btn" onClick={() => navigate(`/entrenamiento/${todayId}`)}>
             Ir ahora →
@@ -188,22 +301,22 @@ export default function Dashboard() {
 
       {/* KPIs */}
       <div className="kpis">
-        <article className="card kpi">
+        <article className="card kpi" data-color="primary">
           <div className="kpi-label">Sesiones semana</div>
           <div className="kpi-value">{completedSessions}/{dayIds.length}</div>
           <div className="kpi-meta">Objetivo semanal</div>
         </article>
-        <article className="card kpi">
+        <article className="card kpi" data-color="success">
           <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>Ejercicios <IconCheck size={12} /></div>
           <div className="kpi-value">{doneExercises}</div>
           <div className="kpi-meta">De {totalExercises} totales</div>
         </article>
-        <article className="card kpi">
+        <article className="card kpi" data-color="orange">
           <div className="kpi-label">Progreso</div>
           <div className="kpi-value">{progress}%</div>
           <div className="kpi-meta">Avance global semana</div>
         </article>
-        <article className="card kpi">
+        <article className="card kpi" data-color="water">
           <div className="kpi-label">Racha activa</div>
           <div className="kpi-value" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             {streak > 0 && <IconFire className="accent-fire" />} {streak}
@@ -250,10 +363,21 @@ export default function Dashboard() {
         </section>
       )}
 
+      {/* Brief semanal */}
+      {activeRoutineId && (
+        <WeeklyBriefCard
+          weekNumber={weekNumber}
+          sessions={sessions}
+          dayIds={dayIds}
+          hasAI={!!(user?.settings?.aiKeySet)}
+          completedSessions={completedSessions}
+        />
+      )}
+
       {/* Semana actual — días de la rutina */}
       <section className="card">
         <div className="panel-head">
-          <div><h3>Semana {weekNumber}</h3><p>{routineName}</p></div>
+          <div><h3>Semana {weekNumber}</h3><p>{routineName} · {completedSessions}/{dayIds.length} sesiones</p></div>
         </div>
         <div className="panel-body day-grid">
           {dayIds.length === 0 ? (

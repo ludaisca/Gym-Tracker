@@ -93,9 +93,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── Refresh token ──────────────────────────────────────────────────────
-  fastify.post('/refresh', { config: { rateLimit: { max: 20, timeWindow: '15 minutes' } } }, async (request, reply) => {
-    const { refreshToken } = request.body as { refreshToken: string }
-    if (!refreshToken) return reply.status(400).send({ error: 'refreshToken requerido' })
+  fastify.post('/refresh', { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } }, async (request, reply) => {
+    const parsed = z.object({ refreshToken: z.string().min(64).max(100) }).safeParse(request.body)
+    if (!parsed.success) return reply.status(400).send({ error: 'refreshToken requerido' })
+    const { refreshToken } = parsed.data
 
     const stored = await repos.users.findRefreshToken(refreshToken)
     if (!stored || stored.expiresAt < new Date()) {

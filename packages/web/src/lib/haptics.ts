@@ -17,3 +17,15 @@ export function hapticError() {
     navigator.vibrate([50, 50, 50])
   }
 }
+
+export function hapticPR() {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    navigator.vibrate([40, 60, 20])
+  }
+}
+
+export function hapticSessionComplete() {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    navigator.vibrate([25, 80, 25])
+  }
+}

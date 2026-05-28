@@ -1,12 +1,13 @@
-import { useMemo, useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown } from 'lucide-react'
+import { useMemo, useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion'
+import { ChevronDown, TrendingUp } from 'lucide-react'
 import type { ExerciseDef } from '../../types/domain'
 import type { ExerciseSession } from '../../types/domain'
-import { isPR, getExerciseHistory, getLastRecordedSets, calc1RM } from '../../lib/fitness'
+import { isPR, getExerciseHistory, getLastRecordedSets, calc1RM, getProgressionSuggestion } from '../../lib/fitness'
 import type { WorkoutSession } from '../../types/domain'
 import SetBox from './SetBox'
 import ExerciseLineChart from './ExerciseLineChart'
+import { hapticImpact, hapticPR } from '../../lib/haptics'
 
 interface Props {
   exDef: ExerciseDef
@@ -26,11 +27,17 @@ export default function ExerciseCard({
   onToggleDone, onSetChange, onStartTimer, onAutoFill,
 }: Props) {
   const [open, setOpen] = useState(true)
+  const prevHasPR = useRef(false)
+  const kgInputRefs = useRef<(HTMLInputElement | null)[]>([])
 
   // Auto-colapsa cuando se marca como hecho
   useEffect(() => {
     if (exState.done) setOpen(false)
   }, [exState.done])
+
+  // Motion value para swipe
+  const dragX = useMotionValue(0)
+  const swipeBgOpacity = useTransform(dragX, [-80, -30], [1, 0])
 
   const currentBest = useMemo(() => {
     let best = 0
@@ -55,6 +62,11 @@ export default function ExerciseCard({
     [allSessions, dayIds, exDef.name, currentBest, currentWeek, routineDays]
   )
 
+  useEffect(() => {
+    if (hasPR && !prevHasPR.current) hapticPR()
+    prevHasPR.current = hasPR
+  }, [hasPR])
+
   const history = useMemo(
     () => getExerciseHistory(allSessions, dayIds, exDef.name, currentWeek, routineDays),
     [allSessions, dayIds, exDef.name, currentWeek, routineDays]
@@ -63,6 +75,11 @@ export default function ExerciseCard({
   const lastRecordedSets = useMemo(
     () => getLastRecordedSets(allSessions, dayIds, exDef.name, currentWeek, routineDays),
     [allSessions, dayIds, exDef.name, currentWeek, routineDays]
+  )
+
+  const suggestion = useMemo(
+    () => getProgressionSuggestion(lastRecordedSets, exDef.reps),
+    [lastRecordedSets, exDef.reps]
   )
 
   const isCurrentEmpty = useMemo(() => {
@@ -90,11 +107,24 @@ export default function ExerciseCard({
       className={`exercise-item${exState.done ? ' done' : ''}`}
       transition={{ type: 'spring', stiffness: 350, damping: 25 }}
     >
-      {/* ── Header — siempre visible, click para expandir/colapsar ── */}
-      <div
-        className="exercise-top exercise-accordion-header"
-        onClick={() => setOpen(o => !o)}
-      >
+      {/* ── Header — siempre visible, swipe izquierda = done, click = expandir ── */}
+      <div style={{ position: 'relative', overflow: 'hidden' }}>
+        <motion.div className="swipe-check-bg" style={{ opacity: swipeBgOpacity }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </motion.div>
+        <motion.div
+          drag="x"
+          dragConstraints={{ left: -80, right: 0 }}
+          dragElastic={0.15}
+          style={{ x: dragX, touchAction: 'pan-y' }}
+          onDragEnd={(_, info) => {
+            if (info.offset.x < -55) { hapticImpact('light'); onToggleDone() }
+          }}
+          className="exercise-top exercise-accordion-header"
+          onClick={() => setOpen(o => !o)}
+        >
         <button
           className="exercise-check"
           type="button"
@@ -133,6 +163,7 @@ export default function ExerciseCard({
         >
           <ChevronDown size={16} />
         </motion.span>
+        </motion.div>
       </div>
 
       {/* ── Cuerpo colapsable ── */}
@@ -146,6 +177,13 @@ export default function ExerciseCard({
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
             style={{ overflow: 'hidden' }}
           >
+            {suggestion && (
+              <div className="progression-hint">
+                <TrendingUp size={11} />
+                Próxima sesión: <strong>{suggestion.kg} kg</strong> · {suggestion.reps} reps
+              </div>
+            )}
+
             {lastRecordedSets && onAutoFill && isCurrentEmpty && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 var(--space-4) .5rem' }}>
                 <button
@@ -170,6 +208,8 @@ export default function ExerciseCard({
                   exerciseName={exDef.name}
                   onChange={(field, value) => onSetChange(sidx, field, value)}
                   onStartTimer={onStartTimer}
+                  kgInputRef={el => { kgInputRefs.current[sidx] = el }}
+                  onRepEnter={sidx < exState.sets.length - 1 ? () => kgInputRefs.current[sidx + 1]?.focus() : undefined}
                 />
               ))}
             </div>

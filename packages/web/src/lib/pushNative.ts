@@ -13,9 +13,12 @@ export async function initNativePush(onToken: (token: string) => Promise<void>):
   // App en foreground: no mostrar nada (la app ya está activa)
   PushNotifications.addListener('pushNotificationReceived', (_notification) => {})
 
-  // Usuario tocó la notificación: navegar a la URL del payload si existe
+  // Usuario tocó la notificación: solo navegar a rutas relativas internas
+  // Rechazar URLs absolutas/externas para prevenir open-redirect
   PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-    const url = action.notification.data?.url as string | undefined
-    if (url) window.location.href = url
+    const raw = action.notification.data?.url as string | undefined
+    if (!raw) return
+    const isRelative = /^\/[a-zA-Z0-9\-_/]*$/.test(raw)
+    if (isRelative) window.location.href = raw
   })
 }

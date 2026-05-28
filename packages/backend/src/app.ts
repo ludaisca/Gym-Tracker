@@ -1,4 +1,6 @@
 import Fastify from 'fastify'
+import { createHash } from 'crypto'
+import { timingSafeEqual } from 'crypto'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
@@ -27,6 +29,7 @@ import challengesRoutes from './routes/challenges'
 import pushRoutes from './routes/push'
 import analyticsRoutes from './routes/analytics'
 import marketplaceRoutes from './routes/marketplace'
+import goalsRoutes from './routes/goals'
 export async function buildApp() {
   const fastify = Fastify({
     logger: process.env.NODE_ENV !== 'test',
@@ -74,6 +77,7 @@ export async function buildApp() {
   await fastify.register(pushRoutes,        { prefix: '/push' })
   await fastify.register(analyticsRoutes,   { prefix: '/analytics' })
   await fastify.register(marketplaceRoutes, { prefix: '/marketplace' })
+  await fastify.register(goalsRoutes,       { prefix: '/goals' })
 
   initWorker() // Arrancar worker de colas
   registerReminderJob().catch(() => {}) // Registrar job repeatable de recordatorios (idempotente)
@@ -120,7 +124,9 @@ export async function buildApp() {
     if (!adminToken) {
       return reply.status(403).send({ error: 'Panel de administración no configurado.' })
     }
-    if (request.headers.authorization !== `Bearer ${adminToken}`) {
+    const provided = createHash('sha256').update(request.headers.authorization ?? '').digest()
+    const expected = createHash('sha256').update(`Bearer ${adminToken}`).digest()
+    if (!timingSafeEqual(provided, expected)) {
       return reply.status(401).send({ error: 'Unauthorized' })
     }
   })

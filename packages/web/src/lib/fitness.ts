@@ -136,6 +136,27 @@ export function getTodayDayId(dayIds: string[]): string | null {
   return null
 }
 
+export function getProgressionSuggestion(
+  lastSets: { kg: string; reps: string }[] | null,
+  targetRepsStr: string
+): { kg: number; reps: number } | null {
+  if (!lastSets || lastSets.length === 0) return null
+  const validSets = lastSets.filter(s => parseFloat(s.kg) > 0 && parseFloat(s.reps) > 0)
+  if (validSets.length === 0) return null
+  const bestSet = validSets.reduce((best, s) =>
+    parseFloat(s.kg) > parseFloat(best.kg) ? s : best
+  )
+  const lastKg = parseFloat(bestSet.kg)
+  const lastReps = parseInt(bestSet.reps)
+  const parts = targetRepsStr.split('-')
+  const targetReps = parseInt(parts[parts.length - 1]) || 0
+  if (targetReps === 0) return null
+  if (lastReps >= targetReps) {
+    return { kg: Math.round((lastKg + 2.5) * 10) / 10, reps: lastReps }
+  }
+  return { kg: lastKg, reps: lastReps + 1 }
+}
+
 export function getLastRecordedSets(
   sessions: WorkoutSession[],
   dayIds: string[],

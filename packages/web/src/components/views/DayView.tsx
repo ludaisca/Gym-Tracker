@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store'
 import { useEnsuredSession } from '../../hooks/useSessions'
@@ -11,7 +12,7 @@ import ExerciseCard from '../workout/ExerciseCard'
 import RestTimerModal from '../modals/RestTimerModal'
 import type { CardioData } from '../../types/domain'
 
-import { hapticImpact, hapticSuccess } from '../../lib/haptics'
+import { hapticImpact, hapticSuccess, hapticSessionComplete } from '../../lib/haptics'
 import { Check } from 'lucide-react'
 
 function capitalize(s: string) {
@@ -38,6 +39,7 @@ export default function DayView() {
   const { session, update, saving } = useEnsuredSession(weekNumber, dayId ?? '', customRoutines)
 
   const [timer, setTimer] = useState<{ seconds: number; label: string } | null>(null)
+  const [celebrate, setCelebrate] = useState(false)
 
   if (!dayId || !routineDays[dayId]) {
     return (
@@ -98,8 +100,15 @@ export default function DayView() {
   }
 
   function toggleComplete() {
-    if (!session!.complete) hapticSuccess()
-    update({ complete: !session!.complete })
+    const willComplete = !session!.complete
+    if (willComplete) {
+      hapticSessionComplete()
+      setCelebrate(true)
+      setTimeout(() => setCelebrate(false), 500)
+    } else {
+      hapticSuccess()
+    }
+    update({ complete: willComplete })
   }
 
   const dayLabel = (dayDef as { label?: string }).label ?? dayId
@@ -190,12 +199,29 @@ export default function DayView() {
                 onChange={(e) => update({ notes: e.target.value })}
               />
               <button
-                className={`complete-btn${session.complete ? ' is-complete' : ''}${saving === 'pending' ? ' is-saving' : ''}`}
+                className={`complete-btn${session.complete ? ' is-complete' : ''}${saving === 'pending' ? ' is-saving' : ''}${celebrate ? ' celebrate' : ''}`}
                 onClick={toggleComplete}
                 disabled={saving === 'pending'}
               >
                 {saving === 'pending' ? <div className="spinner-small" /> : session.complete ? <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>Sesión completada <Check size={18} /></span> : 'Marcar sesión como completada'}
               </button>
+              <AnimatePresence>
+                {session.complete && (
+                  <motion.div
+                    key="session-summary"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                    className="session-summary"
+                  >
+                    <div className="session-summary-row">
+                      <span>{done}/{total} ejercicios completados</span>
+                      {done === total && total > 0 && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success)' }}>Todo hecho ✓</span>}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </section>
         </div>

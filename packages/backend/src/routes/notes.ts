@@ -30,10 +30,14 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.put('/:id', async (request, reply) => {
     const { sub } = request.user as { sub: string }
     const { id } = request.params as { id: string }
-    const body = z.object({ text: z.string().optional(), done: z.boolean().optional(), position: z.number().optional() }).parse(request.body)
-    const note = await prisma.globalNote.findFirst({ where: { id, userId: sub } })
-    if (!note) return reply.status(404).send({ error: 'No encontrado' })
-    return prisma.globalNote.update({ where: { id }, data: body })
+    const body = z.object({
+      text: z.string().min(1).max(500).optional(),
+      done: z.boolean().optional(),
+      position: z.number().int().min(0).optional(),
+    }).parse(request.body)
+    const { count } = await prisma.globalNote.updateMany({ where: { id, userId: sub }, data: body })
+    if (count === 0) return reply.status(404).send({ error: 'No encontrado' })
+    return prisma.globalNote.findFirst({ where: { id, userId: sub } })
   })
 
   fastify.delete('/:id', async (request, reply) => {

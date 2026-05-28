@@ -8,6 +8,7 @@ import { api } from '../../api/client'
 import { PRESET_ROUTINES } from '../../lib/presetRoutines'
 import type { Routine } from '../../types/domain'
 import { IconTarget, IconTrash, IconEdit, IconCopy, IconEye, IconPlus, IconCheck, IconClose, IconDownload } from '../ui/Icons'
+import EmptyState from '../ui/EmptyState'
 import { toast } from '../../lib/toast'
 import { motion, AnimatePresence } from 'framer-motion'
 import { hapticImpact } from '../../lib/haptics'
@@ -240,11 +241,12 @@ export default function Routines() {
       {/* ── Presets & Custom ── */}
       {tab !== 'mercado' && (
         activeRoutines.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon"><IconTarget size={40} /></div>
-            <p>No tienes rutinas personalizadas aún.</p>
-            <button className="ghost-btn" onClick={() => setTab('presets')}>Ver predeterminadas</button>
-          </div>
+          <EmptyState
+            icon={<IconTarget size={36} />}
+            title="Sin rutinas propias aún"
+            body="Crea tu primera rutina personalizada o importa una con un código."
+            action={{ label: 'Crear rutina', href: '/rutinas/nueva' }}
+          />
         ) : (
           <div className="rcard-list">
             {activeRoutines.map(r => {

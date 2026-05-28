@@ -47,3 +47,6 @@ coolify.env
 .cursorignore
 .projects/
 skills-lock.json
+
+# Firebase — contiene claves privadas del proyecto
+packages/android/android/app/google-services.json

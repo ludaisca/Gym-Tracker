@@ -166,7 +166,7 @@ export async function registerCheckIn(
   await writeFile(join(uploadDir, fileName), buf)
 
   const serverTime = new Date()
-  const hashInput = `${userId}:${challengeId}:${serverTime.toISOString()}:${process.env.JWT_SECRET ?? 'secret'}`
+  const hashInput = `${userId}:${challengeId}:${serverTime.toISOString()}:${process.env.JWT_SECRET!}`
   const hash = crypto.createHash('sha256').update(hashInput).digest('hex').slice(0, 12)
 
   const checkIn = await challenges.createCheckIn({

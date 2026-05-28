@@ -135,6 +135,15 @@ export default function Config() {
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!ALLOWED.includes(file.type)) {
+      toast('Solo se permiten imágenes JPEG, PNG, WebP o GIF', 'error')
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast('La imagen no puede superar 8 MB', 'error')
+      return
+    }
     try {
       const base64 = await compressImage(file)
       const updated = await usersApi.update({ avatar: base64 })
@@ -498,8 +507,8 @@ export default function Config() {
       <section className="card">
         <div className="panel-head">
           <div>
-            <h3>Asistente de Inteligencia Artificial</h3>
-            <p>Conecta tu cuenta con Google Gemini (modelo <strong>gemini-2.5-flash-lite</strong> optimizado por defecto) para obtener análisis instantáneos de tus entrenamientos y escaneo visual de comidas.</p>
+            <h3>Inteligencia Artificial</h3>
+            <p>Google Gemini para análisis de entrenamientos y escaneo visual de comidas.</p>
           </div>
         </div>
         <div className="panel-body">
@@ -589,8 +598,8 @@ export default function Config() {
       <section className="card">
         <div className="panel-head">
           <div>
-            <h3>Sincronización Local (Modo Offline)</h3>
-            <p>Acciones guardadas localmente en espera de conexión.</p>
+            <h3>Sincronización offline</h3>
+            <p>Acciones pendientes de envío al servidor.</p>
           </div>
           {queue.length > 0 && (
             <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>

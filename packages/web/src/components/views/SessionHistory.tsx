@@ -6,6 +6,7 @@ import { useRoutines } from '../../hooks/useRoutines'
 import { getRoutineDays } from '../../lib/fitness'
 import type { WorkoutSession } from '../../types/domain'
 import { Check, FileText, Circle } from 'lucide-react'
+import EmptyState from '../ui/EmptyState'
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
@@ -66,10 +67,12 @@ export default function SessionHistory() {
         <div className="panel-head" style={{ padding: '0 0 var(--space-6)' }}>
           <div><h3>Historial de sesiones</h3><p>Todas tus semanas de entrenamiento.</p></div>
         </div>
-        <div className="empty-state">
-          <p>No hay sesiones registradas aún.</p>
-          <button className="primary-btn" onClick={() => navigate('/dashboard')}>Ir al dashboard</button>
-        </div>
+        <EmptyState
+          icon={<FileText size={36} />}
+          title="Sin sesiones registradas"
+          body="Completa tu primer entrenamiento para que aparezca aquí."
+          action={{ label: 'Ir al inicio', href: '/dashboard' }}
+        />
       </div>
     )
   }

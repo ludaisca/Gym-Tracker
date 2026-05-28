@@ -7,15 +7,19 @@ import {
 import { useAuthStore } from '../../store'
 import { useRoutines } from '../../hooks/useRoutines'
 import { sessionsApi } from '../../api/sessions'
-import { getRoutineDays, getDayIds, calcStreak, getBestKgForWeek } from '../../lib/fitness'
+import { getRoutineDays, getDayIds, calcStreak, getBestKgForWeek, calc1RM } from '../../lib/fitness'
 import { bodyWeightApi, type BodyWeightEntry } from '../../api/bodyweight'
 import { analyticsApi, type WeekAnalytics, type ExerciseAnalyticsPoint } from '../../api/analytics'
+import { goalsApi, type LiftGoal } from '../../api/goals'
+import { getMuscleVolume, MUSCLE_NAMES } from '../../lib/muscleMap'
+import BodySvg from '../ui/BodySvg'
 import type { WorkoutSession } from '../../types/domain'
 
 type Sessions = WorkoutSession[]
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 import { IconCheck, IconLock } from '../ui/Icons'
+import EmptyState from '../ui/EmptyState'
 
 function IconTarget({ className }: { className?: string }) {
   return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
@@ -194,8 +198,34 @@ export default function Stats() {
   }, [])
 
   const sessions = allSessions
-  const [tab, setTab] = useState<'progreso' | 'peso' | 'logros'>('progreso')
+  const [tab, setTab] = useState<'progreso' | 'musculos' | 'metas' | 'peso' | 'logros'>('progreso')
   const [selectedExercise, setSelectedExercise] = useState<string>('')
+
+  // Goals (Feature 5)
+  const [goals, setGoals] = useState<LiftGoal[]>([])
+  const [newGoalExercise, setNewGoalExercise] = useState('')
+  const [newGoalKg, setNewGoalKg] = useState('')
+  const [savingGoal, setSavingGoal] = useState(false)
+  const loadGoals = useCallback(() => {
+    goalsApi.list().then(setGoals).catch((err: unknown) => console.warn('[goals]', err))
+  }, [])
+  useEffect(() => { loadGoals() }, [loadGoals])
+
+  const handleSaveGoal = async () => {
+    const kg = parseFloat(newGoalKg)
+    if (!newGoalExercise || !kg || kg <= 0) return
+    setSavingGoal(true)
+    try {
+      await goalsApi.upsert(newGoalExercise, kg)
+      setNewGoalKg('')
+      loadGoals()
+    } finally { setSavingGoal(false) }
+  }
+
+  const handleDeleteGoal = async (exerciseName: string) => {
+    await goalsApi.remove(exerciseName)
+    loadGoals()
+  }
 
   const [weekData, setWeekData] = useState<WeekAnalytics | null>(null)
   const [exerciseData, setExerciseData] = useState<ExerciseAnalyticsPoint[] | null>(null)
@@ -347,6 +377,19 @@ export default function Stats() {
     return suggestions
   }, [sessions, allExercises])
 
+  // Muscle volume (Feature 4)
+  const muscleVolume = useMemo(() => {
+    const weekSessions = sessions.filter(s => s.weekNumber === weekNumber)
+    return getMuscleVolume(weekSessions)
+  }, [sessions, weekNumber])
+
+  const topMuscles = useMemo(() => {
+    return Object.entries(muscleVolume)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([id]) => MUSCLE_NAMES[id] ?? id)
+  }, [muscleVolume])
+
   // Persistir fechas de desbloqueo en localStorage por userId
   const [achievementDates, setAchievementDates] = useState<Record<string, string>>({})
   useEffect(() => {
@@ -395,16 +438,30 @@ export default function Stats() {
       </div>
 
       {/* Tabs */}
-      <div className="stats-tabs">
-        {(['progreso', 'peso', 'logros'] as const).map(t => (
-          <button key={t} className={`stats-tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'progreso' ? <><IconChart /> Progreso</> : t === 'peso' ? <><IconWeight /> Peso</> : <><IconTrophy /> Logros ({unlockedAchievements.length})</>}
+      <div className="routines-tab-bar" style={{ borderTop: 'none', paddingLeft: 0, paddingRight: 0, marginBottom: 'var(--space-4)' }}>
+        {([
+          { id: 'progreso' as const, label: 'Progreso', icon: <IconChart /> },
+          { id: 'musculos' as const, label: 'Músculos', icon: <IconBicep /> },
+          { id: 'metas' as const, label: 'Metas 1RM', icon: <IconTarget /> },
+          { id: 'peso' as const, label: 'Peso', icon: <IconWeight /> },
+          { id: 'logros' as const, label: `Logros (${unlockedAchievements.length})`, icon: <IconTrophy /> },
+        ]).map(t => (
+          <button key={t.id} className={`routines-tab-btn${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+            {t.icon} {t.label}
           </button>
         ))}
       </div>
 
       {tab === 'progreso' && (
         <div className="stats-tab-content">
+          {sessions.length === 0 && (
+            <EmptyState
+              icon={<IconChart className="" />}
+              title="Sin datos de progreso aún"
+              body="Completa tus primeros entrenamientos para ver gráficas de volumen, PRs y evolución."
+              action={{ label: 'Empezar a entrenar', href: '/dashboard' }}
+            />
+          )}
           {volData.length >= 2 && (
             <section className="card">
               <div className="panel-head">
@@ -597,6 +654,136 @@ export default function Stats() {
               })}
             </div>
           </section>
+        </div>
+      )}
+
+      {tab === 'musculos' && (
+        <div className="stats-tab-content">
+          <section className="card">
+            <div className="panel-head">
+              <div>
+                <h3>Mapa muscular</h3>
+                <p>Grupos trabajados esta semana (semana {weekNumber})</p>
+              </div>
+            </div>
+            <div className="panel-body">
+              {Object.keys(muscleVolume).length === 0 ? (
+                <EmptyState
+                  icon={<IconBicep />}
+                  title="Sin datos esta semana"
+                  body="Completa ejercicios esta semana para ver qué músculos estás trabajando."
+                />
+              ) : (
+                <>
+                  <BodySvg activeGroups={muscleVolume} />
+                  {topMuscles.length > 0 && (
+                    <div style={{ marginTop: 'var(--space-4)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                      {topMuscles.map((m, i) => (
+                        <span key={m} className="pill" style={{ background: `color-mix(in srgb, var(--color-primary) ${80 - i * 20}%, transparent)`, color: 'var(--color-primary)', fontWeight: 700 }}>
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === 'metas' && (
+        <div className="stats-tab-content">
+          <section className="card">
+            <div className="panel-head">
+              <div><h3>Añadir meta de 1RM</h3><p>Establece tu objetivo por ejercicio.</p></div>
+            </div>
+            <div className="panel-body">
+              <div className="goal-form">
+                <select
+                  className="input"
+                  value={newGoalExercise}
+                  onChange={e => setNewGoalExercise(e.target.value)}
+                >
+                  <option value="">Selecciona ejercicio</option>
+                  {allExercises.map(ex => <option key={ex} value={ex}>{ex}</option>)}
+                </select>
+                <input
+                  className="input"
+                  type="number"
+                  placeholder="Objetivo (kg)"
+                  min="1" max="1000" step="0.5"
+                  value={newGoalKg}
+                  onChange={e => setNewGoalKg(e.target.value)}
+                />
+                <button
+                  className="primary-btn"
+                  disabled={savingGoal || !newGoalExercise || !newGoalKg}
+                  onClick={handleSaveGoal}
+                >
+                  {savingGoal ? '…' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {goals.length === 0 ? (
+            <EmptyState
+              icon={<IconTarget />}
+              title="Sin metas definidas"
+              body="Añade tu primer objetivo de 1RM para trackear tu progreso hacia él."
+            />
+          ) : (
+            <section className="card">
+              <div className="panel-head">
+                <div><h3>Mis metas</h3><p>{goals.length} ejercicio{goals.length !== 1 ? 's' : ''}</p></div>
+              </div>
+              <div className="panel-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                  {goals.map(goal => {
+                    // Best 1RM for this exercise from history
+                    const best1RM = sessions.reduce((best, s) => {
+                      const ex = s.exercises.find(e => e.name === goal.exerciseName && e.done)
+                      if (!ex) return best
+                      for (const set of ex.sets) {
+                        const rm = calc1RM(set.kg, set.reps)
+                        if (rm && rm > best) return rm
+                      }
+                      return best
+                    }, 0)
+                    const pct = best1RM > 0 ? Math.min(100, Math.round(best1RM / goal.targetKg * 100)) : 0
+                    return (
+                      <div key={goal.id} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{goal.exerciseName}</div>
+                            <div className="tiny muted">
+                              {best1RM > 0 ? `${best1RM} kg` : 'sin datos'} → meta {goal.targetKg} kg
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                            <span style={{ fontWeight: 800, fontSize: 'var(--text-lg)', color: pct >= 100 ? 'var(--color-success)' : 'var(--color-primary)' }}>
+                              {pct}%
+                            </span>
+                            <button
+                              className="ghost-btn"
+                              style={{ padding: '.2rem .5rem', fontSize: 'var(--text-xs)' }}
+                              onClick={() => handleDeleteGoal(goal.exerciseName)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                        <div className="progress">
+                          <span style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--color-success)' : undefined }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </section>
+          )}
         </div>
       )}
 

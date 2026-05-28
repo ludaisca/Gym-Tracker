@@ -1,8 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useMemo, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { authApi } from '../../api/auth'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
-import { Mail, Lock, Eye, EyeOff, AlertCircle, User, CheckCircle2, Zap, Flame, Target, Trophy, Dumbbell } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, AlertCircle, User, CheckCircle2, Zap, Flame, Target, Trophy, Dumbbell, Check, X } from 'lucide-react'
 import { hapticImpact } from '../../lib/haptics'
 
 const AVATARS = [
@@ -22,6 +22,13 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [registered, setRegistered] = useState(false)
+
+  const pwChecks = useMemo(() => ({
+    length: password.length >= 8,
+    upper: /[A-Z]/.test(password),
+    number: /[0-9]/.test(password),
+  }), [password])
+  const pwValid = pwChecks.length && pwChecks.upper && pwChecks.number
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -160,8 +167,8 @@ export default function RegisterPage() {
                       required minLength={8} autoComplete="new-password"
                       style={{ paddingRight: '40px' }}
                     />
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className="auth-pwd-toggle"
                       onClick={() => { hapticImpact('light'); setShowPassword(!showPassword) }}
                       tabIndex={-1}
@@ -169,9 +176,22 @@ export default function RegisterPage() {
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
+                  {password.length > 0 && (
+                    <div style={{ display: 'flex', gap: 'var(--space-3)', marginTop: 'var(--space-2)', flexWrap: 'wrap' }}>
+                      {([
+                        { ok: pwChecks.length, label: '8+ caracteres' },
+                        { ok: pwChecks.upper,  label: 'Mayúscula' },
+                        { ok: pwChecks.number, label: 'Número' },
+                      ] as { ok: boolean; label: string }[]).map(({ ok, label }) => (
+                        <span key={label} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-xs)', color: ok ? 'var(--color-success)' : 'var(--color-text-faint)' }}>
+                          {ok ? <Check size={11} /> : <X size={11} />} {label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <button type="submit" className="auth-submit" disabled={loading}>
+                <button type="submit" className="auth-submit" disabled={loading || !pwValid}>
                   {loading ? 'Preparando tu cuenta...' : 'Crear Cuenta'}
                 </button>
               </motion.form>

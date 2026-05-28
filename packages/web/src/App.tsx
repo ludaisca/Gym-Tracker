@@ -29,18 +29,17 @@ const Config = lazy(() => import('./components/views/Config'))
 const Duelos = lazy(() => import('./components/views/Duelos'))
 const SessionHistory = lazy(() => import('./components/views/SessionHistory'))
 
-// Componente simple de carga (Skeleton o Spinner)
 function SuspenseLoader() {
   return (
-    <div className="content fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      <div className="skeleton" style={{ height: '120px', borderRadius: 'var(--radius-xl)' }} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-        <div className="skeleton" style={{ height: '80px', borderRadius: 'var(--radius-xl)' }} />
-        <div className="skeleton" style={{ height: '80px', borderRadius: 'var(--radius-xl)' }} />
-        <div className="skeleton" style={{ height: '80px', borderRadius: 'var(--radius-xl)' }} />
-        <div className="skeleton" style={{ height: '80px', borderRadius: 'var(--radius-xl)' }} />
+    <div className="splash-loader">
+      <div className="splash-brand">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 4L12 2L6 4V12C6 16.4 9.4 20.4 12 22C14.6 20.4 18 16.4 18 12V4Z"/>
+        </svg>
       </div>
-      <div className="skeleton" style={{ height: '200px', borderRadius: 'var(--radius-xl)' }} />
+      <div className="splash-bar-wrap">
+        <div className="splash-bar" />
+      </div>
     </div>
   )
 }
@@ -88,8 +87,8 @@ const router = createBrowserRouter([
 async function updateNativeStatusBar(theme: 'light' | 'dark') {
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar')
+    // Style.Dark = light/white icons (for dark backgrounds); Style.Light = dark icons (for light backgrounds)
     await StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light })
-    await StatusBar.setBackgroundColor({ color: theme === 'dark' ? '#171614' : '#f5f5f0' })
   } catch { /* no-op en entornos sin status bar nativa */ }
 }
 
