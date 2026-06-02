@@ -9,6 +9,7 @@ backend/dist/
 .env
 .env.*
 !.env.example
+!frontend/.env.android
 
 # Android / Capacitor (descartado)
 frontend/android/
@@ -30,3 +31,22 @@ Thumbs.db
 
 # Claude Code (configuración local)
 .claude/
+
+# Archivos de entorno de Coolify (contienen secretos)
+coolify.env
+
+# Imágenes sueltas en la raíz (screenshots, etc.)
+*.jpeg
+*.jpg
+*.png
+!packages/web/public/**
+
+# stripe-projects-cli + Cursor (artefactos locales, no código fuente)
+.agents/
+.cursor/
+.cursorignore
+.projects/
+skills-lock.json
+
+# Firebase — contiene claves privadas del proyecto
+packages/android/android/app/google-services.json

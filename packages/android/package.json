@@ -1,0 +1,25 @@
+{
+  "name": "@gym-tracker/android",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:web && npx cap sync android",
+    "build:web": "cd ../web && npm run build:android",
+    "sync": "npx cap sync android",
+    "open": "npx cap open android",
+    "run": "npx cap run android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.3.3",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/camera": "^8.2.0",
+    "@capacitor/core": "^8.3.3",
+    "@capacitor/push-notifications": "^8.1.1",
+    "@capacitor/status-bar": "^8.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.3.3"
+  }
+}

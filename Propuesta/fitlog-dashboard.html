@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>FITLOG — Dashboard</title>
+<link rel="preconnect" href="https://api.fontshare.com"/>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,600,700&display=swap" rel="stylesheet"/>
+
+<style>
+:root {
+  --bg:#0A0A0C;--s1:#131318;--s2:#1A1A22;--s3:#21212D;--sh:#26263A;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
+  --text:#F0EFF6;--muted:#8A8A9A;--faint:#4A4A5A;
+  --accent:#7C6FFF;--adim:rgba(124,111,255,0.18);--aglow:rgba(124,111,255,0.35);
+  --alight:#A89DFF;--adark:#5A4FCC;
+  --green:#3ECFA3;--gdim:rgba(62,207,163,0.15);
+  --red:#FF5F7E;--rdim:rgba(255,95,126,0.15);
+  --r-sm:10px;--r-md:16px;--r-lg:20px;--r-xl:26px;--r-full:9999px;
+  --t:220ms cubic-bezier(0.16,1,0.3,1);--tf:140ms cubic-bezier(0.16,1,0.3,1);
+  --font:'Satoshi',system-ui,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100dvh;display:flex;justify-content:center;align-items:flex-start;padding:20px 16px}
+img{display:block;max-width:100%}
+button{cursor:pointer;border:none;background:none;font:inherit;color:inherit}
+
+.phone{width:390px;min-height:844px;background:var(--bg);border-radius:48px;overflow:hidden;position:relative;box-shadow:0 0 0 1.5px rgba(255,255,255,0.10),0 40px 120px rgba(0,0,0,0.8),0 0 80px rgba(124,111,255,0.08);display:flex;flex-direction:column}
+
+.status-bar{display:flex;justify-content:space-between;align-items:center;padding:14px 28px 0;height:44px}
+.status-time{font-size:15px;font-weight:600;letter-spacing:-0.3px}
+.status-icons{display:flex;align-items:center;gap:6px}
+
+.scroll-area{flex:1;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:0 20px 100px;scrollbar-width:none}
+.scroll-area::-webkit-scrollbar{display:none}
+
+.app-header{display:flex;justify-content:space-between;align-items:center;padding:16px 0 18px;position:sticky;top:0;z-index:10;background:var(--bg)}
+.logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:700;letter-spacing:0.8px}
+.logo-icon{width:34px;height:34px;background:var(--adim);border:1px solid rgba(124,111,255,0.3);border-radius:10px;display:flex;align-items:center;justify-content:center}
+.header-actions{display:flex;align-items:center;gap:8px}
+
+.badge-pill{display:flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--border2);border-radius:var(--r-full);padding:5px 12px;font-size:13px;font-weight:500;color:var(--muted);transition:background var(--tf),border-color var(--tf)}
+.badge-pill:hover{background:var(--s3);border-color:rgba(255,255,255,0.18)}
+.badge-num{color:var(--alight);font-weight:700}
+
+.avatar-btn{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--adark));border:2px solid rgba(124,111,255,0.4);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:white;transition:transform var(--tf),box-shadow var(--tf)}
+.avatar-btn:hover{transform:scale(1.06);box-shadow:0 0 16px var(--aglow)}
+.avatar-btn:active{transform:scale(0.96)}
+
+.greeting-section{padding:24px 0 20px}
+.greeting-date{font-size:11px;font-weight:600;letter-spacing:1.2px;color:var(--faint);text-transform:uppercase;margin-bottom:6px}
+.greeting-name{font-size:32px;font-weight:700;letter-spacing:-0.8px;line-height:1.1}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.kpi-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 14px 16px;display:flex;flex-direction:column;gap:6px;cursor:pointer;transition:background var(--tf),border-color var(--tf),transform var(--tf);position:relative;overflow:hidden}
+.kpi-card:hover{background:var(--s2);border-color:var(--border2)}
+.kpi-card:active{transform:scale(0.97)}
+.kpi-card.accent::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--alight))}
+.kpi-label{font-size:11px;font-weight:500;color:var(--muted);letter-spacing:0.2px}
+.kpi-value{font-size:22px;font-weight:700;letter-spacing:-0.5px;line-height:1;font-variant-numeric:tabular-nums lining-nums}
+.kpi-value .unit{font-size:13px;font-weight:500;color:var(--muted);margin-left:2px}
+.kpi-delta{font-size:11px;font-weight:600;display:flex;align-items:center;gap:3px}
+.up{color:var(--green)}
+.down{color:var(--red)}
+
+.chart-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r-xl);padding:18px 18px 16px;margin-bottom:20px}
+.chart-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px}
+.chart-title{font-size:11px;font-weight:600;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase}
+.chart-sub{font-size:12px;color:var(--faint)}
+
+.bar-chart{display:flex;align-items:flex-end;gap:10px;height:90px}
+.bar-group{display:flex;flex-direction:column;align-items:center;flex:1;gap:8px;cursor:pointer}
+.bar-wrap{display:flex;align-items:flex-end;justify-content:center;height:74px;width:100%}
+.bar{width:100%;max-width:32px;border-radius:6px 6px 3px 3px;transition:opacity var(--tf);position:relative;overflow:hidden}
+.bar::after{content:'';position:absolute;top:0;left:0;right:0;height:40%;background:linear-gradient(to bottom,rgba(255,255,255,0.12),transparent)}
+.bar.filled{background:linear-gradient(to top,var(--adark),var(--accent))}
+.bar.filled.active{background:linear-gradient(to top,var(--accent),var(--alight));box-shadow:0 4px 16px var(--aglow)}
+.bar.empty{background:var(--s3);opacity:0.4}
+.bar-group:hover .bar{opacity:0.75}
+.bar-group.is-active:hover .bar{opacity:1}
+.bar-label{font-size:11px;font-weight:500;color:var(--faint);letter-spacing:0.3px}
+.bar-group.is-active .bar-label{color:var(--alight);font-weight:700}
+
+.section-label{font-size:11px;font-weight:600;letter-spacing:1.3px;color:var(--muted);text-transform:uppercase;margin-bottom:12px}
+
+.today-section{margin-bottom:20px}
+.workout-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r-xl);padding:16px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:background var(--tf),border-color var(--tf),transform var(--tf);position:relative;overflow:hidden}
+.workout-card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(124,111,255,0.06) 0%,transparent 70%);pointer-events:none}
+.workout-card:hover{background:var(--s2);border-color:rgba(124,111,255,0.25)}
+.workout-card:active{transform:scale(0.99)}
+.workout-icon{width:52px;height:52px;background:var(--adim);border:1px solid rgba(124,111,255,0.25);border-radius:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.workout-info{flex:1}
+.workout-name{font-size:18px;font-weight:700;letter-spacing:-0.3px;margin-bottom:5px}
+.workout-meta{display:flex;align-items:center;gap:14px}
+.meta-item{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted);font-weight:500}
+.play-btn{width:44px;height:44px;background:var(--accent);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform var(--tf),box-shadow var(--tf),background var(--tf)}
+.play-btn:hover{transform:scale(1.08);box-shadow:0 6px 20px var(--aglow);background:var(--alight)}
+.play-btn:active{transform:scale(0.93)}
+
+@keyframes pulse-ring{0%{box-shadow:0 0 0 0 var(--aglow)}70%{box-shadow:0 0 0 8px rgba(124,111,255,0)}100%{box-shadow:0 0 0 0 rgba(124,111,255,0)}}
+.play-btn{animation:pulse-ring 2.5s ease-out infinite}
+
+.history-section{margin-bottom:20px}
+.history-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.see-all{font-size:13px;font-weight:600;color:var(--alight);transition:color var(--tf)}
+.see-all:hover{color:#fff}
+.history-list{display:flex;flex-direction:column;gap:8px}
+
+.history-item{background:var(--s1);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:background var(--tf),border-color var(--tf),transform var(--tf)}
+.history-item:hover{background:var(--s2);border-color:var(--border2)}
+.history-item:active{transform:scale(0.99)}
+.h-name{font-size:15px;font-weight:600;letter-spacing:-0.2px;margin-bottom:3px}
+.h-date{font-size:12px;color:var(--faint);font-weight:500}
+.h-right{display:flex;align-items:center;gap:12px}
+.h-metric{text-align:right}
+.h-val{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text)}
+.h-sub{font-size:11px;color:var(--faint);font-weight:500}
+.h-div{width:1px;height:28px;background:var(--border2)}
+
+.bottom-nav{position:absolute;bottom:0;left:0;right:0;height:82px;background:rgba(10,10,12,0.92);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);border-top:1px solid var(--border);display:flex;align-items:flex-start;padding-top:10px;z-index:20}
+.nav-items{width:100%;display:flex;justify-content:space-around;align-items:center}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:5px;padding:6px 14px;border-radius:var(--r-md);cursor:pointer;transition:background var(--tf);min-width:60px}
+.nav-item:hover{background:var(--s2)}
+.nav-item:active{transform:scale(0.95)}
+.nav-label{font-size:11px;font-weight:500;color:var(--faint);transition:color var(--tf)}
+.nav-item.active .nav-label{color:var(--alight);font-weight:700}
+.nav-icon{color:var(--faint);transition:color var(--tf)}
+.nav-item.active .nav-icon{color:var(--alight)}
+
+@keyframes ripple-anim{from{transform:scale(0);opacity:0.4}to{transform:scale(4);opacity:0}}
+.ripple-host{position:relative;overflow:hidden}
+.ripple-el{position:absolute;border-radius:50%;background:rgba(124,111,255,0.28);width:50px;height:50px;margin-left:-25px;margin-top:-25px;pointer-events:none;animation:ripple-anim 600ms ease-out forwards}
+
+@keyframes bar-rise{from{transform:scaleY(0);transform-origin:bottom}to{transform:scaleY(1);transform-origin:bottom}}
+.bar{animation:bar-rise 600ms cubic-bezier(0.16,1,0.3,1) both}
+.bar-group:nth-child(1) .bar{animation-delay:0ms}
+.bar-group:nth-child(2) .bar{animation-delay:60ms}
+.bar-group:nth-child(3) .bar{animation-delay:120ms}
+.bar-group:nth-child(4) .bar{animation-delay:180ms}
+.bar-group:nth-child(5) .bar{animation-delay:240ms}
+.bar-group:nth-child(6) .bar{animation-delay:300ms}
+.bar-group:nth-child(7) .bar{animation-delay:360ms}
+
+@keyframes fade-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.kpi-card{animation:fade-up 500ms cubic-bezier(0.16,1,0.3,1) both}
+.kpi-card:nth-child(1){animation-delay:80ms}
+.kpi-card:nth-child(2){animation-delay:140ms}
+.kpi-card:nth-child(3){animation-delay:200ms}
+.chart-card{animation:fade-up 500ms cubic-bezier(0.16,1,0.3,1) both;animation-delay:260ms}
+.workout-card{animation:fade-up 500ms cubic-bezier(0.16,1,0.3,1) both;animation-delay:320ms}
+.history-item:nth-child(1){animation:fade-up 500ms cubic-bezier(0.16,1,0.3,1) both;animation-delay:380ms}
+.history-item:nth-child(2){animation:fade-up 500ms cubic-bezier(0.16,1,0.3,1) both;animation-delay:430ms}
+.history-item:nth-child(3){animation:fade-up 500ms cubic-bezier(0.16,1,0.3,1) both;animation-delay:480ms}
+
+.bar-tooltip{position:fixed;background:var(--s3);border:1px solid var(--border2);border-radius:var(--r-sm);padding:6px 10px;font-size:12px;font-weight:600;color:var(--text);pointer-events:none;z-index:100;opacity:0;transition:opacity var(--tf);white-space:nowrap;transform:translateX(-50%)}
+.bar-tooltip.show{opacity:1}
+
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:0.01ms !important;transition-duration:0.01ms !important}}
+</style>
+</head>
+<body>
+
+<div class="phone ripple-host" id="app">
+
+  <div class="status-bar">
+    <span class="status-time">9:41</span>
+    <div class="status-icons">
+      <svg width="17" height="12" viewBox="0 0 17 12" fill="white" aria-hidden="true">
+        <rect x="0" y="3" width="3" height="9" rx="1" opacity="0.35"/>
+        <rect x="4.5" y="2" width="3" height="10" rx="1" opacity="0.55"/>
+        <rect x="9" y="0.5" width="3" height="11.5" rx="1" opacity="0.75"/>
+        <rect x="13.5" y="0" width="3" height="12" rx="1"/>
+      </svg>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="none" aria-hidden="true">
+        <path d="M8 2.5C10.5 2.5 12.7 3.5 14.2 5.2L15.5 3.8C13.6 1.8 11 0.5 8 0.5C5 0.5 2.4 1.8 0.5 3.8L1.8 5.2C3.3 3.5 5.5 2.5 8 2.5Z" fill="white"/>
+        <path d="M8 6C9.6 6 11 6.7 12 7.8L13.3 6.5C11.9 4.9 9.9 4 8 4C6.1 4 4.1 4.9 2.7 6.5L4 7.8C5 6.7 6.4 6 8 6Z" fill="white" opacity="0.8"/>
+        <circle cx="8" cy="10" r="1.5" fill="white"/>
+      </svg>
+      <svg width="26" height="12" viewBox="0 0 26 12" fill="none" aria-hidden="true">
+        <rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="white" stroke-opacity="0.35"/>
+        <rect x="2" y="2" width="17" height="8" rx="2" fill="white"/>
+        <path d="M23 4v4a2 2 0 000-4z" fill="white" opacity="0.4"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="scroll-area" id="scrollArea">
+
+    <header class="app-header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A89DFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6.5 6.5h11M6.5 17.5h11M4 12h2m14 0h2M6 8.5v7M18 8.5v7"/>
+          </svg>
+        </div>
+        FITLOG
+      </div>
+      <div class="header-actions">
+        <button class="badge-pill ripple-host" id="streakBadge" aria-label="Racha activa de 12 días">
+          <span aria-hidden="true">🔥</span>
+          <span style="font-size:12px">Racha</span>
+          <span class="badge-num">12</span>
+        </button>
+        <button class="avatar-btn ripple-host" aria-label="Ver perfil">C</button>
+      </div>
+    </header>
+
+    <section aria-label="Saludo y fecha">
+      <p class="greeting-date">Martes · 24 Octubre</p>
+      <h1 class="greeting-name">Hola, Carlos</h1>
+    </section>
+
+    <div style="height:20px"></div>
+
+    <div class="kpi-grid" role="list" aria-label="Estadísticas principales">
+      <div class="kpi-card ripple-host" role="listitem" tabindex="0" aria-label="Racha: 12 días, subió 3 días">
+        <span class="kpi-label">Racha</span>
+        <div class="kpi-value"><span id="c1">12</span><span class="unit">días</span></div>
+        <div class="kpi-delta up">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="currentColor" aria-hidden="true"><path d="M4.5 0L9 9H0z"/></svg>+3
+        </div>
+      </div>
+      <div class="kpi-card ripple-host" role="listitem" tabindex="0" aria-label="Sesiones: 4 de 5 esta semana">
+        <span class="kpi-label">Sesiones</span>
+        <div class="kpi-value">4<span class="unit">/5 sem</span></div>
+        <div class="kpi-delta up">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="currentColor" aria-hidden="true"><path d="M4.5 0L9 9H0z"/></svg>Meta
+        </div>
+      </div>
+      <div class="kpi-card accent ripple-host" role="listitem" tabindex="0" aria-label="Volumen: 38.4 mil kilogramos, más 12 por ciento">
+        <span class="kpi-label">Volumen</span>
+        <div class="kpi-value">38.4<span class="unit">k kg</span></div>
+        <div class="kpi-delta up">
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="currentColor" aria-hidden="true"><path d="M4.5 0L9 9H0z"/></svg>+12%
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-card" role="region" aria-label="Gráfico de volumen diario">
+      <div class="chart-header">
+        <span class="chart-title">Volumen diario</span>
+        <span class="chart-sub">kg · 7 días</span>
+      </div>
+      <div class="bar-chart" id="barChart"></div>
+    </div>
+
+    <section class="today-section" aria-labelledby="lbl-today">
+      <p class="section-label" id="lbl-today">Entrenamiento de hoy</p>
+      <div class="workout-card ripple-host" role="button" tabindex="0" aria-label="Iniciar: Pecho y tríceps, 65 minutos, 8 ejercicios">
+        <div class="workout-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#A89DFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6.5 6.5h11M6.5 17.5h11M4 12h2m14 0h2M6 8.5v7M18 8.5v7"/>
+          </svg>
+        </div>
+        <div class="workout-info">
+          <div class="workout-name">Pecho y tríceps</div>
+          <div class="workout-meta">
+            <div class="meta-item">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>65 min
+            </div>
+            <div class="meta-item">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>8 ej.
+            </div>
+          </div>
+        </div>
+        <div class="play-btn" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+        </div>
+      </div>
+    </section>
+
+    <section class="history-section" aria-labelledby="lbl-history">
+      <div class="history-header">
+        <p class="section-label" id="lbl-history" style="margin-bottom:0">Historial reciente</p>
+        <button class="see-all" aria-label="Ver todo el historial">Ver todo</button>
+      </div>
+      <div class="history-list" id="historyList"></div>
+    </section>
+
+  </div>
+
+  <nav class="bottom-nav" aria-label="Navegación principal">
+    <div class="nav-items">
+      <button class="nav-item active ripple-host" aria-current="page" aria-label="Inicio">
+        <svg class="nav-icon" width="22" height="22" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
+        <span class="nav-label">Inicio</span>
+      </button>
+      <button class="nav-item ripple-host" aria-label="Rutinas">
+        <svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2M9 12h6M9 16h4"/></svg>
+        <span class="nav-label">Rutinas</span>
+      </button>
+      <button class="nav-item ripple-host" aria-label="Gráficos">
+        <svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 3v18h18M7 16l4-4 4 4 4-7"/></svg>
+        <span class="nav-label">Gráficos</span>
+      </button>
+      <button class="nav-item ripple-host" aria-label="Perfil">
+        <svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"/></svg>
+        <span class="nav-label">Perfil</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="bar-tooltip" id="barTooltip" role="tooltip" aria-hidden="true"></div>
+
+</div>
+
+<script>
+const chartData=[
+  {day:"L",vol:8200},{day:"M",vol:10400},{day:"X",vol:6800},
+  {day:"J",vol:12600},{day:"V",vol:4800,active:true},
+  {day:"S",vol:0},{day:"D",vol:0}
+];
+const historyData=[
+  {name:"Pierna completa",date:"23 oct",vol:"12 400 kg",dur:"75 min"},
+  {name:"Pull · Dorsales",date:"21 oct",vol:"10 200 kg",dur:"60 min"},
+  {name:"Hombros y Trapecio",date:"19 oct",vol:"7 800 kg",dur:"55 min"}
+];
+
+function renderBars(){
+  const max=Math.max(...chartData.map(d=>d.vol));
+  document.getElementById("barChart").innerHTML=chartData.map((d,i)=>{
+    const h=d.vol>0?Math.max(16,Math.round(d.vol/max*74)):4;
+    const cls=d.vol>0?(d.active?"filled active":"filled"):"empty";
+    const ag=d.active?" is-active":"";
+    return `<div class="bar-group${ag}" data-vol="${d.vol}" data-day="${d.day}" tabindex="${d.vol>0?0:-1}" role="img" aria-label="${d.day}: ${d.vol>0?(d.vol/1000).toFixed(1)+"k kg":"sin datos"}">
+      <div class="bar-wrap"><div class="bar ${cls}" style="height:${h}px"></div></div>
+      <span class="bar-label">${d.day}</span>
+    </div>`;
+  }).join("");
+  setupBars();
+}
+
+function renderHistory(){
+  document.getElementById("historyList").innerHTML=historyData.map(h=>`
+    <div class="history-item ripple-host" role="button" tabindex="0" aria-label="${h.name}, ${h.vol}, ${h.dur}">
+      <div>
+        <div class="h-name">${h.name}</div>
+        <div class="h-date">${h.date}</div>
+      </div>
+      <div class="h-right">
+        <div class="h-metric"><div class="h-val">${h.vol}</div><div class="h-sub">volumen</div></div>
+        <div class="h-div" aria-hidden="true"></div>
+        <div class="h-metric"><div class="h-val">${h.dur}</div><div class="h-sub">duración</div></div>
+      </div>
+    </div>`).join("");
+  document.querySelectorAll(".history-item").forEach(el=>{
+    el.addEventListener("click",()=>addRipple(el,event));
+    el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();el.click();}});
+  });
+}
+
+const tooltip=document.getElementById("barTooltip");
+let ttTimeout;
+function showTT(el,text){
+  clearTimeout(ttTimeout);
+  const r=el.getBoundingClientRect();
+  const appR=document.getElementById("app").getBoundingClientRect();
+  tooltip.textContent=text;
+  tooltip.classList.add("show");
+  tooltip.style.left=(r.left+r.width/2)+"px";
+  tooltip.style.top=(r.top-38)+"px";
+}
+function hideTT(){ttTimeout=setTimeout(()=>tooltip.classList.remove("show"),100);}
+
+function setupBars(){
+  document.querySelectorAll(".bar-group").forEach(bg=>{
+    bg.addEventListener("mouseenter",()=>{
+      const v=parseInt(bg.dataset.vol);
+      if(v>0)showTT(bg,(v/1000).toFixed(1)+"k kg");
+    });
+    bg.addEventListener("mouseleave",hideTT);
+    bg.addEventListener("click",()=>{
+      document.querySelectorAll(".bar-group").forEach(b=>b.classList.remove("is-active"));
+      document.querySelectorAll(".bar").forEach(b=>b.classList.remove("active"));
+      bg.classList.add("is-active");
+      const bar=bg.querySelector(".bar");
+      if(bar.classList.contains("filled"))bar.classList.add("active");
+    });
+    bg.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();bg.click();}});
+  });
+}
+
+function addRipple(el,e){
+  const r=document.createElement("span");
+  r.className="ripple-el";
+  const rect=el.getBoundingClientRect();
+  const clientX=e?.clientX??rect.left+rect.width/2;
+  const clientY=e?.clientY??rect.top+rect.height/2;
+  r.style.left=(clientX-rect.left)+"px";
+  r.style.top=(clientY-rect.top)+"px";
+  el.appendChild(r);
+  r.addEventListener("animationend",()=>r.remove());
+}
+
+document.querySelectorAll(".ripple-host").forEach(el=>{
+  el.addEventListener("click",e=>addRipple(el,e));
+});
+
+document.querySelectorAll(".nav-item").forEach(btn=>{
+  btn.addEventListener("click",function(){
+    document.querySelectorAll(".nav-item").forEach(b=>{b.classList.remove("active");b.removeAttribute("aria-current");});
+    this.classList.add("active");
+    this.setAttribute("aria-current","page");
+  });
+});
+
+document.querySelectorAll(".kpi-card, .workout-card, .see-all, .badge-pill, .avatar-btn").forEach(el=>{
+  el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();el.click();}});
+});
+
+// Counter animation
+function animateCounter(el,target,duration=1200){
+  const start=performance.now();
+  function update(now){
+    const p=Math.min((now-start)/duration,1);
+    const ease=1-Math.pow(1-p,4);
+    el.textContent=Math.round(ease*target);
+    if(p<1)requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+}
+
+document.addEventListener("DOMContentLoaded",()=>{
+  renderBars();
+  renderHistory();
+  setTimeout(()=>animateCounter(document.getElementById("c1"),12),300);
+});
+</script>
+</body>
+</html>

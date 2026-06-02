@@ -1,0 +1,237 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  passwordHash       String
+  name               String
+  avatar             String    @default("💪")
+  theme              String    @default("dark")
+  accentTheme        String    @default("teal")
+  activeRoutineId    String?
+  routineStartDate   DateTime?
+  currentWeek        Int       @default(1)
+  emailVerified      Boolean   @default(false)
+  verificationToken  String?   @unique
+  verificationExpiry DateTime?
+  resetToken         String?   @unique
+  resetExpiry        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  settings           UserSettings?
+  sessions           WorkoutSession[]
+  nutritionDays      NutritionDay[]
+  notes              GlobalNote[]
+  savedFoods         SavedFood[]
+  customRoutines     Routine[]
+  refreshTokens      RefreshToken[]
+  bodyWeights        BodyWeight[]
+  aiChat             AIChat?
+  challengesCreated  Challenge[]        @relation("ChallengeCreator")
+  challengesOpponent Challenge[]        @relation("ChallengeOpponent")
+  checkIns           CheckIn[]
+  liftGoals          LiftGoal[]
+}
+
+model UserSettings {
+  id            String  @id @default(cuid())
+  userId        String  @unique
+  sessionLength String  @default("90-120 min")
+  goal          String  @default("Definición")
+  cardioDefault String  @default("20 min")
+  calorieGoal   Int     @default(2500)
+  proteinGoal   Int     @default(150)
+  carbGoal      Int     @default(250)
+  fatGoal       Int     @default(80)
+  waterGoal     Int     @default(8)
+  aiProvider    String?
+  aiKey         String?
+  aiModel       String?
+  fcmToken      String?           // FCM token del dispositivo Android (nullable = sin APK o sin permisos)
+  reminderTime  String?           // "HH:MM" hora del servidor (UTC) para recordatorio diario; null = desactivado
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Routine {
+  id            String  @id @default(cuid())
+  userId        String
+  name          String
+  description   String?
+  days          Json
+  shareCode     String? @unique
+  isPublic      Boolean @default(false)
+  downloadCount Int     @default(0)
+
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions WorkoutSession[]
+
+  @@index([userId])
+  @@index([isPublic])
+}
+
+model WorkoutSession {
+  id         String   @id @default(cuid())
+  userId     String
+  routineId  String?
+  weekNumber Int
+  dayId      String
+  complete   Boolean  @default(false)
+  notes      String?
+  cardio     Json?
+  exercises  Json     @default("[]")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routine Routine? @relation(fields: [routineId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, weekNumber, dayId])
+  @@index([userId, weekNumber])
+  @@index([exercises(ops: JsonbPathOps)], type: Gin)
+}
+
+model NutritionDay {
+  id        String   @id @default(cuid())
+  userId    String
+  date      String
+  water     Int      @default(0)
+  meals     Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@index([meals(ops: JsonbPathOps)], type: Gin)
+}
+
+model GlobalNote {
+  id        String   @id @default(cuid())
+  userId    String
+  text      String
+  done      Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model SavedFood {
+  id      String @id @default(cuid())
+  userId  String
+  name    String
+  kcal    Float
+  protein Float  @default(0)
+  carbs   Float  @default(0)
+  fat     Float  @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AIChat {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  messages  Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BodyWeight {
+  id        String   @id @default(cuid())
+  userId    String
+  date      String
+  weight_kg Float
+  notes     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+}
+
+model Challenge {
+  id           String    @id @default(cuid())
+  code         String    @unique
+  creatorId    String
+  opponentId   String?
+  type         String    @default("both") // "checkin" | "versus" | "both"
+  status       String    @default("pending") // "pending" | "active" | "finished"
+  durationDays Int       @default(30)
+  startDate    DateTime?
+  endDate      DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  creator  User      @relation("ChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  opponent User?     @relation("ChallengeOpponent", fields: [opponentId], references: [id], onDelete: SetNull)
+  checkIns CheckIn[]
+
+  @@index([creatorId])
+  @@index([opponentId])
+}
+
+model CheckIn {
+  id          String   @id @default(cuid())
+  challengeId String
+  userId      String
+  photoUrl    String
+  lat         Float?
+  lng         Float?
+  serverTime  DateTime @default(now())
+  hash        String
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId, serverTime])
+  @@index([challengeId])
+  @@index([userId])
+}
+
+model LiftGoal {
+  id           String   @id @default(cuid())
+  userId       String
+  exerciseName String
+  targetKg     Float
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, exerciseName])
+  @@index([userId])
+}
+
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

@@ -1,260 +1,185 @@
-<div align="center">
+# Gym Tracker
 
-# 🏋️ Gym Tracker
+Aplicación de seguimiento de entrenamiento y nutrición para Android. Construida con React 19 + Capacitor 8, con API Fastify en producción (Coolify).
 
-**App web de seguimiento de entrenamiento personal — instalable como PWA**
-
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
-[![Fastify](https://img.shields.io/badge/Fastify-5.4-000000?style=flat-square&logo=fastify&logoColor=white)](https://fastify.dev/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Prisma](https://img.shields.io/badge/Prisma-6.8-2D3748?style=flat-square&logo=prisma&logoColor=white)](https://www.prisma.io/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![nginx](https://img.shields.io/badge/nginx-alpine-009639?style=flat-square&logo=nginx&logoColor=white)](https://nginx.org/)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
-
-</div>
+**Producción**: `https://gym-tracker.ludaisca.ddns.net`  
+**Rama activa**: `v1`
 
 ---
 
-## 📋 Tabla de contenidos
+## Stack
 
-- [Arquitectura](#-arquitectura)
-- [Requisitos](#-requisitos-previos)
-- [Configuración del entorno](#-configuración-del-entorno)
-- [Deploy con Coolify](#-deploy-con-coolify)
-- [Docker Compose (producción)](#-docker-compose-producción)
-- [Tailscale](#-tailscale)
-- [Desarrollo local](#-desarrollo-local)
-- [Variables de entorno](#-variables-de-entorno)
+| Capa | Tecnología |
+|------|-----------|
+| Backend | Fastify v5 · Prisma · PostgreSQL · Redis · BullMQ |
+| Frontend (APK) | React 19 · Vite 8 · Zustand · Axios · Capacitor 8 |
+| Infra | Docker Compose · Coolify + Traefik (producción) |
+
+La app corre en un WebView de Android gestionado por Capacitor. No hay app web — el único cliente es la APK.
 
 ---
 
-## 🏗 Arquitectura
+## Monorepo
 
 ```
-Cliente (browser / móvil)
-       │
-       ▼
-  nginx :80  (reverse proxy)
-       │
-       ├── /api/*  ──►  api (Fastify :3001)  ──►  db (PostgreSQL :5432)
-       │
-       └── /*      ──►  SPA (dist estático de Vite)
+packages/
+├── backend/    → API Fastify v5 + Prisma + PostgreSQL + Redis
+├── web/        → Código React (UI de la APK; también sirve como dev server con HMR)
+└── android/    → Wrapper Capacitor 8 + proyecto nativo Android
 ```
 
-| Servicio | Imagen | Rol |
-|---|---|---|
-| `nginx` | `Dockerfile.nginx` | Reverse proxy + sirve el SPA |
-| `web` | `Dockerfile.frontend` | Compila React con Vite (solo en build) |
-| `api` | `Dockerfile.backend` | Fastify + Prisma, aplica migraciones al arrancar |
-| `db` | `postgres:16-alpine` | Base de datos, datos persistentes en volumen `pgdata` |
-
 ---
 
-## ✅ Requisitos previos
+## Desarrollo local
 
-- Docker + Docker Compose
-- `make`
-- Node.js 22 (solo para desarrollo local)
+### Requisitos
 
----
+- Node.js 20+
+- Docker y Docker Compose
+- Java 21 en `~/java/jdk-21.0.7+6` (Temurin — para builds Android)
+- Android SDK en `~/android-sdk` (API 36)
 
-## ⚙️ Configuración del entorno
-
-Copia el archivo de ejemplo y rellena los valores:
+### Variables de entorno
 
 ```bash
-cp .env.example .env
+cp .env.example .env   # editar con tus valores
 ```
+
+Variables mínimas requeridas:
 
 ```env
-# PostgreSQL
+DATABASE_URL=postgresql://gymtracker:pass@localhost:5440/gymtracker
+REDIS_URL=redis://:pass@localhost:6390
+JWT_SECRET=<32+ chars>
+JWT_REFRESH_SECRET=<32+ chars>
+ENCRYPTION_KEY=<exactamente 32 chars>
+DB_USER=gymtracker
+DB_PASSWORD=pass
 DB_NAME=gymtracker
-DB_USER=gymuser
-DB_PASSWORD=una_clave_segura_aqui
-
-# Solo para desarrollo local
-DATABASE_URL=postgresql://gymuser:una_clave_segura_aqui@localhost:5432/gymtracker
-
-# Genera cada uno con: openssl rand -base64 32
-JWT_SECRET=cadena_aleatoria_larga_minimo_32_caracteres
-JWT_REFRESH_SECRET=otra_cadena_diferente_para_refresh
+REDIS_PASSWORD=pass
 ```
 
-> 💡 Para generar secrets seguros:
-> ```bash
-> openssl rand -base64 32
-> ```
-
----
-
-## 🚀 Deploy con Coolify
-
-Este proyecto está optimizado para desplegarse en [Coolify](https://coolify.io) usando Docker Compose.
-
-### Pasos
-
-1. **Conecta tu repositorio** en Coolify → New Resource → Docker Compose
-2. **Desactiva "Build Secrets"** en Configuration → General (evita que Coolify corrompa los Dockerfiles)
-3. **Configura las variables de entorno** en la tab *Environment Variables* con los siguientes valores:
-
-```
-DB_NAME=gymtracker
-DB_USER=gymuser
-DB_PASSWORD=<password_seguro>
-JWT_SECRET=<openssl rand -base64 32>
-JWT_REFRESH_SECRET=<openssl rand -base64 32>
-```
-
-4. **Asigna un dominio** al servicio `nginx` en la sección FQDN
-5. **Despliega** — Coolify construirá las 3 imágenes y levantará el stack automáticamente
-
-> ⚠️ **Nota:** Las variables deben marcarse como *Available at Runtime*, no solo en build time.
-
----
-
-## 🐳 Docker Compose (producción)
-
-### Primer deploy
+### Levantar el entorno
 
 ```bash
-make build
-```
-
-Este comando:
-1. Construye la imagen del frontend (Vite → dist estático)
-2. Construye la imagen del backend (TypeScript compilado, 2 stages)
-3. Construye la imagen de nginx (config embebida)
-4. Levanta los servicios en orden: `db` → `api` → `nginx`
-5. El backend aplica las migraciones de Prisma automáticamente
-
-La app queda disponible en: **`http://localhost:3000`**
-
-### Comandos de operación
-
-```bash
-make build       # Reconstruir imágenes y levantar
-make deploy      # git pull + reconstruir + levantar
-make logs        # Logs en tiempo real de nginx y api
-make logs-api    # Logs solo del backend
-make logs-db     # Logs solo de PostgreSQL
-make restart     # Reiniciar nginx y api sin tocar la BD
-
-docker compose down      # Parar servicios (datos persisten)
-docker compose down -v   # Parar y borrar todos los datos ⚠️
-```
-
-### Persistencia
-
-Los datos de PostgreSQL se almacenan en el volumen Docker `pgdata`. Sobreviven a reinicios y a `docker compose down`. Solo se eliminan con `docker compose down -v`.
-
----
-
-## 🔒 Tailscale
-
-### Opción A — Acceso directo por IP
-
-```bash
-make build
-tailscale ip -4        # Obtén tu IP de Tailscale, ej: 100.80.118.36
-# Accede desde cualquier dispositivo del tailnet:
-# http://100.80.118.36:3000
-```
-
-### Opción B — HTTPS con hostname (Tailscale Serve)
-
-```bash
-make build
-tailscale serve --bg 3000
-tailscale serve status   # Muestra la URL HTTPS del tailnet
-# https://nombre-maquina.tailnet-name.ts.net
-```
-
-Para desactivar:
-```bash
-tailscale serve reset
+npm install          # instala todos los workspaces
+make db-up           # PostgreSQL :5440 + Redis :6390 en Docker
+make db-migrate      # migraciones Prisma (requiere TTY)
+make dev             # Vite :5173 + backend :3010 en paralelo
 ```
 
 ---
 
-## 💻 Desarrollo local
+## Desarrollo Android con Live Reload
 
-Requiere Node.js 22 instalado. Usa hot-reload con Vite + tsx watch.
+Compila la APK **una sola vez** con la IP del servidor de desarrollo. Después cualquier cambio en el código React aparece al instante en el teléfono (HMR) sin recompilar.
 
 ```bash
-# 1. Levantar solo la BD
-make db-up
-
-# 2. Instalar dependencias (primera vez)
-cd frontend && npm install && cd ..
-cd backend  && npm install && cd ..
-
-# 3. Arrancar en paralelo
-make dev
+# Teléfono conectado por USB + make dev corriendo
+make android-dev-build   # detecta IP (Tailscale > LAN), compila APK e instala
+make dev                 # arranca Vite :5173 + backend :3010
+# Abrir la app en el teléfono → carga desde http://<ip>:5173
 ```
 
-- **Frontend** (Vite): `http://localhost:5173`
-- **Backend** (Fastify): `http://localhost:3001`
-- El proxy de Vite redirige `/api/*` al backend automáticamente
-
-### Acceso desde Tailscale en modo dev
+Para forzar una IP específica:
 
 ```bash
-cd backend  && npm run dev &
-cd frontend && npm run dev -- --host
-# Vite mostrará: Network: http://100.80.118.36:5173/
+make android-dev-build DEV_IP=100.x.x.x
 ```
 
-### Comandos útiles
+Recompilar la APK solo cuando cambien plugins nativos (Capacitor, Firebase, cámara...).
+
+---
+
+## Build de producción (APK)
 
 ```bash
-make db-migrate    # Aplicar nuevas migraciones de Prisma
-make db-studio     # Abrir Prisma Studio (explorador visual de BD)
-
-cd frontend && npm run lint
-cd frontend && npx tsc -b
-cd backend  && npx tsc
+make android-build   # vite build --mode android + cap sync
+# Luego compilar con Gradle:
+cd packages/android/android
+JAVA_HOME=~/java/jdk-21.0.7+6 ANDROID_HOME=~/android-sdk ./gradlew assembleDebug
+# APK → app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ---
 
-## 🔐 Variables de entorno
+## Producción con Docker Compose
 
-### Obligatorias
-
-| Variable | Descripción | Cómo generarla |
-|---|---|---|
-| `DB_NAME` | Nombre de la base de datos | ej. `gymtracker` |
-| `DB_USER` | Usuario de PostgreSQL | ej. `gymuser` |
-| `DB_PASSWORD` | Contraseña de PostgreSQL | `openssl rand -base64 32` |
-| `JWT_SECRET` | Secret para access tokens | `openssl rand -base64 32` |
-| `JWT_REFRESH_SECRET` | Secret para refresh tokens | `openssl rand -base64 32` (diferente) |
-| `APP_URL` | URL pública del frontend | `https://tuapp.com` |
-
-### Solo desarrollo local
-
-| Variable | Descripción | Ejemplo |
-|---|---|---|
-| `DATABASE_URL` | URL directa para Prisma (`make dev`) | `postgresql://gymuser:pass@localhost:5432/gymtracker` |
-
-### SMTP — correos de verificación y reset (opcionales)
-
-Sin `SMTP_HOST` la app funciona igual, pero los correos se imprimen en los logs del contenedor.
-
-| Variable | Descripción | Ejemplo |
-|---|---|---|
-| `SMTP_HOST` | Servidor SMTP | `mail.tudominio.com` |
-| `SMTP_PORT` | Puerto SMTP | `465` (SSL) o `587` (STARTTLS) |
-| `SMTP_SECURE` | SSL directo en puerto | `true` para 465, `false` para 587 |
-| `SMTP_USER` | Email remitente | `no-reply@tudominio.com` |
-| `SMTP_PASS` | Contraseña / App Password SMTP | — |
-| `SMTP_FROM` | Nombre visible en el correo | `Gym Tracker <no-reply@tudominio.com>` |
+```bash
+make up              # levantar contenedores (api, db, redis, db-backup)
+make down            # parar todo
+make build           # rebuild sin caché
+make deploy          # git pull + rebuild + up
+make logs            # logs en vivo de la API
+make restart         # reiniciar api
+make backup          # dump PostgreSQL → ./backups/
+```
 
 ---
 
-<div align="center">
+## Despliegue en Coolify
 
-Hecho con ☕ y 🏋️
+1. Crear proyecto en Coolify apuntando a este repositorio, rama `v1`
+2. Seleccionar `docker-compose.yml` (Coolify ignora el `.override.yml`)
+3. Configurar variables de entorno en el panel (ver tabla en `CLAUDE.md`)
+4. **Routing**: Traefik de Coolify debe apuntar a `api:3001` (ya no hay nginx)
+5. El origen `capacitor://localhost` está en la lista CORS del backend — no requiere configuración adicional
 
-</div>
+---
+
+## Base de datos
+
+```bash
+make db-migrate                              # aplicar migraciones en dev
+make db-studio                               # Prisma Studio en el navegador
+# Producción:
+npx prisma migrate deploy                    # dentro del contenedor api (lo hace automáticamente el entrypoint)
+```
+
+---
+
+## Push notifications (FCM)
+
+Setup Firebase:
+1. Proyecto Firebase: `gym-tracker-5b5ae` | Package: `com.ludaisca.gymtracker`
+2. `google-services.json` → `packages/android/android/app/` (gitignoreado)
+3. `FIREBASE_SERVICE_ACCOUNT` → variable de entorno en Coolify (JSON completo en una línea)
+
+---
+
+## Funcionalidades
+
+- **Entrenamientos** — Sesiones por semana/día, autofill del anterior, sets con kg/reps, cardio, timer
+- **Rutinas** — Presets estándar + custom + compartir con link
+- **Nutrición** — Comidas y macros por día, análisis de fotos con IA, agua, promedio semanal
+- **IA** — Análisis de progreso, recomendaciones, chat contextual (OpenAI / Anthropic / Google)
+- **Peso corporal** — Historial + gráfica de tendencia
+- **Duelos** — Challenges con check-ins fotográficos nativos y ranking
+- **Analytics** — Volumen semanal, PRs, proyecciones de 1RM
+- **Push notifications** — Recordatorios FCM con hora configurable
+- **Offline-first** — Cola de escrituras que se reproduce al reconectar
+- **Temas** — Claro/oscuro + 5 colores de acento
+- **Export/Import** — Backup completo en JSON
+
+---
+
+## API Reference
+
+| Ruta | Descripción |
+|------|-------------|
+| `POST /auth/register` | Crear cuenta |
+| `POST /auth/login` | Iniciar sesión |
+| `POST /auth/refresh` | Renovar access token |
+| `GET/PUT /users/me` | Perfil de usuario |
+| `GET/PUT /users/me/settings` | Configuración + recordatorio FCM |
+| `GET/PUT /sessions/:week/:day` | Sesión de entrenamiento |
+| `CRUD /routines` | Rutinas custom |
+| `CRUD /nutrition/:date` | Días de nutrición |
+| `CRUD /notes` | Notas |
+| `POST /ai/analyze` | Análisis de progreso con IA |
+| `POST /ai/chat` | Chat contextual con IA |
+| `CRUD /challenges` | Duelos |
+| `POST /push/fcm-token` | Registrar token FCM |
+| `POST /push/test` | Notificación de prueba |
+
+Panel de colas (BullMQ): `GET /admin/queues` con `Authorization: <ADMIN_TOKEN>`

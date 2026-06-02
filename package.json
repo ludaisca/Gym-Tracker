@@ -1,0 +1,15 @@
+{
+  "name": "gym-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "trap 'kill 0' SIGINT; (cd packages/web && npm run dev) & (cd packages/backend && npm run dev) & wait",
+    "build:web": "npm run build -w packages/web",
+    "build:android": "npm run build -w packages/android",
+    "backend:migrate": "npm run db:migrate -w packages/backend",
+    "backend:studio": "npm run db:studio -w packages/backend"
+  }
+}
