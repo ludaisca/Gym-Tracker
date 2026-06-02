@@ -198,7 +198,6 @@ export default function Stats() {
   }, [])
 
   const sessions = allSessions
-  const [tab, setTab] = useState<'progreso' | 'musculos' | 'metas' | 'peso' | 'logros'>('progreso')
   const [selectedExercise, setSelectedExercise] = useState<string>('')
 
   // Goals (Feature 5)
@@ -410,64 +409,45 @@ export default function Stats() {
   }, [unlockedAchievements, user?.id])
 
   return (
-    <div className="fade-in">
-      <div className="kpis">
-        <article className="card kpi">
-          <div className="kpi-label">Ejercicios marcados</div>
-          <div className="kpi-value">{totalCompleted}</div>
-          <div className="kpi-meta">esta semana</div>
-        </article>
-        <article className="card kpi">
-          <div className="kpi-label">Sesiones cerradas</div>
-          <div className="kpi-value">{completedDays}/{dayIds.length}</div>
-          <div className="kpi-meta">semana {weekNumber}</div>
-        </article>
-        <article className="card kpi">
-          <div className="kpi-label">Total sesiones</div>
+    <div className="content fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+      {/* KPIs */}
+      <div className="kpis-3">
+        <div className="kpi-card animate-in" style={{ animationDelay: '60ms' }}>
+          <div className="kpi-label">Sesiones</div>
+          <div className="kpi-value">{completedDays}<span className="unit">/{dayIds.length}</span></div>
+          <div className="kpi-delta neutral">semana {weekNumber}</div>
+        </div>
+        <div className="kpi-card animate-in" style={{ animationDelay: '120ms' }}>
+          <div className="kpi-label">Histórico</div>
           <div className="kpi-value">{totalCompleteSessions}</div>
-          <div className="kpi-meta">historial completo</div>
-        </article>
-        <article className="card kpi">
-          <div className="kpi-label">Racha activa</div>
-          <div className="kpi-value" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          <div className="kpi-delta neutral">sesiones totales</div>
+        </div>
+        <div className="kpi-card kpi-accent animate-in" style={{ animationDelay: '180ms' }}>
+          <div className="kpi-label">Racha</div>
+          <div className="kpi-value" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {streak > 0 && <IconFire className="accent-fire" />}
-            {streak}
+            {streak}<span className="unit">sem</span>
           </div>
-          <div className="kpi-meta">{streak >= 2 ? 'semanas consecutivas' : 'semanas'}</div>
-        </article>
+          <div className={`kpi-delta ${streak > 0 ? 'up' : 'neutral'}`}>
+            {streak >= 2 ? '▲ consecutivas' : streak === 1 ? '▲ 1 semana' : '— sin racha'}
+          </div>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="routines-tab-bar" style={{ borderTop: 'none', paddingLeft: 0, paddingRight: 0, marginBottom: 'var(--space-4)' }}>
-        {([
-          { id: 'progreso' as const, label: 'Progreso', icon: <IconChart /> },
-          { id: 'musculos' as const, label: 'Músculos', icon: <IconBicep /> },
-          { id: 'metas' as const, label: 'Metas 1RM', icon: <IconTarget /> },
-          { id: 'peso' as const, label: 'Peso', icon: <IconWeight /> },
-          { id: 'logros' as const, label: `Logros (${unlockedAchievements.length})`, icon: <IconTrophy /> },
-        ]).map(t => (
-          <button key={t.id} className={`routines-tab-btn${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
-            {t.icon} {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'progreso' && (
-        <div className="stats-tab-content">
-          {sessions.length === 0 && (
-            <EmptyState
-              icon={<IconChart className="" />}
-              title="Sin datos de progreso aún"
-              body="Completa tus primeros entrenamientos para ver gráficas de volumen, PRs y evolución."
-              action={{ label: 'Empezar a entrenar', href: '/dashboard' }}
-            />
-          )}
+      {sessions.length === 0 ? (
+        <EmptyState
+          icon={<IconChart className="" />}
+          title="Sin datos de progreso aún"
+          body="Completa tus primeros entrenamientos para ver gráficas de volumen, PRs y evolución."
+          action={{ label: 'Empezar a entrenar', href: '/dashboard' }}
+        />
+      ) : (
+        <>
+          {/* Volumen semanal */}
           {volData.length >= 2 && (
-            <section className="card">
-              <div className="panel-head">
-                <div><h3>Volumen semanal</h3><p>kg × reps acumulados.</p></div>
-              </div>
-              <div className="panel-body">
+            <section>
+              <div className="dv-section-label" style={{ marginBottom: 'var(--space-3)' }}>Volumen semanal</div>
+              <div className="card" style={{ padding: 'var(--space-4)' }}>
                 <ResponsiveContainer width="100%" height={180}>
                   <AreaChart data={volData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                     <defs>
@@ -487,15 +467,16 @@ export default function Stats() {
             </section>
           )}
 
+          {/* Progreso por ejercicio */}
           {allExercises.length > 0 && (
-            <section className="card">
-              <div className="panel-head">
-                <div><h3>Progreso por ejercicio</h3><p>Mejor kg registrado por semana.</p></div>
-                <select className="input" style={{ maxWidth: 200 }} value={selectedExercise} onChange={e => setSelectedExercise(e.target.value)}>
+            <section>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                <div className="dv-section-label">Progreso por ejercicio</div>
+                <select className="input" style={{ maxWidth: 180, fontSize: 'var(--text-xs)', padding: '.4rem .6rem' }} value={selectedExercise} onChange={e => setSelectedExercise(e.target.value)}>
                   {allExercises.map(ex => <option key={ex} value={ex}>{ex}</option>)}
                 </select>
               </div>
-              <div className="panel-body">
+              <div className="card" style={{ padding: 'var(--space-4)' }}>
                 {exerciseHistory.length >= 2 ? (
                   <ResponsiveContainer width="100%" height={180}>
                     <LineChart data={exerciseHistory} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -515,30 +496,30 @@ export default function Stats() {
             </section>
           )}
 
+          {/* PRs y 1RM */}
           {prRows.length > 0 && (
-            <section className="card">
-              <div className="panel-head">
-                <div><h3>Tabla de PRs</h3><p>Máximo kg por ejercicio (ejercicios completados).</p></div>
-                <button
-                  className="ghost-btn"
-                  style={{ padding: '.4rem .8rem', fontSize: 'var(--text-xs)', flexShrink: 0 }}
-                  onClick={() => navigate('/historial')}
-                >
-                  Ver historial completo →
+            <section>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-3)' }}>
+                <div className="dv-section-label">Mejores levantamientos</div>
+                <button className="ghost-btn" style={{ padding: '.3rem .7rem', fontSize: 'var(--text-xs)' }} onClick={() => navigate('/historial')}>
+                  Historial →
                 </button>
               </div>
-              <div className="panel-body">
-                <div className="pr-table-wrap">
+              <div className="card" style={{ overflow: 'hidden' }}>
+                <div className="pr-table-wrap" style={{ padding: 'var(--space-4)' }}>
                   <table className="pr-table">
-                    <thead><tr><th>Ejercicio</th><th>Mejor kg</th><th>Semana</th></tr></thead>
+                    <thead><tr><th>Ejercicio</th><th>Mejor kg</th><th>1RM est.</th></tr></thead>
                     <tbody>
-                      {prRows.map(r => (
-                        <tr key={r.name}>
-                          <td>{r.name}</td>
-                          <td><strong>{r.bestKg} kg</strong></td>
-                          <td><span className="pill">S{r.bestWeek}</span></td>
-                        </tr>
-                      ))}
+                      {prRows.slice(0, 8).map(r => {
+                        const rm = oneRMData.find(o => o.name === r.name)
+                        return (
+                          <tr key={r.name}>
+                            <td>{r.name}</td>
+                            <td><strong>{r.bestKg} kg</strong></td>
+                            <td>{rm ? `${rm.oneRM} kg` : '—'}</td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -546,75 +527,89 @@ export default function Stats() {
             </section>
           )}
 
-          {oneRMData.length > 0 && (
-            <section className="card">
-              <div className="panel-head">
-                <div><h3>Proyección 1RM</h3><p>Máximo estimado con una repetición (fórmula Epley).</p></div>
-              </div>
-              <div className="panel-body">
-                <div className="pr-table-wrap">
-                  <table className="pr-table">
-                    <thead><tr><th>Ejercicio</th><th>Mejor set</th><th>1RM est.</th></tr></thead>
-                    <tbody>
-                      {oneRMData.map(r => (
-                        <tr key={r.name}>
-                          <td>{r.name}</td>
-                          <td className="muted">{r.weight} kg × {r.reps} reps</td>
-                          <td><strong>{r.oneRM} kg</strong></td>
-                        </tr>
+          {/* Mapa muscular */}
+          <section>
+            <div className="dv-section-label" style={{ marginBottom: 'var(--space-3)' }}>Mapa muscular · semana {weekNumber}</div>
+            <div className="card" style={{ padding: 'var(--space-4)' }}>
+              {Object.keys(muscleVolume).length === 0 ? (
+                <p className="muted tiny" style={{ textAlign: 'center', padding: '1rem 0' }}>Completa ejercicios esta semana para ver qué músculos estás trabajando.</p>
+              ) : (
+                <>
+                  <BodySvg activeGroups={muscleVolume} />
+                  {topMuscles.length > 0 && (
+                    <div style={{ marginTop: 'var(--space-3)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                      {topMuscles.map((m, i) => (
+                        <span key={m} className="pill" style={{ background: `color-mix(in srgb, var(--color-primary) ${80 - i * 20}%, transparent)`, color: 'var(--color-primary)', fontWeight: 700 }}>{m}</span>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </section>
-          )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
 
-          {topVolume.length > 0 && (
-            <section className="card">
-              <div className="panel-head">
-                <div>
-                  <h3>Top ejercicios por volumen</h3>
-                  <p>Semana {weekNumber} · {weekData?.sessions ?? 0} sesiones · {(weekData?.totalVolume ?? 0).toLocaleString()} kg×r totales.</p>
-                </div>
+          {/* Metas 1RM */}
+          <section>
+            <div className="dv-section-label" style={{ marginBottom: 'var(--space-3)' }}>Objetivos 1RM</div>
+            <div className="card" style={{ padding: 'var(--space-4)' }}>
+              <div className="goal-form" style={{ marginBottom: goals.length ? 'var(--space-4)' : 0 }}>
+                <select className="input" value={newGoalExercise} onChange={e => setNewGoalExercise(e.target.value)}>
+                  <option value="">Ejercicio</option>
+                  {allExercises.map(ex => <option key={ex} value={ex}>{ex}</option>)}
+                </select>
+                <input className="input" type="number" placeholder="Meta (kg)" min="1" max="1000" step="0.5" value={newGoalKg} onChange={e => setNewGoalKg(e.target.value)} />
+                <button className="primary-btn" disabled={savingGoal || !newGoalExercise || !newGoalKg} onClick={handleSaveGoal}>
+                  {savingGoal ? '…' : 'Añadir'}
+                </button>
               </div>
-              <div className="panel-body">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                  {topVolume.map((e, i) => {
-                    const max = topVolume[0].volume || 1
-                    const pct = Math.max(8, (e.volume / max) * 100)
+              {goals.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                  {goals.map(goal => {
+                    const best1RM = sessions.reduce((best, s) => {
+                      const ex = s.exercises.find(e => e.name === goal.exerciseName && e.done)
+                      if (!ex) return best
+                      for (const set of ex.sets) {
+                        const rm = calc1RM(set.kg, set.reps)
+                        if (rm && rm > best) return rm
+                      }
+                      return best
+                    }, 0)
+                    const pct = best1RM > 0 ? Math.min(100, Math.round(best1RM / goal.targetKg * 100)) : 0
                     return (
-                      <div key={e.name} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                        <span className="pill" style={{ minWidth: 28, textAlign: 'center', fontWeight: 700 }}>{i + 1}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-2)', marginBottom: 4 }}>
-                            <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
-                            <span className="tiny muted" style={{ flexShrink: 0 }}>{e.volume.toLocaleString()} kg×r</span>
+                      <div key={goal.id}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{goal.exerciseName}</div>
+                            <div className="tiny muted">{best1RM > 0 ? `${best1RM} kg` : 'sin datos'} → meta {goal.targetKg} kg</div>
                           </div>
-                          <div style={{ height: 6, background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${pct}%`, background: 'var(--color-primary)', borderRadius: 'var(--radius-full)' }} />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                            <span style={{ fontWeight: 800, color: pct >= 100 ? 'var(--color-success)' : 'var(--color-primary)' }}>{pct}%</span>
+                            <button className="ghost-btn" style={{ padding: '.2rem .5rem', fontSize: 'var(--text-xs)' }} onClick={() => handleDeleteGoal(goal.exerciseName)}>×</button>
                           </div>
                         </div>
+                        <div className="progress"><span style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--color-success)' : undefined }} /></div>
                       </div>
                     )
                   })}
                 </div>
-              </div>
-            </section>
-          )}
+              )}
+            </div>
+          </section>
 
+          {/* Peso corporal */}
+          <section>
+            <div className="dv-section-label" style={{ marginBottom: 'var(--space-3)' }}>Peso corporal</div>
+            <WeightTab />
+          </section>
+
+          {/* Sugerencias de progresión */}
           {progressionSuggestions.length > 0 && (
-            <section className="card">
-              <div className="panel-head">
-                <div>
-                  <h3>Sugerencias de progresión</h3>
-                  <p>Ejercicios con peso consistente en las últimas 3 sesiones.</p>
-                </div>
-              </div>
-              <div className="panel-body">
+            <section>
+              <div className="dv-section-label" style={{ marginBottom: 'var(--space-3)' }}>Sugerencias de progresión</div>
+              <div className="card" style={{ padding: 'var(--space-4)' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                   {progressionSuggestions.map(s => (
-                    <div key={s.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-3)', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)' }}>
+                    <div key={s.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-3)', background: 'var(--color-surface-2)', borderRadius: 'var(--radius-lg)' }}>
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{s.name}</div>
                         <div className="tiny muted">Actual: {s.currentKg} kg</div>
@@ -630,198 +625,28 @@ export default function Stats() {
             </section>
           )}
 
-          <section className="card">
-            <div className="panel-head">
-              <div><h3>Resumen por día</h3><p>Semana {weekNumber}.</p></div>
-            </div>
-            <div className="panel-body day-grid">
-              {dayIds.map(day => {
-                const s = sessions.find(s => s.weekNumber === weekNumber && s.dayId === day)
-                const dayLabel = (routineDays[day] as { label?: string })?.label ?? day
+          {/* Logros */}
+          <section>
+            <div className="dv-section-label" style={{ marginBottom: 'var(--space-3)' }}>Logros · {unlockedAchievements.length}/{ACHIEVEMENTS.length}</div>
+            <div className="achievements-grid">
+              {ACHIEVEMENTS.map(a => {
+                const unlocked = unlockedAchievements.some(u => u.id === a.id)
+                const unlockedAt = achievementDates[a.id]
+                const unlockedLabel = unlockedAt ? new Date(unlockedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : null
                 return (
-                  <article key={day} className="day-card">
-                    <header>
-                      <div>
-                        <h4>{capitalize(day)} · {dayLabel}</h4>
-                        <div className="tiny muted">{s ? s.exercises.filter(e => e.done).length : 0} ejercicios marcados</div>
-                      </div>
-                      <span className="pill" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        {s?.complete ? <><IconCheck size={10} strokeWidth={3} /> done</> : 'open'}
-                      </span>
-                    </header>
-                  </article>
+                  <div key={a.id} className={`achievement-card ${unlocked ? 'unlocked' : 'locked'}`}>
+                    <div className={`achievement-icon ${unlocked ? 'unlocked' : ''}`}>
+                      {unlocked ? a.icon : <IconLock />}
+                    </div>
+                    <div className="achievement-title">{a.title}</div>
+                    <div className="achievement-desc">{a.desc}</div>
+                    {unlocked && unlockedLabel && <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: 4 }}>{unlockedLabel}</div>}
+                  </div>
                 )
               })}
             </div>
           </section>
-        </div>
-      )}
-
-      {tab === 'musculos' && (
-        <div className="stats-tab-content">
-          <section className="card">
-            <div className="panel-head">
-              <div>
-                <h3>Mapa muscular</h3>
-                <p>Grupos trabajados esta semana (semana {weekNumber})</p>
-              </div>
-            </div>
-            <div className="panel-body">
-              {Object.keys(muscleVolume).length === 0 ? (
-                <EmptyState
-                  icon={<IconBicep />}
-                  title="Sin datos esta semana"
-                  body="Completa ejercicios esta semana para ver qué músculos estás trabajando."
-                />
-              ) : (
-                <>
-                  <BodySvg activeGroups={muscleVolume} />
-                  {topMuscles.length > 0 && (
-                    <div style={{ marginTop: 'var(--space-4)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-                      {topMuscles.map((m, i) => (
-                        <span key={m} className="pill" style={{ background: `color-mix(in srgb, var(--color-primary) ${80 - i * 20}%, transparent)`, color: 'var(--color-primary)', fontWeight: 700 }}>
-                          {m}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </section>
-        </div>
-      )}
-
-      {tab === 'metas' && (
-        <div className="stats-tab-content">
-          <section className="card">
-            <div className="panel-head">
-              <div><h3>Añadir meta de 1RM</h3><p>Establece tu objetivo por ejercicio.</p></div>
-            </div>
-            <div className="panel-body">
-              <div className="goal-form">
-                <select
-                  className="input"
-                  value={newGoalExercise}
-                  onChange={e => setNewGoalExercise(e.target.value)}
-                >
-                  <option value="">Selecciona ejercicio</option>
-                  {allExercises.map(ex => <option key={ex} value={ex}>{ex}</option>)}
-                </select>
-                <input
-                  className="input"
-                  type="number"
-                  placeholder="Objetivo (kg)"
-                  min="1" max="1000" step="0.5"
-                  value={newGoalKg}
-                  onChange={e => setNewGoalKg(e.target.value)}
-                />
-                <button
-                  className="primary-btn"
-                  disabled={savingGoal || !newGoalExercise || !newGoalKg}
-                  onClick={handleSaveGoal}
-                >
-                  {savingGoal ? '…' : 'Guardar'}
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {goals.length === 0 ? (
-            <EmptyState
-              icon={<IconTarget />}
-              title="Sin metas definidas"
-              body="Añade tu primer objetivo de 1RM para trackear tu progreso hacia él."
-            />
-          ) : (
-            <section className="card">
-              <div className="panel-head">
-                <div><h3>Mis metas</h3><p>{goals.length} ejercicio{goals.length !== 1 ? 's' : ''}</p></div>
-              </div>
-              <div className="panel-body">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                  {goals.map(goal => {
-                    // Best 1RM for this exercise from history
-                    const best1RM = sessions.reduce((best, s) => {
-                      const ex = s.exercises.find(e => e.name === goal.exerciseName && e.done)
-                      if (!ex) return best
-                      for (const set of ex.sets) {
-                        const rm = calc1RM(set.kg, set.reps)
-                        if (rm && rm > best) return rm
-                      }
-                      return best
-                    }, 0)
-                    const pct = best1RM > 0 ? Math.min(100, Math.round(best1RM / goal.targetKg * 100)) : 0
-                    return (
-                      <div key={goal.id} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{goal.exerciseName}</div>
-                            <div className="tiny muted">
-                              {best1RM > 0 ? `${best1RM} kg` : 'sin datos'} → meta {goal.targetKg} kg
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                            <span style={{ fontWeight: 800, fontSize: 'var(--text-lg)', color: pct >= 100 ? 'var(--color-success)' : 'var(--color-primary)' }}>
-                              {pct}%
-                            </span>
-                            <button
-                              className="ghost-btn"
-                              style={{ padding: '.2rem .5rem', fontSize: 'var(--text-xs)' }}
-                              onClick={() => handleDeleteGoal(goal.exerciseName)}
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </div>
-                        <div className="progress">
-                          <span style={{ width: `${pct}%`, background: pct >= 100 ? 'var(--color-success)' : undefined }} />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </section>
-          )}
-        </div>
-      )}
-
-      {tab === 'peso' && <WeightTab />}
-
-      {tab === 'logros' && (
-        <div className="stats-tab-content">
-          <section className="card">
-            <div className="panel-head">
-              <div><h3>Logros desbloqueados</h3><p>{unlockedAchievements.length} de {ACHIEVEMENTS.length}</p></div>
-            </div>
-            <div className="panel-body">
-              <div className="achievements-grid">
-                {ACHIEVEMENTS.map(a => {
-                  const unlocked = unlockedAchievements.some(u => u.id === a.id)
-                  const unlockedAt = achievementDates[a.id]
-                  const unlockedLabel = unlockedAt
-                    ? new Date(unlockedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
-                    : null
-                  return (
-                    <div key={a.id} className={`achievement-card ${unlocked ? 'unlocked' : 'locked'}`} style={{ position: 'relative' }}>
-                      <div className={`achievement-icon ${unlocked ? 'unlocked' : ''}`}>
-                        {unlocked ? a.icon : <IconLock />}
-                      </div>
-                      <div className="achievement-title">{a.title}</div>
-                      <div className="achievement-desc">{a.desc}</div>
-                      {unlocked && unlockedLabel && (
-                        <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                          {unlockedLabel}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </section>
-        </div>
+        </>
       )}
     </div>
   )

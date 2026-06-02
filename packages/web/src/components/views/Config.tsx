@@ -280,7 +280,8 @@ export default function Config() {
 
   return (
     <div className="fade-in">
-      {/* ── Perfil header ─────────────────────────────────────── */}
+
+      {/* ── Card 1: Perfil + Cuenta ──────────────────────────────── */}
       <section className="card">
         <div className="profile-header-main">
           <button className="profile-avatar-large" onClick={() => setShowAvatarPicker(v => !v)} aria-label="Cambiar avatar">
@@ -306,8 +307,8 @@ export default function Config() {
           <div style={{ padding: '0 var(--space-6) var(--space-6)', borderBottom: '1px solid var(--color-divider)' }}>
              <div className="nav-group-title" style={{ marginTop: 0, marginBottom: 'var(--space-3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                <span>Elige tu avatar</span>
-               <button 
-                 className="ghost-btn" 
+               <button
+                 className="ghost-btn"
                  style={{ fontSize: 'var(--text-xs)', padding: '.3rem .6rem' }}
                  onClick={() => fileInputRef.current?.click()}
                >
@@ -347,22 +348,21 @@ export default function Config() {
             <button className="week-btn-circle" onClick={() => updateWeek(1)} aria-label="Más uno">+</button>
           </div>
         </div>
-      </section>
 
-      {/* ── Datos de la cuenta ─────────────────────────────────── */}
-      <section className="card">
+        <hr className="section-sep" />
+
         <div className="panel-head">
-          <div><h3>Datos de la cuenta</h3><p>Actualiza tu información personal.</p></div>
+          <div><h3>Datos de la cuenta</h3><p>Actualiza tu nombre, correo y contraseña.</p></div>
         </div>
         <div className="panel-body" style={{ display: 'grid', gap: 'var(--space-4)' }}>
           <div className="field">
             <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
               <IconUser size={14} /> Nombre
             </label>
-            <input 
-              type="text" 
-              value={accountName} 
-              onChange={e => setAccountName(e.target.value)} 
+            <input
+              type="text"
+              value={accountName}
+              onChange={e => setAccountName(e.target.value)}
               placeholder="Tu nombre"
             />
           </div>
@@ -370,10 +370,10 @@ export default function Config() {
             <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
               <IconMail size={14} /> Correo electrónico
             </label>
-            <input 
-              type="email" 
-              value={accountEmail} 
-              onChange={e => setAccountEmail(e.target.value)} 
+            <input
+              type="email"
+              value={accountEmail}
+              onChange={e => setAccountEmail(e.target.value)}
               placeholder="correo@ejemplo.com"
             />
           </div>
@@ -417,8 +417,10 @@ export default function Config() {
         </div>
       </section>
 
-      {/* ── Apariencia ─────────────────────────────────────────── */}
+      {/* ── Card 2: Preferencias ─────────────────────────────────── */}
       <section className="card">
+
+        {/* Apariencia */}
         <div className="panel-head">
           <div><h3>Apariencia</h3><p>Modo de color y tema de la app.</p></div>
         </div>
@@ -436,7 +438,6 @@ export default function Config() {
               </button>
             </div>
           </div>
-
           <div>
             <div className="nav-group-title" style={{ marginTop: 0, marginBottom: 'var(--space-3)' }}>Color de acento</div>
             <div className="appearance-grid">
@@ -454,12 +455,12 @@ export default function Config() {
             </div>
           </div>
         </div>
-      </section>
 
-      {/* ── Preferencias de entrenamiento ──────────────────────── */}
-      <section className="card">
+        <hr className="section-sep" />
+
+        {/* Preferencias de entrenamiento */}
         <div className="panel-head">
-          <div><h3>Preferencias de entrenamiento</h3><p>Duración de sesión, objetivo y cardio por defecto.</p></div>
+          <div><h3>Entrenamiento</h3><p>Duración de sesión, objetivo y cardio por defecto.</p></div>
         </div>
         <div className="panel-body triple">
           <div className="field">
@@ -501,14 +502,14 @@ export default function Config() {
             {saving ? 'Guardando…' : saved ? <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><IconCheck size={16} /> Guardado</span> : 'Guardar preferencias'}
           </button>
         </div>
-      </section>
 
-      {/* ── Integración IA ────────────────────────────────────── */}
-      <section className="card">
+        <hr className="section-sep" />
+
+        {/* Integración IA */}
         <div className="panel-head">
           <div>
             <h3>Inteligencia Artificial</h3>
-            <p>Google Gemini para análisis de entrenamientos y escaneo visual de comidas.</p>
+            <p>Google Gemini para análisis de entrenamientos y escaneo de comidas.</p>
           </div>
         </div>
         <div className="panel-body">
@@ -529,7 +530,7 @@ export default function Config() {
               autoComplete="off"
             />
             <div className="tiny muted" style={{ marginTop: 'var(--space-1)' }}>
-              Tu clave se almacena de forma segura/cifrada localmente. Puedes obtener una gratuita en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>Google AI Studio</a>.
+              Tu clave se almacena cifrada. Obtén una gratis en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>Google AI Studio</a>.
             </div>
           </div>
         </div>
@@ -557,14 +558,14 @@ export default function Config() {
             </button>
           )}
         </div>
-      </section>
 
-      {/* ── Recordatorio de entrenamiento ────────────────────── */}
-      <section className="card">
+        <hr className="section-sep" />
+
+        {/* Recordatorio */}
         <div className="panel-head">
           <div>
-            <h3>Recordatorio de entrenamiento</h3>
-            <p>Recibe una notificación diaria a la hora que elijas (hora UTC del servidor).</p>
+            <h3>Recordatorio</h3>
+            <p>Notificación diaria a la hora elegida (hora UTC del servidor).</p>
           </div>
         </div>
         <div className="panel-body" style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -594,8 +595,10 @@ export default function Config() {
         </div>
       </section>
 
-      {/* ── Sincronización Local ──────────────────────────────── */}
+      {/* ── Card 3: Sistema ──────────────────────────────────────── */}
       <section className="card">
+
+        {/* Sincronización offline */}
         <div className="panel-head">
           <div>
             <h3>Sincronización offline</h3>
@@ -626,8 +629,8 @@ export default function Config() {
         </div>
         <div className="panel-body">
           {queue.length === 0 ? (
-            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
-              <IconCheck size={14} style={{ color: 'var(--color-success)', flexShrink: 0, marginTop: '2px' }} /> Todas las acciones están sincronizadas con el servidor.
+            <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '.4rem' }}>
+              <IconCheck size={14} style={{ color: 'var(--color-success)', flexShrink: 0 }} /> Todas las acciones están sincronizadas.
             </div>
           ) : (
             <div>
@@ -645,11 +648,12 @@ export default function Config() {
             </div>
           )}
         </div>
-      </section>
 
-      <section className="card">
+        <hr className="section-sep" />
+
+        {/* Datos y almacenamiento */}
         <div className="panel-head">
-          <div><h3>Datos y almacenamiento</h3><p>Exportar o importar datos.</p></div>
+          <div><h3>Datos y almacenamiento</h3><p>Exportar, importar o eliminar cuenta.</p></div>
         </div>
         <div className="panel-body triple">
           <div>

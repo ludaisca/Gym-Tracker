@@ -56,7 +56,7 @@ export const useUIStore = create<UIState>()(
   persist(
     (set) => ({
       theme: 'dark',
-      accentTheme: 'teal',
+      accentTheme: 'violet',
       isOffline: false,
       toggleTheme: () =>
         set((s) => {

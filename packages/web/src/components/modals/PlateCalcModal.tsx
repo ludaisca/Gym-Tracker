@@ -27,7 +27,7 @@ function calcPlates(targetKg: number, barKg: number): { weight: number; count: n
   let remaining = Math.round(perSide * 100) / 100
   for (const plate of PLATE_WEIGHTS) {
     if (remaining < plate - 0.001) continue
-    const count = Math.floor(Math.round(remaining / plate * 10) / 10)
+    const count = Math.floor(remaining / plate)
     if (count > 0) {
       plates.push({ weight: plate, count })
       remaining = Math.round((remaining - count * plate) * 100) / 100
