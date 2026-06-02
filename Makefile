@@ -1,4 +1,4 @@
-.PHONY: up down build logs logs-api logs-db restart deploy dev db-up db-migrate db-studio backup android-build android-dev-build android-open android-run
+.PHONY: up down build logs logs-api logs-db restart deploy dev db-up db-migrate db-studio backup android-build android-dev-build android-open android-run flutter-run flutter-build flutter-dev
 
 # IP para live reload: Tailscale si está disponible, si no la IP de la ruta principal.
 # Se puede sobreescribir: make android-dev-build DEV_IP=192.168.1.x
@@ -84,6 +84,28 @@ android-open:   ## Abrir proyecto en Android Studio
 
 android-run:    ## Instalar en dispositivo Android conectado por USB
 	cd packages/android && npx cap run android
+
+# ── Flutter ──────────────────────────────────────────────────────────
+# Requiere: JAVA_HOME=~/java/jdk-21.0.11+10 en el entorno (ya en .bashrc)
+FLUTTER        := $(HOME)/flutter/bin/flutter
+FLUTTER_JAVA   := $(HOME)/java/jdk-21.0.11+10
+FLUTTER_ANDROID := $(HOME)/Android/Sdk
+FLUTTER_APK    := packages/flutter/build/app/outputs/flutter-apk/app-debug.apk
+
+flutter-dev:  ## Inicia Flutter con hot reload apuntando al backend local
+	cd packages/flutter && JAVA_HOME=$(FLUTTER_JAVA) ANDROID_HOME=$(FLUTTER_ANDROID) \
+	  $(FLUTTER) run \
+	  --dart-define=DEV_API_URL=http://$(DEV_IP):3010/api
+
+flutter-build:  ## Build APK release
+	cd packages/flutter && JAVA_HOME=$(FLUTTER_JAVA) ANDROID_HOME=$(FLUTTER_ANDROID) \
+	  $(FLUTTER) build apk --release
+
+flutter-run:  ## Instala debug APK en dispositivo USB
+	cd packages/flutter && JAVA_HOME=$(FLUTTER_JAVA) ANDROID_HOME=$(FLUTTER_ANDROID) \
+	  $(FLUTTER) build apk --debug
+	$(FLUTTER_ANDROID)/platform-tools/adb install -r $(FLUTTER_APK)
+	@echo "✅ APK instalada."
 
 # Backup manual de la base de datos (genera archivo en ./backups/)
 backup:
