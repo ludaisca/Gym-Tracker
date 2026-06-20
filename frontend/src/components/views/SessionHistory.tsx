@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { SkeletonWeeks } from '../ui/Skeleton'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store'
 import { sessionsApi } from '../../api/sessions'
@@ -56,7 +57,7 @@ export default function SessionHistory() {
       }))
   }, [sessions])
 
-  if (loading) return <div className="content"><div className="spinner" /></div>
+  if (loading) return <SkeletonWeeks count={4} />
 
   if (byWeek.length === 0) {
     return (

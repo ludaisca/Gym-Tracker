@@ -165,44 +165,50 @@ const challengesRoutes: FastifyPluginAsync = async (fastify) => {
     if (challenge.creatorId !== userId && challenge.opponentId !== userId)
       return reply.code(403).send({ error: 'No participas en este reto.' })
 
-    // One check-in per calendar day per challenge
-    const todayStr = dateStr(new Date())
-    const existing = await prisma.checkIn.findFirst({
-      where: {
-        challengeId: challenge.id,
-        userId,
-        serverTime: {
-          gte: new Date(todayStr + 'T00:00:00Z'),
-          lte: new Date(todayStr + 'T23:59:59Z'),
-        },
-      },
-    })
-    if (existing) return reply.code(409).send({ error: 'Ya registraste tu asistencia hoy.' })
-
-    // Save photo (strip data URL prefix, write to disk)
+    // Save photo before the atomic check so we have the filename ready
     const b64 = photoBase64.replace(/^data:image\/\w+;base64,/, '')
     const fileName = `${userId}-${Date.now()}.jpg`
     const filePath = join(uploadDir, fileName)
     const buf = Buffer.from(b64, 'base64')
-    const { writeFile } = await import('fs/promises')
+    const { writeFile, unlink } = await import('fs/promises')
     await writeFile(filePath, buf)
 
-    // Generate tamper-evident hash: userId + challengeId + serverTime + secret
     const serverTime = new Date()
+    const todayStr = dateStr(serverTime)
     const hashInput = `${userId}:${challenge.id}:${serverTime.toISOString()}:${process.env.JWT_SECRET ?? 'secret'}`
     const hash = crypto.createHash('sha256').update(hashInput).digest('hex').slice(0, 12)
 
-    const checkIn = await prisma.checkIn.create({
-      data: {
-        challengeId: challenge.id,
-        userId,
-        photoUrl: `/uploads/checkins/${fileName}`,
-        lat: lat ?? null,
-        lng: lng ?? null,
-        serverTime,
-        hash,
-      },
+    // Atomic check + create — prevents duplicate check-ins even under concurrent requests
+    const checkIn = await prisma.$transaction(async (tx) => {
+      const existing = await tx.checkIn.findFirst({
+        where: {
+          challengeId: challenge.id,
+          userId,
+          serverTime: {
+            gte: new Date(todayStr + 'T00:00:00Z'),
+            lte: new Date(todayStr + 'T23:59:59Z'),
+          },
+        },
+      })
+      if (existing) return null
+
+      return tx.checkIn.create({
+        data: {
+          challengeId: challenge.id,
+          userId,
+          photoUrl: `/uploads/checkins/${fileName}`,
+          lat: lat ?? null,
+          lng: lng ?? null,
+          serverTime,
+          hash,
+        },
+      })
     })
+
+    if (!checkIn) {
+      await unlink(filePath).catch(() => {})
+      return reply.code(409).send({ error: 'Ya registraste tu asistencia hoy.' })
+    }
 
     return reply.code(201).send({ checkIn, hash })
   })

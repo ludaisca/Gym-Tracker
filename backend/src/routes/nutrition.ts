@@ -42,7 +42,7 @@ const nutritionRoutes: FastifyPluginAsync = async (fastify) => {
 
     const day = await prisma.nutritionDay.findUnique({ where: { userId_date: { userId: sub, date } } })
     const meals = (day?.meals as Record<string, unknown[]>) ?? {}
-    const list = (meals[mealType] as unknown[]) ?? []
+    const list = Array.isArray(meals[mealType]) ? meals[mealType] : []
     const newEntry = { ...entry, id: randomUUID() }
     list.push(newEntry)
     meals[mealType] = list

@@ -10,6 +10,7 @@ import { sessionsApi } from '../../api/sessions'
 import { getRoutineDays, getDayIds, calcStreak, getBestKgForWeek } from '../../lib/fitness'
 import { bodyWeightApi, type BodyWeightEntry } from '../../api/bodyweight'
 import type { WorkoutSession } from '../../types/domain'
+import { IconClose } from '../ui/Icons'
 
 type Sessions = WorkoutSession[]
 
@@ -161,7 +162,7 @@ function WeightTab() {
                 <div key={e.date} className="weight-row">
                   <span className="weight-date">{e.date}</span>
                   <span className="weight-val">{e.weight_kg} kg</span>
-                  <button className="ghost-btn weight-del" onClick={() => handleDelete(e.date)}>×</button>
+                  <button className="ghost-btn weight-del" onClick={() => handleDelete(e.date)} aria-label="Eliminar registro"><IconClose size={14} strokeWidth={2.5} /></button>
                 </div>
               ))}
             </div>

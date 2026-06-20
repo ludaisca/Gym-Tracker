@@ -233,6 +233,22 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
         const data = await res.json() as { content?: { text: string }[]; error?: { message: string } }
         if (data.error) return reply.status(502).send({ error: `Error de Anthropic: ${data.error.message}` })
         raw = data.content?.[0]?.text ?? ''
+      } else if (aiProvider === 'opencode') {
+        const model = aiModel ?? 'glm-5.2'
+        const res = await fetch('https://opencode.ai/zen/go/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'user', content: [
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+              { type: 'text', text: FOOD_PROMPT },
+            ]}],
+          }),
+        })
+        const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
+        if (data.error) return reply.status(502).send({ error: `Error de OpenCode: ${data.error.message}` })
+        raw = data.choices?.[0]?.message?.content ?? ''
       } else {
         return reply.status(400).send({ error: `Proveedor desconocido: ${aiProvider}` })
       }
@@ -313,6 +329,15 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
         const data = await res.json() as { content?: { text: string }[]; error?: { message: string } }
         if (data.error) return reply.status(502).send({ error: `Error de Anthropic: ${data.error.message}` })
         result = data.content?.[0]?.text ?? ''
+      } else if (aiProvider === 'opencode') {
+        const res = await fetch('https://opencode.ai/zen/go/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
+          body: JSON.stringify({ model: aiModel ?? 'glm-5.2', messages: [{ role: 'user', content: prompt }] }),
+        })
+        const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
+        if (data.error) return reply.status(502).send({ error: `Error de OpenCode: ${data.error.message}` })
+        result = data.choices?.[0]?.message?.content ?? ''
       } else {
         return reply.status(400).send({ error: `Proveedor desconocido: ${aiProvider}` })
       }
@@ -418,6 +443,20 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
         const data = await res.json() as { content?: { text: string }[]; error?: { message: string } }
         if (data.error) return reply.status(502).send({ error: `Error de Anthropic: ${data.error.message}` })
         reply_text = data.content?.[0]?.text ?? ''
+      } else if (aiProvider === 'opencode') {
+        const messages = [
+          { role: 'system', content: systemPrompt },
+          ...history.map(m => ({ role: m.role, content: m.content })),
+          { role: 'user', content: message.trim() },
+        ]
+        const res = await fetch('https://opencode.ai/zen/go/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
+          body: JSON.stringify({ model: aiModel ?? 'glm-5.2', messages }),
+        })
+        const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
+        if (data.error) return reply.status(502).send({ error: `Error de OpenCode: ${data.error.message}` })
+        reply_text = data.choices?.[0]?.message?.content ?? ''
       } else {
         return reply.status(400).send({ error: `Proveedor desconocido: ${aiProvider}` })
       }

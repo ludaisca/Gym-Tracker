@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { notesApi } from '../../api/notes'
 import type { GlobalNote } from '../../types/domain'
+import { SkeletonList } from '../ui/Skeleton'
 
 export default function Notes() {
   const [notes, setNotes] = useState<GlobalNote[]>([])
@@ -36,10 +37,10 @@ export default function Notes() {
     setPendingDelete(null)
   }
 
-  if (loading) return <div className="content"><div className="spinner" /></div>
+  if (loading) return <SkeletonList count={5} />
 
   return (
-    <div className="layout">
+    <div className="layout fade-in">
       <section className="card">
         <div className="panel-head">
           <div><h3>Checklist global</h3><p>Tareas repetibles para no perder consistencia.</p></div>
@@ -60,8 +61,9 @@ export default function Notes() {
                 {pendingDelete === note.id ? (
                   <button
                     className="icon-btn"
-                    style={{ width: 28, height: 28, color: 'var(--danger)', borderColor: 'var(--danger)' }}
+                    style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}
                     onClick={() => deleteNote(note.id)}
+                    aria-label="Confirmar eliminación"
                     title="Confirmar eliminación"
                   >
                     ✓
@@ -69,8 +71,8 @@ export default function Notes() {
                 ) : (
                   <button
                     className="icon-btn"
-                    style={{ width: 28, height: 28 }}
                     onClick={() => deleteNote(note.id)}
+                    aria-label="Eliminar nota"
                     title="Eliminar"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

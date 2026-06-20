@@ -383,6 +383,111 @@ export function IconUpload({ size = 20, strokeWidth = 1.75, className, style }: 
   )
 }
 
+export function IconBolt({ size = 20, strokeWidth = 1.75, className, style }: IconProps) {
+  return (
+    <svg {...def(size, strokeWidth)} className={className} style={style}>
+      <path d="M13 2L4.09 12.96A1 1 0 0 0 5 14.5h6.5L10 22l8.91-10.96A1 1 0 0 0 18 9.5H11.5L13 2Z"/>
+    </svg>
+  )
+}
+
+export function IconAlertTriangle({ size = 20, strokeWidth = 1.75, className, style }: IconProps) {
+  return (
+    <svg {...def(size, strokeWidth)} className={className} style={style}>
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+  )
+}
+
+export function IconInfo({ size = 20, strokeWidth = 1.75, className, style }: IconProps) {
+  return (
+    <svg {...def(size, strokeWidth)} className={className} style={style}>
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="16" x2="12" y2="12"/>
+      <line x1="12" y1="8" x2="12.01" y2="8"/>
+    </svg>
+  )
+}
+
+export function IconShield({ size = 20, strokeWidth = 1.75, className, style }: IconProps) {
+  return (
+    <svg {...def(size, strokeWidth)} className={className} style={style}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
+    </svg>
+  )
+}
+
+export function IconCrown({ size = 20, strokeWidth = 1.75, className, style }: IconProps) {
+  return (
+    <svg {...def(size, strokeWidth)} className={className} style={style}>
+      <path d="M2 20h20"/>
+      <polyline points="5 20 5 9 12 3 19 9 19 20"/>
+      <path d="M5 13l7-2 7 2"/>
+    </svg>
+  )
+}
+
+export function IconMountain({ size = 20, strokeWidth = 1.75, className, style }: IconProps) {
+  return (
+    <svg {...def(size, strokeWidth)} className={className} style={style}>
+      <path d="m3 20 6-12 4 5 3-4 5 11H3Z"/>
+      <path d="M13.5 8h1"/>
+    </svg>
+  )
+}
+
+export function IconHeart({ size = 20, strokeWidth = 1.75, className, style }: IconProps) {
+  return (
+    <svg {...def(size, strokeWidth)} className={className} style={style}>
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+    </svg>
+  )
+}
+
+export function IconLeaf({ size = 20, strokeWidth = 1.75, className, style }: IconProps) {
+  return (
+    <svg {...def(size, strokeWidth)} className={className} style={style}>
+      <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/>
+      <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>
+    </svg>
+  )
+}
+
+// ── Avatar icon system ────────────────────────────────────────────────────
+export const AVATAR_IDS = [
+  'dumbbell', 'fire', 'bolt', 'target', 'trophy', 'rocket',
+  'star', 'shield', 'crown', 'mountain', 'heart', 'leaf',
+] as const
+export type AvatarId = typeof AVATAR_IDS[number]
+
+export function AvatarIcon({ id, size = 28, strokeWidth = 1.75 }: { id: string; size?: number; strokeWidth?: number }) {
+  const p = { size, strokeWidth }
+  switch (id) {
+    case 'dumbbell':  return <IconDumbbell {...p} />
+    case 'fire':      return <IconFire {...p} />
+    case 'bolt':      return <IconBolt {...p} />
+    case 'target':    return <IconTarget {...p} />
+    case 'trophy':    return <IconTrophy {...p} />
+    case 'rocket':    return <IconRocket {...p} />
+    case 'star':      return <IconStarFilled {...p} />
+    case 'shield':    return <IconShield {...p} />
+    case 'crown':     return <IconCrown {...p} />
+    case 'mountain':  return <IconMountain {...p} />
+    case 'heart':     return <IconHeart {...p} />
+    case 'leaf':      return <IconLeaf {...p} />
+    default:          return <IconDumbbell {...p} />
+  }
+}
+
+export function UserAvatar({ avatar, size = 28 }: { avatar?: string; size?: number }) {
+  if (avatar?.startsWith('data:')) {
+    return <img src={avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+  }
+  return <AvatarIcon id={avatar ?? 'dumbbell'} size={size} />
+}
+
 // Module-to-icon mapping for AppShell / nav
 export function ModuleIcon({ path, size = 20, strokeWidth = 1.75 }: { path: string; size?: number; strokeWidth?: number }) {
   const props = { size, strokeWidth }

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { SkeletonExerciseList } from '../ui/Skeleton'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store'
 import { useEnsuredSession } from '../../hooks/useSessions'
@@ -46,11 +47,7 @@ export default function DayView() {
   }
 
   if (!session) {
-    return (
-      <div className="content">
-        <div className="spinner" />
-      </div>
-    )
+    return <SkeletonExerciseList count={4} />
   }
 
   const dayDef = routineDays[dayId]
@@ -102,7 +99,7 @@ export default function DayView() {
   const exercises = dayDef.exercises ?? []
 
   return (
-    <section className="card">
+    <section className="card fade-in">
       <div className="panel-head">
         <div>
           <h3>{capitalize(dayId)} · {dayLabel}</h3>

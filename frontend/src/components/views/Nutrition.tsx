@@ -154,7 +154,7 @@ export default function Nutrition() {
   const isToday = date === todayISO()
 
   return (
-    <>
+    <div className="fade-in">
       <section className="card">
         <div className="panel-head" style={{ paddingBottom: 0 }}>
           <div>
@@ -389,7 +389,7 @@ export default function Nutrition() {
           onClose={() => setShowGoalModal(false)}
         />
       )}
-    </>
+    </div>
   )
 }
 

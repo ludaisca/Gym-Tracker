@@ -1,4 +1,5 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
+import { SkeletonDashboard } from '../ui/Skeleton'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store'
 import { useSessions } from '../../hooks/useSessions'
@@ -10,6 +11,7 @@ import { getRoutineDays, getDayIds, calcStreak, getTodayDayId } from '../../lib/
 import { PRESET_ROUTINES } from '../../lib/presetRoutines'
 import MigrationModal from '../modals/MigrationModal'
 import { IconFire, IconRocket, IconMoon, IconTarget } from '../ui/Icons'
+import { usePullToRefresh } from '../../hooks/usePullToRefresh'
 import type { WorkoutSession } from '../../types/domain'
 
 function capitalize(s: string) {
@@ -34,9 +36,10 @@ export default function Dashboard() {
   const { sessions, loading } = useSessions(weekNumber)
   // Todas las sesiones para heatmap y racha (cargado en segundo plano)
   const [allSessions, setAllSessions] = useState<WorkoutSession[]>([])
-  useEffect(() => {
-    sessionsApi.listAll().then(setAllSessions).catch(() => {})
-  }, [])
+  const loadAll = useCallback(() => sessionsApi.listAll().then(setAllSessions).catch(() => {}), [])
+  useEffect(() => { loadAll() }, [loadAll])
+
+  const { refreshing } = usePullToRefresh(loadAll)
 
   // Hybrid logic: detect if week should advance
   const [showAdvanceBanner, setShowAdvanceBanner] = useState(false)
@@ -119,11 +122,16 @@ export default function Dashboard() {
   }, [allSessions, dayIds, weekNumber])
 
   if (loading && sessions.length === 0) {
-    return <div className="content"><div className="spinner" /></div>
+    return <SkeletonDashboard />
   }
 
   return (
     <div className="fade-in">
+      {refreshing && (
+        <div className="ptr-indicator" aria-label="Actualizando" aria-live="polite">
+          <div className="spinner" />
+        </div>
+      )}
       {showMigration && <MigrationModal onDone={() => setShowMigration(false)} />}
 
       {/* Banner de avance de semana (Híbrido) */}

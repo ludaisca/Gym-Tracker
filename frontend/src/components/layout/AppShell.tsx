@@ -1,9 +1,10 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef, Suspense } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useUIStore, useAuthStore, useOfflineStore } from '../../store'
 import { getRoutineDays } from '../../lib/fitness'
 import { useRoutines } from '../../hooks/useRoutines'
 import Toaster from '../ui/Toaster'
+import InstallPrompt from '../ui/InstallPrompt'
 import {
   ModuleIcon,
   IconMenu, IconClose, IconSun, IconMoon,
@@ -214,6 +215,9 @@ export default function AppShell() {
   const [editingNav, setEditingNav] = useState(false)
   const [favorites, setFavorites]   = useState<string[]>(loadFavs)
 
+  const menuToggleBtnRef = useRef<HTMLButtonElement>(null)
+  const menuFirstItemRef = useRef<HTMLButtonElement>(null)
+
   const customRoutines = useRoutines()
   const routineDays = useMemo(() => getRoutineDays(user?.activeRoutineId ?? null, customRoutines), [user?.activeRoutineId, customRoutines])
 
@@ -267,6 +271,13 @@ export default function AppShell() {
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [])
+  useEffect(() => {
+    if (menuOpen) {
+      menuFirstItemRef.current?.focus()
+    } else {
+      menuToggleBtnRef.current?.focus()
+    }
+  }, [menuOpen])
 
   const groups = ['Principal', 'Social', 'Herramientas'] as const
   const byGroup = (g: string) => ALL_MODULES.filter(m => m.group === g)
@@ -331,6 +342,7 @@ export default function AppShell() {
       <main className="main">
         {isOffline && (
           <div className="offline-banner">
+            <span className="offline-dot" aria-hidden="true" />
             Sin conexión · Los cambios se sincronizarán al reconectar
             {pendingSync > 0 && ` (${pendingSync} pendiente${pendingSync > 1 ? 's' : ''})`}
           </div>
@@ -347,13 +359,17 @@ export default function AppShell() {
             <button className="icon-btn" onClick={toggleTheme} aria-label="Cambiar tema">
               {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
             </button>
-            <button className="icon-btn menu-toggle-btn" onClick={() => setMenuOpen(v => !v)} aria-label="Menú de módulos" aria-expanded={menuOpen}>
+            <button ref={menuToggleBtnRef} className="icon-btn menu-toggle-btn" onClick={() => setMenuOpen(v => !v)} aria-label="Menú de módulos" aria-expanded={menuOpen} aria-controls="fullscreen-menu">
               {menuOpen ? <IconClose size={18} /> : <IconMenu size={18} />}
             </button>
           </div>
         </header>
 
-        <div className="content"><Outlet /></div>
+        <div className="content">
+          <Suspense fallback={<div className="skeleton-page"><div className="skeleton skeleton-card" /><div className="skeleton skeleton-card" /><div className="skeleton skeleton-kpi" /></div>}>
+            <Outlet />
+          </Suspense>
+        </div>
 
         {/* ── Bottom nav ── */}
         <nav className="bottom-nav" aria-label="Navegación principal">
@@ -372,10 +388,10 @@ export default function AppShell() {
 
       {/* ── Full-screen menu ─────────────────────────────────── */}
       {menuOpen && (
-        <div className="fullscreen-menu" role="dialog" aria-modal="true">
+        <div id="fullscreen-menu" className="fullscreen-menu" role="dialog" aria-modal="true" aria-labelledby="fsmenu-title">
           <div className="fsmenu-header">
             <div>
-              <div className="fsmenu-user-name">{user?.name ?? 'Usuario'}</div>
+              <div id="fsmenu-title" className="fsmenu-user-name">{user?.name ?? 'Usuario'}</div>
               <div className="fsmenu-user-meta">Semana {user?.currentWeek ?? 1} · {user?.settings?.goal ?? 'Sin objetivo'}</div>
             </div>
             <button className="icon-btn" onClick={() => setMenuOpen(false)} aria-label="Cerrar menú">
@@ -384,13 +400,14 @@ export default function AppShell() {
           </div>
 
           <div className="fsmenu-body">
-            {groups.map(group => (
+            {groups.map((group, gIdx) => (
               <div key={group} className="fsmenu-group">
                 <div className="fsmenu-group-title">{group}</div>
                 <div className="fsmenu-grid">
-                  {byGroup(group).map(mod => (
+                  {byGroup(group).map((mod, mIdx) => (
                     <button
                       key={mod.path}
+                      ref={gIdx === 0 && mIdx === 0 ? menuFirstItemRef : undefined}
                       className={`fsmenu-item ${isActive(mod.path) ? 'active' : ''}`}
                       onClick={() => handleModuleNav(mod.path)}
                     >
@@ -434,6 +451,7 @@ export default function AppShell() {
         />
       )}
 
+      <InstallPrompt />
       <Toaster />
     </div>
   )

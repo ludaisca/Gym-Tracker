@@ -8,12 +8,12 @@ export function useOfflineSync() {
   const { isAuthenticated } = useAuthStore()
 
   useEffect(() => {
-    const handleOnline = () => {
+    const handleOnline = async () => {
       setOffline(false)
       if (!isAuthenticated) return
       // Replay queued writes in order
       const pending = useOfflineStore.getState().queue
-      pending.forEach(async (action) => {
+      for (const action of pending) {
         try {
           await api.request({
             method: action.method,
@@ -23,8 +23,9 @@ export function useOfflineSync() {
           dequeue(action.id)
         } catch {
           // Keep in queue if still failing
+          break
         }
-      })
+      }
     }
 
     const handleOffline = () => setOffline(true)

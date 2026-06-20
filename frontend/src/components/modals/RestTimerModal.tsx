@@ -34,7 +34,7 @@ export default function RestTimerModal({ seconds, label, onClose }: Props) {
     intervalRef.current = setInterval(() => {
       setRemaining((prev) => {
         if (prev <= 1) {
-          clearInterval(intervalRef.current!)
+          if (intervalRef.current) clearInterval(intervalRef.current)
           setRunning(false)
           playBeep(880, 0.3)
           setTimeout(() => playBeep(880, 0.3), 350)
@@ -45,7 +45,7 @@ export default function RestTimerModal({ seconds, label, onClose }: Props) {
         return prev - 1
       })
     }, 1000)
-    return () => clearInterval(intervalRef.current!)
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [running, playBeep])
 
   function toggle() {
@@ -53,7 +53,7 @@ export default function RestTimerModal({ seconds, label, onClose }: Props) {
   }
 
   function reset() {
-    clearInterval(intervalRef.current!)
+    if (intervalRef.current) clearInterval(intervalRef.current)
     setRemaining(seconds)
     setRunning(true)
   }

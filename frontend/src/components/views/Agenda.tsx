@@ -21,7 +21,7 @@ export default function Agenda() {
   const { sessions } = useSessions(weekNumber)
 
   return (
-    <section className="card">
+    <section className="card fade-in">
       <div className="panel-head">
         <div><h3>Agenda semanal</h3><p>Vista centralizada para planear la semana.</p></div>
       </div>

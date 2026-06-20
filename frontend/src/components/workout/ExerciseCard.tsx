@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { IconCheck, IconBolt, IconTrophy } from '../ui/Icons'
 import type { ExerciseDef } from '../../types/domain'
 import type { ExerciseSession } from '../../types/domain'
 import { isPR, getExerciseHistory, getLastRecordedSets, calc1RM } from '../../lib/fitness'
@@ -63,13 +64,13 @@ export default function ExerciseCard({
   return (
     <article className={`exercise-item${exState.done ? ' done' : ''}`}>
       <div className="exercise-top">
-        <button className="exercise-check" type="button" onClick={onToggleDone}>
-          {exState.done ? '✓' : ''}
+        <button className="exercise-check" type="button" onClick={onToggleDone} aria-label={exState.done ? 'Marcar como pendiente' : 'Marcar como completo'}>
+          {exState.done && <IconCheck size={16} strokeWidth={2.5} />}
         </button>
         <div>
           <div className="exercise-name">
             {exDef.name}
-            {hasPR && <span className="pr-badge">🏆 PR</span>}
+            {hasPR && <span className="pr-badge"><IconTrophy size={11} strokeWidth={2} /> PR</span>}
           </div>
           <div className="exercise-meta">
             Series: {exDef.sets} · Reps objetivo: {exDef.reps}
@@ -96,7 +97,7 @@ export default function ExerciseCard({
             onClick={() => onAutoFill(lastRecordedSets)}
             title="Copiar series de la última sesión registrada"
           >
-            ⚡ Autocompletar con sesión anterior
+            <IconBolt size={12} strokeWidth={2} /> Autocompletar con sesión anterior
           </button>
         </div>
       )}

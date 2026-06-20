@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { challengesApi, type Challenge, type VersusData } from '../../api/challenges'
 import { useAuthStore } from '../../store'
-import { IconTrophy, IconCamera, IconStats, IconCheck } from '../ui/Icons'
+import { IconTrophy, IconCamera, IconStats, IconCheck, IconClose } from '../ui/Icons'
 
 // ── Canvas watermark helper ──────────────────────────────────────────────
 async function captureWithWatermark(
@@ -232,7 +232,7 @@ function CheckInModal({
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
             <IconCamera size={18} /> Check-in al gym
           </h3>
-          <button onClick={onClose} style={{ fontSize: '1.4rem', lineHeight: 1 }}>×</button>
+          <button onClick={onClose} className="icon-btn"><IconClose size={18} strokeWidth={2} /></button>
         </div>
         <div className="modal-body">
           {error && <div className="form-error" style={{ marginBottom: '1rem' }}>{error}</div>}
@@ -294,7 +294,7 @@ function VersusModal({ challenge, onClose }: { challenge: Challenge; onClose: ()
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             VERSUS · {challenge.code}
           </h3>
-          <button onClick={onClose} style={{ fontSize: '1.4rem', lineHeight: 1 }}>×</button>
+          <button onClick={onClose} className="icon-btn"><IconClose size={18} strokeWidth={2} /></button>
         </div>
         <div className="modal-body">
           {loading && <div style={{ textAlign: 'center', padding: '2rem' }}><div className="spinner" /></div>}
@@ -452,7 +452,7 @@ export default function Duelos() {
           <div className="modal" style={{ maxWidth: 420 }}>
             <div className="modal-head">
               <h3>+ Nuevo reto</h3>
-              <button onClick={() => { setShowCreate(false); setCreateResult(null) }} style={{ fontSize: '1.4rem', lineHeight: 1 }}>×</button>
+              <button onClick={() => { setShowCreate(false); setCreateResult(null) }} className="icon-btn"><IconClose size={18} strokeWidth={2} /></button>
             </div>
             <div className="modal-body">
               {!createResult ? (
@@ -523,7 +523,7 @@ export default function Duelos() {
           <div className="modal" style={{ maxWidth: 380 }}>
             <div className="modal-head">
               <h3>Unirme a reto</h3>
-              <button onClick={() => setShowJoin(false)} style={{ fontSize: '1.4rem', lineHeight: 1 }}>×</button>
+              <button onClick={() => setShowJoin(false)} className="icon-btn"><IconClose size={18} strokeWidth={2} /></button>
             </div>
             <div className="modal-body">
               <div className="field" style={{ marginBottom: '1rem' }}>

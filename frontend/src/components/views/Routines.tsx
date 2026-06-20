@@ -122,10 +122,10 @@ export default function Routines() {
                       <p className="routine-card-desc">{r.description || 'Sin descripción'}</p>
                     </div>
                     <div className="routine-card-actions-top">
-                      <button className="icon-btn-subtle" onClick={() => setPreviewRoutine(r)} title="Previsualizar">
+                      <button className="icon-btn-subtle" onClick={() => setPreviewRoutine(r)} title="Previsualizar" aria-label="Previsualizar rutina">
                         <IconEye size={18} />
                       </button>
-                      <button className="icon-btn-subtle" onClick={() => cloneRoutine(r)} title="Clonar">
+                      <button className="icon-btn-subtle" onClick={() => cloneRoutine(r)} title="Clonar" aria-label="Clonar rutina">
                         <IconCopy size={18} />
                       </button>
                     </div>
@@ -154,10 +154,10 @@ export default function Routines() {
                     )}
                     {r.isCustom && (
                       <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                        <button className="icon-btn-danger" onClick={() => deleteRoutine(r.id!)} title="Eliminar">
+                        <button className="icon-btn-danger" onClick={() => deleteRoutine(r.id!)} title="Eliminar" aria-label="Eliminar rutina">
                           <IconTrash size={18} />
                         </button>
-                        <button className="icon-btn-accent" onClick={() => navigate(`/rutinas/${r.id}`)} title="Editar">
+                        <button className="icon-btn-accent" onClick={() => navigate(`/rutinas/${r.id}`)} title="Editar" aria-label="Editar rutina">
                           <IconEdit size={18} />
                         </button>
                       </div>
@@ -211,7 +211,7 @@ export default function Routines() {
               <h3>{previewRoutine?.name}</h3>
               <p>{previewRoutine?.description || 'Plan de entrenamiento detallado'}</p>
             </div>
-            <button className="icon-btn-subtle" onClick={() => setPreviewRoutine(null)}>
+            <button className="icon-btn-subtle" onClick={() => setPreviewRoutine(null)} aria-label="Cerrar vista previa">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>

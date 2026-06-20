@@ -95,7 +95,7 @@ export default function Insights() {
   }
 
   return (
-    <>
+    <div className="fade-in">
       <div className="kpis">
         <article className="card kpi">
           <div className="kpi-label">Racha activa</div>
@@ -216,6 +216,6 @@ export default function Insights() {
           </div>
         )}
       </section>
-    </>
+    </div>
   )
 }

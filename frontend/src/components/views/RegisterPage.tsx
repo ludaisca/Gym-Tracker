@@ -1,14 +1,13 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { authApi } from '../../api/auth'
-
-const AVATARS = ['💪', '🏋️', '🔥', '⚡', '🎯', '🦁', '🐺', '🏆']
+import { AVATAR_IDS, AvatarIcon } from '../ui/Icons'
 
 export default function RegisterPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [avatar, setAvatar] = useState('💪')
+  const [avatar, setAvatar] = useState<string>('dumbbell')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [registered, setRegistered] = useState(false)
@@ -32,7 +31,13 @@ export default function RegisterPage() {
     return (
       <div className="auth-page fade-in">
         <div className="auth-card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '3rem', marginBottom: 'var(--space-4)' }}>📬</div>
+          <div style={{ color: 'var(--color-primary)', marginBottom: 'var(--space-4)', display: 'flex', justifyContent: 'center' }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+              <path d="M9 12l-2 2 2 2"/>
+            </svg>
+          </div>
           <h1 style={{ marginBottom: 'var(--space-2)' }}>Revisa tu correo</h1>
           <p style={{ color: 'var(--color-text-muted)', marginBottom: 'var(--space-6)', lineHeight: 1.6 }}>
             Te enviamos un enlace de verificación a <strong style={{ color: 'var(--color-text)' }}>{email}</strong>.
@@ -76,14 +81,16 @@ export default function RegisterPage() {
 
           <div className="auth-field">
             <label>Avatar</label>
-            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-              {AVATARS.map((a) => (
-                <button key={a} type="button" onClick={() => setAvatar(a)} style={{
-                  fontSize: '1.6rem', padding: '0.4rem', borderRadius: 'var(--radius-lg)',
-                  border: `2px solid ${a === avatar ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                  background: a === avatar ? 'var(--color-primary-highlight)' : 'transparent',
-                }}>
-                  {a}
+            <div className="avatar-picker">
+              {AVATAR_IDS.map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`avatar-option${id === avatar ? ' selected' : ''}`}
+                  onClick={() => setAvatar(id)}
+                  aria-label={id}
+                >
+                  <AvatarIcon id={id} size={22} strokeWidth={1.6} />
                 </button>
               ))}
             </div>

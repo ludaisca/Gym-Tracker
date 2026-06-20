@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { lazy, useEffect } from 'react'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { useAuthStore, useUIStore } from './store'
 import { useOfflineSync } from './hooks/useOfflineSync'
 
+// Auth pages: pequeñas, carga inmediata
 import LoginPage from './components/views/LoginPage'
 import RegisterPage from './components/views/RegisterPage'
 import VerifyEmailPage from './components/views/VerifyEmailPage'
@@ -10,19 +11,20 @@ import ForgotPasswordPage from './components/views/ForgotPasswordPage'
 import ResetPasswordPage from './components/views/ResetPasswordPage'
 import AppShell from './components/layout/AppShell'
 
-import Dashboard from './components/views/Dashboard'
-import Agenda from './components/views/Agenda'
-import DayView from './components/views/DayView'
-import Stats from './components/views/Stats'
-import Insights from './components/views/Insights'
-import Routines from './components/views/Routines'
-import RoutineEditor from './components/views/RoutineEditor'
-import Cardio from './components/views/Cardio'
-import Notes from './components/views/Notes'
-import Nutrition from './components/views/Nutrition'
-import Config from './components/views/Config'
-import Duelos from './components/views/Duelos'
-import SessionHistory from './components/views/SessionHistory'
+// Vistas protegidas: lazy para code splitting por ruta
+const Dashboard      = lazy(() => import('./components/views/Dashboard'))
+const Agenda         = lazy(() => import('./components/views/Agenda'))
+const DayView        = lazy(() => import('./components/views/DayView'))
+const Stats          = lazy(() => import('./components/views/Stats'))
+const Insights       = lazy(() => import('./components/views/Insights'))
+const Routines       = lazy(() => import('./components/views/Routines'))
+const RoutineEditor  = lazy(() => import('./components/views/RoutineEditor'))
+const Cardio         = lazy(() => import('./components/views/Cardio'))
+const Notes          = lazy(() => import('./components/views/Notes'))
+const Nutrition      = lazy(() => import('./components/views/Nutrition'))
+const Config         = lazy(() => import('./components/views/Config'))
+const Duelos         = lazy(() => import('./components/views/Duelos'))
+const SessionHistory = lazy(() => import('./components/views/SessionHistory'))
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()

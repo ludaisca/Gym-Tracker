@@ -12,7 +12,7 @@ const authPlugin: FastifyPluginAsync = fp(async (fastify) => {
     try {
       await request.jwtVerify()
     } catch {
-      reply.status(401).send({ error: 'Unauthorized' })
+      return reply.status(401).send({ error: 'Unauthorized' })
     }
   })
 })

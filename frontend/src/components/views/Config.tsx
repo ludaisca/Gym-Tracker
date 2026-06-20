@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore, useUIStore, useOfflineStore } from '../../store'
 import { usersApi } from '../../api/users'
@@ -7,16 +7,56 @@ import type { UserSettings } from '../../types/domain'
 import {
   IconSun, IconMoon, IconDownload, IconUpload, IconTrash, IconLogout,
   IconUser, IconMail, IconLock, IconCamera,
+  AVATAR_IDS, AvatarIcon, UserAvatar,
 } from '../ui/Icons'
 import { toast } from '../../lib/toast'
 
-const AVATARS = ['💪', '🏋️', '🔥', '⚡', '🎯', '🦁', '🐉', '🏆', '🧠', '🌊', '🦅', '🚀']
+const AI_PROVIDERS = [
+  { id: 'opencode',  label: 'OpenCode Go',      placeholder: 'oc-…',          link: 'https://opencode.ai',             linkLabel: 'opencode.ai' },
+  { id: 'google',    label: 'Google Gemini',     placeholder: 'AIzaSy…',       link: 'https://aistudio.google.com/',    linkLabel: 'Google AI Studio' },
+  { id: 'openai',    label: 'OpenAI',            placeholder: 'sk-…',          link: 'https://platform.openai.com/',   linkLabel: 'platform.openai.com' },
+  { id: 'anthropic', label: 'Anthropic (Claude)', placeholder: 'sk-ant-…',     link: 'https://console.anthropic.com/', linkLabel: 'console.anthropic.com' },
+]
+
+const AI_MODELS: Record<string, { id: string; label: string }[]> = {
+  opencode: [
+    { id: 'glm-5.2',           label: 'GLM-5.2 — visión + texto (recomendado)' },
+    { id: 'glm-5.1',           label: 'GLM-5.1' },
+    { id: 'deepseek-v4-pro',   label: 'DeepSeek V4 Pro — texto, razonamiento potente' },
+    { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash — texto, muy económico' },
+    { id: 'qwen3.7-max',       label: 'Qwen3.7 Max — multilingüe' },
+    { id: 'qwen3.7-plus',      label: 'Qwen3.7 Plus' },
+    { id: 'minimax-m3',        label: 'MiniMax M3' },
+    { id: 'kimi-k2.7-code',    label: 'Kimi K2.7 Code' },
+  ],
+  google: [
+    { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite (recomendado)' },
+    { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash' },
+    { id: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro' },
+  ],
+  openai: [
+    { id: 'gpt-4o-mini', label: 'GPT-4o Mini (recomendado)' },
+    { id: 'gpt-4o',      label: 'GPT-4o' },
+    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
+  ],
+  anthropic: [
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (recomendado)' },
+    { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6' },
+  ],
+}
+
+const AI_DEFAULT_MODELS: Record<string, string> = {
+  opencode: 'glm-5.2',
+  google:   'gemini-2.5-flash-lite',
+  openai:   'gpt-4o-mini',
+  anthropic: 'claude-haiku-4-5-20251001',
+}
 
 const ACCENT_THEMES = [
   { id: 'teal',   label: 'Teal',   lightColor: '#01696f', darkColor: '#4f98a3' },
   { id: 'forest', label: 'Forest', lightColor: '#2d6a4f', darkColor: '#52b788' },
   { id: 'ocean',  label: 'Ocean',  lightColor: '#1d6fa4', darkColor: '#4da6d9' },
-  { id: 'ember',  label: 'Ember',   lightColor: '#c05c1a', darkColor: '#4f98a3' }, // Fixed ember dark color
+  { id: 'ember',  label: 'Ember',  lightColor: '#c05c1a', darkColor: '#f4874a' },
   { id: 'violet', label: 'Violeta', lightColor: '#6d3bbf', darkColor: '#9b6de0' },
 ]
 
@@ -27,6 +67,8 @@ export default function Config() {
   const { queue, dequeue, clearQueue } = useOfflineStore()
   const [settings, setSettings] = useState<Partial<UserSettings>>(user?.settings ?? {})
   const [aiKey, setAiKey] = useState('')
+  const [aiProvider, setAiProvider] = useState(user?.settings?.aiProvider ?? 'opencode')
+  const [aiModel, setAiModel] = useState(user?.settings?.aiModel ?? AI_DEFAULT_MODELS['opencode'])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [savingAi, setSavingAi] = useState(false)
@@ -44,6 +86,15 @@ export default function Config() {
   const [accountError, setAccountError] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const accountUpdatedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savedAiTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (accountUpdatedTimer.current) clearTimeout(accountUpdatedTimer.current)
+    if (savedTimer.current) clearTimeout(savedTimer.current)
+    if (savedAiTimer.current) clearTimeout(savedAiTimer.current)
+  }, [])
 
   async function handleManualSync() {
     if (syncingQueue || queue.length === 0) return
@@ -76,7 +127,7 @@ export default function Config() {
     }
     setUpdatingAccount(true)
     try {
-      const payload: any = { name: accountName, email: accountEmail }
+      const payload: { name: string; email: string; password?: string; currentPassword?: string } = { name: accountName, email: accountEmail }
       if (passChanged) payload.password = accountPass.trim()
       if (emailChanged || passChanged) payload.currentPassword = accountCurrentPass
       const updated = await usersApi.update(payload)
@@ -85,9 +136,9 @@ export default function Config() {
       setAccountCurrentPass('')
       setAccountUpdated(true)
       toast('Datos de cuenta actualizados')
-      setTimeout(() => setAccountUpdated(false), 2000)
-    } catch (err: any) {
-      const msg = err?.response?.data?.error ?? 'Error al actualizar la cuenta'
+      accountUpdatedTimer.current = setTimeout(() => setAccountUpdated(false), 2000)
+    } catch (err) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Error al actualizar la cuenta'
       setAccountError(msg)
     } finally {
       setUpdatingAccount(false)
@@ -133,7 +184,7 @@ export default function Config() {
     try {
       await usersApi.updateSettings(settings)
       setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
+      savedTimer.current = setTimeout(() => setSaved(false), 2000)
     } finally {
       setSaving(false)
     }
@@ -143,15 +194,15 @@ export default function Config() {
     setSavingAi(true)
     try {
       const payload: Partial<UserSettings> & { aiKey?: string | null } = {
-        aiProvider: 'google',
-        aiModel: 'gemini-2.5-flash-lite',
+        aiProvider,
+        aiModel: aiModel || AI_DEFAULT_MODELS[aiProvider] || null,
       }
       if (aiKey.trim()) payload.aiKey = aiKey.trim()
       const updated = await usersApi.updateSettings(payload)
       setAiKey('')
       setSavedAi(true)
       if (user) setAuth({ ...user, settings: updated }, accessToken ?? '')
-      setTimeout(() => setSavedAi(false), 2000)
+      savedAiTimer.current = setTimeout(() => setSavedAi(false), 2000)
     } finally {
       setSavingAi(false)
     }
@@ -230,19 +281,14 @@ export default function Config() {
 
   const swatchColor = (t: typeof ACCENT_THEMES[0]) => theme === 'dark' ? t.darkColor : t.lightColor
 
-  const isDataUrl = (s?: string) => s?.startsWith('data:image')
 
   return (
-    <>
+    <div className="fade-in">
       {/* ── Perfil header ─────────────────────────────────────── */}
       <section className="card">
         <div className="profile-header-main">
           <button className="profile-avatar-large" onClick={() => setShowAvatarPicker(v => !v)} aria-label="Cambiar avatar">
-            {isDataUrl(user?.avatar) ? (
-              <img src={user?.avatar} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-            ) : (
-              user?.avatar ?? '💪'
-            )}
+            <UserAvatar avatar={user?.avatar} size={36} />
           </button>
           <div className="profile-info">
             <h3>{user?.name ?? 'Usuario'}</h3>
@@ -268,13 +314,14 @@ export default function Config() {
                <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handlePhotoUpload} />
              </div>
             <div className="avatar-picker">
-              {AVATARS.map(a => (
+              {AVATAR_IDS.map(id => (
                 <button
-                  key={a}
-                  className={`avatar-option${user?.avatar === a ? ' selected' : ''}`}
-                  onClick={() => handleAvatarSelect(a)}
+                  key={id}
+                  className={`avatar-option${user?.avatar === id ? ' selected' : ''}`}
+                  onClick={() => handleAvatarSelect(id)}
+                  aria-label={id}
                 >
-                  {a}
+                  <AvatarIcon id={id} size={22} strokeWidth={1.6} />
                 </button>
               ))}
             </div>
@@ -450,13 +497,46 @@ export default function Config() {
         <div className="panel-head">
           <div>
             <h3>Asistente de Inteligencia Artificial</h3>
-            <p>Conecta tu cuenta con Google Gemini (modelo <strong>gemini-2.5-flash-lite</strong> optimizado por defecto) para obtener análisis instantáneos de tus entrenamientos y escaneo visual de comidas.</p>
+            <p>Conecta un proveedor de IA para análisis de entrenamientos y escaneo visual de comidas. <strong>OpenCode Go</strong> es la opción más económica ($10/mes, 13 modelos).</p>
           </div>
         </div>
-        <div className="panel-body">
+        <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          {/* Selector de proveedor */}
+          <div className="field" style={{ maxWidth: '400px' }}>
+            <label>Proveedor</label>
+            <select
+              value={aiProvider}
+              onChange={e => {
+                const p = e.target.value
+                setAiProvider(p)
+                setAiModel(AI_DEFAULT_MODELS[p] ?? '')
+              }}
+            >
+              {AI_PROVIDERS.map(p => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Selector de modelo */}
+          <div className="field" style={{ maxWidth: '400px' }}>
+            <label>Modelo</label>
+            <select value={aiModel} onChange={e => setAiModel(e.target.value)}>
+              {(AI_MODELS[aiProvider] ?? []).map(m => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+            {aiProvider === 'opencode' && aiModel && !['glm-5.2', 'glm-5.1'].includes(aiModel) && (
+              <div className="tiny muted" style={{ marginTop: 'var(--space-1)', color: 'var(--color-warning)' }}>
+                Solo GLM-5.2 tiene soporte de visión confirmado. El análisis de fotos de comida puede no funcionar con este modelo.
+              </div>
+            )}
+          </div>
+
+          {/* API Key */}
           <div className="field" style={{ maxWidth: '400px' }}>
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>Google Gemini API Key</span>
+              <span>API Key</span>
               {user?.settings?.aiKeySet && (
                 <span style={{ color: 'var(--color-success)', fontSize: 'var(--text-xs)', fontWeight: 700 }}>
                   ● Conectado
@@ -465,19 +545,29 @@ export default function Config() {
             </label>
             <input
               type="password"
-              placeholder={user?.settings?.aiKeySet ? '••••••••••••••••••••  (dejar vacío para mantener)' : 'AIzaSy…'}
+              placeholder={user?.settings?.aiKeySet
+                ? '••••••••••••••••••••  (dejar vacío para mantener)'
+                : (AI_PROVIDERS.find(p => p.id === aiProvider)?.placeholder ?? '…')}
               value={aiKey}
               onChange={e => setAiKey(e.target.value)}
               autoComplete="off"
             />
-            <div className="tiny muted" style={{ marginTop: 'var(--space-1)' }}>
-              Tu clave se almacena de forma segura/cifrada localmente. Puedes obtener una gratuita en <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>Google AI Studio</a>.
-            </div>
+            {(() => {
+              const prov = AI_PROVIDERS.find(p => p.id === aiProvider)
+              return prov ? (
+                <div className="tiny muted" style={{ marginTop: 'var(--space-1)' }}>
+                  Obtén tu clave en{' '}
+                  <a href={prov.link} target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>
+                    {prov.linkLabel}
+                  </a>
+                </div>
+              ) : null
+            })()}
           </div>
         </div>
         <div className="panel-body" style={{ paddingTop: 0, display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
           <button className="primary-btn" onClick={saveAiSettings} disabled={savingAi}>
-            {savingAi ? 'Guardando…' : savedAi ? 'Guardado ✓' : 'Guardar API Key'}
+            {savingAi ? 'Guardando…' : savedAi ? 'Guardado ✓' : 'Guardar configuración IA'}
           </button>
           {user?.settings?.aiKeySet && (
             <button
@@ -598,6 +688,6 @@ export default function Config() {
           </div>
         </div>
       </section>
-    </>
+    </div>
   )
 }

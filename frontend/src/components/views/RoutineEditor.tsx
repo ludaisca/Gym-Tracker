@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { IconBolt, IconAlertTriangle } from '../ui/Icons'
 import { useNavigate, useParams } from 'react-router-dom'
 import { routinesApi } from '../../api/routines'
 import { aiApi } from '../../api/ai'
@@ -403,8 +404,9 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
         {aiOpen && (
           <div style={{ padding: 'var(--space-4) var(--space-5)', background: 'var(--color-surface)' }}>
             {!hasAI ? (
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning)', padding: 'var(--space-2) 0' }}>
-                ⚠️ Configura un proveedor y clave de IA en <strong>Configuración → IA</strong> para habilitar el generador automático.
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning)', padding: 'var(--space-2) 0', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                <IconAlertTriangle size={14} strokeWidth={2} />
+                Configura un proveedor y clave de IA en <strong>Configuración → IA</strong> para habilitar el generador automático.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -417,10 +419,10 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
                       onChange={e => setAiObjective(e.target.value)}
                       disabled={aiGenerating}
                     >
-                      <option value="hipertrofia">💥 Hipertrofia (Ganancia muscular)</option>
-                      <option value="fuerza">🏋️‍♂️ Fuerza Pura</option>
-                      <option value="definicion">🔥 Definición / Pérdida de grasa</option>
-                      <option value="principiante">🌱 Acondicionamiento Principiante</option>
+                      <option value="hipertrofia">Hipertrofia (Ganancia muscular)</option>
+                      <option value="fuerza">Fuerza Pura</option>
+                      <option value="definicion">Definición / Pérdida de grasa</option>
+                      <option value="principiante">Acondicionamiento Principiante</option>
                     </select>
                   </div>
                   <div className="field" style={{ flex: 2, minWidth: '250px' }}>
@@ -444,7 +446,7 @@ Asegúrate de separar el nombre del ejercicio, reps, series y descanso en segund
                     onClick={generateWithAI}
                     disabled={aiGenerating}
                   >
-                    {aiGenerating ? 'Estructurando rutina inteligente...' : '⚡ Generar Rutina Completa'}
+                    {aiGenerating ? 'Estructurando rutina inteligente...' : <><IconBolt size={13} strokeWidth={2} /> Generar Rutina Completa</>}
                   </button>
                 </div>
               </div>
