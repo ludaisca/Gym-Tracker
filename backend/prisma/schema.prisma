@@ -51,9 +51,11 @@ model UserSettings {
   carbGoal      Int     @default(250)
   fatGoal       Int     @default(80)
   waterGoal     Int     @default(8)
-  aiProvider    String?
-  aiKey         String?
-  aiModel       String?
+  aiProvider          String?
+  aiKey               String?
+  aiModel             String?
+  dashboardLayout     Json?
+  bottomNavFavorites  Json?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

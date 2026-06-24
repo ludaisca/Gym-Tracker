@@ -45,8 +45,8 @@ export function useSessions(weekNumber: number) {
   }, [weekNumber, user?.id])
 
   const getSession = useCallback((dayId: string): WorkoutSession | undefined => {
-    return sessions.find((s) => s.weekNumber === weekNumber && s.dayId === dayId)
-  }, [sessions, weekNumber])
+    return sessions.find((s) => s.dayId === dayId)
+  }, [sessions])
 
   return { sessions, loading, upsert, getSession, reload: load }
 }
@@ -56,6 +56,7 @@ export function useEnsuredSession(weekNumber: number, dayId: string, customRouti
   const [session, setSession] = useState<WorkoutSession | null>(null)
   const [saving, setSaving] = useState<'idle' | 'pending' | 'saved'>('idle')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const flushSeqRef = useRef(0)
 
   const activeRoutineId = user?.activeRoutineId
 
@@ -84,6 +85,7 @@ export function useEnsuredSession(weekNumber: number, dayId: string, customRouti
   const flush = useCallback(async (current: WorkoutSession) => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     setSaving('pending')
+    const seq = ++flushSeqRef.current
     debounceRef.current = setTimeout(async () => {
       try {
         const result = await sessionsApi.upsert(current.weekNumber, current.dayId, {
@@ -92,11 +94,14 @@ export function useEnsuredSession(weekNumber: number, dayId: string, customRouti
           exercises: current.exercises,
           cardio: current.cardio ?? null,
         })
-        setSession(result)
-        setSaving('saved')
-        setTimeout(() => setSaving('idle'), 2000)
+        // Ignorar respuestas de requests superadas por una actualización más reciente
+        if (seq === flushSeqRef.current) {
+          setSession(result)
+          setSaving('saved')
+          setTimeout(() => setSaving('idle'), 2000)
+        }
       } catch {
-        setSaving('idle')
+        if (seq === flushSeqRef.current) setSaving('idle')
       }
     }, 800)
   }, [])

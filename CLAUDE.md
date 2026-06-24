@@ -9,6 +9,9 @@ El proyecto tiene dos versiones coexistentes:
 - **`gym-tracker.html`** — SPA monolítica legacy (~2278 líneas, CSS+HTML+JS inline). Sigue siendo el archivo de referencia de lógica de negocio.
 - **`frontend/` + `backend/`** — Rewrite full-stack activo: React 19 + Fastify + PostgreSQL. Es la versión hacia donde evoluciona el producto.
 
+> **`frontend/CLAUDE.md`** documenta patrones específicos del frontend: sistema CSS, overlays/bottom-sheets, señales UIStore, y comportamientos sutiles de componentes. Leerlo antes de tocar código de UI.
+> **`frontend/DESIGN.md`** es la referencia completa del sistema de diseño visual: tokens de color/tipografía/espaciado, clases de botones, patrones de listas agrupadas, overlays, estados vacíos y checklist de nuevas vistas.
+
 El docker-compose orquesta tres servicios: `nginx` → `api` (Fastify :3001) → `db` (Postgres :5432). Nginx hace reverse proxy de `/api/*` al backend y sirve el SPA para todo lo demás. **La BD no expone puertos al host en producción** — solo es accesible internamente en la red Docker.
 
 ---
@@ -89,7 +92,7 @@ python3 -m http.server 8080
 
 **Seguridad de datos**: `sanitizeUser()` en `users.ts` elimina `passwordHash` de cualquier respuesta. `aiKey` nunca se devuelve al cliente — solo se expone `aiKeySet: boolean`. El export (`GET /me/export`) excluye `passwordHash`, `verificationToken`, `resetToken` y sus expiries.
 
-**IA**: Las rutas `/ai/*` leen `UserSettings.aiProvider` / `aiKey` / `aiModel` por usuario. Soportan Google Gemini, OpenAI y Anthropic. Las claves van en DB por usuario, **no en variables de entorno del servidor**.
+**IA**: Las rutas `/ai/*` leen `UserSettings.aiProvider` / `aiKey` / `aiModel` por usuario. Las claves van en DB por usuario, **no en variables de entorno del servidor**. `POST /ai/analyze` soporta Google Gemini, OpenAI y Anthropic. `POST /ai/analyze-food` usa **solo Gemini** (helper `callGemini` interno); si el usuario tiene otro proveedor configurado, aun así llama a Gemini con su `aiKey`. Hay helpers internos `callGemini(apiKey, model, body)` y `loadUserAiContext(prisma, userId)` para reutilización.
 
 **Health check**: `GET /health` — sin auth, devuelve `{ status: 'ok' }`.
 
@@ -102,7 +105,8 @@ python3 -m http.server 8080
 **Routing**: React Router v7, definido en `App.tsx`. Rutas públicas: `/login`, `/register`, `/verificar-email`, `/olvide-contrasena`, `/restablecer-contrasena`. Rutas autenticadas bajo `AppShell` protegidas por `AuthGuard`.
 
 **Vistas principales** (todas bajo `frontend/src/components/views/`):
-- `Dashboard` — KPIs de la semana actual + heatmap de actividad (usa `sessionsApi.listAll()` para streak e heatmap)
+- `Dashboard` — layout de widgets configurable por el usuario. Exporta `DEFAULT_LAYOUT: DashboardWidgetConfig[]`. Widgets: `today`, `kpis`, `heatmap`, `week`, `volume`, `nutrition`. También carga `nutritionApi.getDay(today)` para el widget de nutrición.
+- `DashboardEditor` — panel lateral (side-panel) para reordenar/activar/cambiar ancho de widgets. Se abre via señal `dashboardEditorOpen` del UIStore.
 - `Agenda` — vista semanal de días con estado visual (`.status-done` / `.status-partial`)
 - `DayView` (`/entrenamiento/:dayId`) — sesión de entrenamiento activa
 - `Stats` — estadísticas históricas y logros (usa `sessionsApi.listAll()` + `useRoutines()`)
@@ -114,7 +118,7 @@ python3 -m http.server 8080
 
 **Estado global** (`frontend/src/store/index.ts`):
 - `useAuthStore` — usuario autenticado + access token (persiste en `localStorage` bajo `gym-auth`)
-- `useUIStore` — tema light/dark + accentTheme (persiste bajo `gym-ui`). **Única fuente de verdad del tema**; nunca escribir `data-theme` al DOM desde fuera del store.
+- `useUIStore` — tema light/dark + accentTheme + `bottomNavFavorites` (persiste bajo `gym-ui`). **Única fuente de verdad del tema y los favoritos de la nav**; nunca escribir `data-theme` al DOM desde fuera del store. Incluye señales de comunicación topbar→vista: `dashboardEditorOpen/openDashboardEditor/closeDashboardEditor` y `nutritionGoalOpen/openNutritionGoal/closeNutritionGoal`. Ver `frontend/CLAUDE.md` para el patrón de uso.
 - `useOfflineStore` — cola de acciones pendientes para sync cuando se recupere conexión
 
 **Hooks** (`frontend/src/hooks/`):
@@ -122,7 +126,7 @@ python3 -m http.server 8080
 - `useSessions(weekNumber)` — sesiones de la semana actual con optimistic updates y debounce de 800ms. Solo para la semana en curso.
 - `useEnsuredSession(weekNumber, dayId, customRoutines)` — para `DayView`; crea sesión vacía si no existe.
 - `useOfflineSync()` — drena la cola al volver online.
-- `useUser()` — sincroniza usuario desde el servidor al montar.
+- `useUser()` — sincroniza usuario desde el servidor al montar. **Vive en `AppShell`**, no en vistas individuales; no llamarlo por duplicado en vistas hijas.
 
 **Patrón crítico — datos históricos vs. semana actual**:
 - Para KPIs de la semana actual: `useSessions(weekNumber)`
@@ -145,7 +149,9 @@ python3 -m http.server 8080
 
 **Utilidades de fitness** (`frontend/src/lib/fitness.ts`): `calc1RM`, `calcWeekVolume`, `isPR`, `calcStreak`, `getBestKgForWeek`, `getRoutineDays`, `getDayIds`, `getTodayDayId`, `getLastRecordedSets`. No duplicar esta lógica en componentes. `isPR` solo cuenta ejercicios con `ex.done === true`.
 
-**Tipos compartidos** (`frontend/src/types/domain.ts`): `User`, `WorkoutSession`, `ExerciseSession`, `CardioData`, `Routine`, `DayDef`, `ExerciseDef`, `NutritionDay`, `GlobalNote`, `SavedFood`, `UserSettings`, `AuthResponse`. No inventar tipos locales.
+**Tipos compartidos** (`frontend/src/types/domain.ts`): `User`, `WorkoutSession`, `ExerciseSession`, `CardioData`, `Routine`, `DayDef`, `ExerciseDef`, `NutritionDay`, `GlobalNote`, `SavedFood`, `UserSettings`, `AuthResponse`, `WidgetType`, `DashboardWidgetConfig`. No inventar tipos locales.
+
+`SetData` tiene campo opcional `completed?: boolean` (nivel serie). `ExerciseSession.done` (nivel ejercicio) es independiente — ver `frontend/CLAUDE.md` para la relación entre ambos.
 
 ---
 
@@ -153,12 +159,14 @@ python3 -m http.server 8080
 
 Modelos: `User`, `UserSettings` (1:1), `Routine`, `WorkoutSession`, `NutritionDay`, `GlobalNote`, `SavedFood`, `RefreshToken`, `BodyWeight`, `AIChat`, `Challenge`, `CheckIn`.
 
-`UserSettings`: preferencias de nutrición, tema, objetivo, credenciales IA. `aiKey` en texto plano en DB pero **nunca al cliente**.
+`UserSettings`: preferencias de nutrición, tema, objetivo, credenciales IA, layout del dashboard y favoritos de la nav. `aiKey` en texto plano en DB pero **nunca al cliente**.
 
 Campos JSON:
 - `WorkoutSession.exercises` — array de `ExerciseSession`; `WorkoutSession.cardio` — `CardioData`
 - `NutritionDay.meals` — Record<MealType, FoodEntry[]>
 - `Routine.days` — Record<string, DayDef>
+- `UserSettings.dashboardLayout` — array de `DashboardWidgetConfig` (orden y visibilidad de widgets)
+- `UserSettings.bottomNavFavorites` — array de rutas (`string[]`) para la barra de navegación inferior
 
 Unicidad compuesta:
 - Sesiones: `(userId, weekNumber, dayId)`
@@ -188,7 +196,7 @@ Cascada: todos los registros relacionados se eliminan al borrar `User`.
 }
 ```
 
-**Import** (`POST /api/users/me/import`): upsert por clave única para sesiones (`weekNumber+dayId`), nutritionDays (`date`), bodyWeights (`date`); create+catch para notas y savedFoods. Los settings sobreescriben los 8 campos de nutrición y configuración pero no las claves IA.
+**Import** (`POST /api/users/me/import`): upsert por clave única para sesiones (`weekNumber+dayId`), nutritionDays (`date`), bodyWeights (`date`); create+catch para notas y savedFoods. Los settings sobreescriben los 8 campos de nutrición y configuración, más `dashboardLayout` y `bottomNavFavorites`, pero no las claves IA.
 
 ---
 

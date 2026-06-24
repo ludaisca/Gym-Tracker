@@ -28,6 +28,8 @@ const updateSettingsSchema = z.object({
   aiProvider: z.string().nullable().optional(),
   aiKey: z.string().nullable().optional(),
   aiModel: z.string().nullable().optional(),
+  dashboardLayout: z.any().optional(),
+  bottomNavFavorites: z.any().optional(),
 })
 
 const usersRoutes: FastifyPluginAsync = async (fastify) => {
@@ -106,10 +108,15 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
     const body = updateSettingsSchema.safeParse(request.body)
     if (!body.success) throw { statusCode: 400, message: body.error.issues[0].message }
 
+    const { dashboardLayout, bottomNavFavorites, ...rest } = body.data
+    const data: Record<string, unknown> = { ...rest }
+    if (dashboardLayout !== undefined) data.dashboardLayout = dashboardLayout ?? null
+    if (bottomNavFavorites !== undefined) data.bottomNavFavorites = bottomNavFavorites ?? null
+
     const updated = await prisma.userSettings.upsert({
       where: { userId: sub },
-      update: body.data,
-      create: { userId: sub, ...body.data },
+      update: data,
+      create: { userId: sub, ...data },
     })
     const { aiKey, ...safeSettings } = updated
     return { ...safeSettings, aiKeySet: !!aiKey }
@@ -247,29 +254,22 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (settings && typeof settings === 'object') {
       const s = settings as Record<string, unknown>
+      const settingsBase = {
+        sessionLength:      String(s.sessionLength ?? '90-120 min'),
+        goal:               String(s.goal ?? 'Hipertrofia'),
+        cardioDefault:      String(s.cardioDefault ?? '20 min'),
+        calorieGoal:        Number(s.calorieGoal)  || 2500,
+        proteinGoal:        Number(s.proteinGoal)  || 150,
+        carbGoal:           Number(s.carbGoal)     || 250,
+        fatGoal:            Number(s.fatGoal)      || 80,
+        waterGoal:          Number(s.waterGoal)    || 8,
+        ...(s.dashboardLayout     != null && { dashboardLayout:     s.dashboardLayout }),
+        ...(s.bottomNavFavorites  != null && { bottomNavFavorites:  s.bottomNavFavorites }),
+      }
       await prisma.userSettings.upsert({
         where: { userId: sub },
-        create: {
-          userId: sub,
-          sessionLength: String(s.sessionLength ?? '90-120 min'),
-          goal:          String(s.goal ?? 'Hipertrofia'),
-          cardioDefault: String(s.cardioDefault ?? '20 min'),
-          calorieGoal:   Number(s.calorieGoal)  || 2500,
-          proteinGoal:   Number(s.proteinGoal)  || 150,
-          carbGoal:      Number(s.carbGoal)     || 250,
-          fatGoal:       Number(s.fatGoal)      || 80,
-          waterGoal:     Number(s.waterGoal)    || 8,
-        },
-        update: {
-          sessionLength: String(s.sessionLength ?? '90-120 min'),
-          goal:          String(s.goal ?? 'Hipertrofia'),
-          cardioDefault: String(s.cardioDefault ?? '20 min'),
-          calorieGoal:   Number(s.calorieGoal)  || 2500,
-          proteinGoal:   Number(s.proteinGoal)  || 150,
-          carbGoal:      Number(s.carbGoal)     || 250,
-          fatGoal:       Number(s.fatGoal)      || 80,
-          waterGoal:     Number(s.waterGoal)    || 8,
-        },
+        create: { userId: sub, ...settingsBase },
+        update: settingsBase,
       })
     }
 

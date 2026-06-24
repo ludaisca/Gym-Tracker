@@ -75,6 +75,12 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
+    hmr: {
+      // Más tiempo antes de forzar reload cuando el WS se cae (útil en móvil/Tailscale)
+      timeout: 120000,
+      overlay: false,
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

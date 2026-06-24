@@ -12,9 +12,6 @@ import ExerciseCard from '../workout/ExerciseCard'
 import RestTimerModal from '../modals/RestTimerModal'
 import type { CardioData } from '../../types/domain'
 
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1)
-}
 
 export default function DayView() {
   const { dayId } = useParams<{ dayId: string }>()
@@ -36,6 +33,12 @@ export default function DayView() {
   const { session, update, saving } = useEnsuredSession(weekNumber, dayId ?? '', customRoutines)
 
   const [timer, setTimer] = useState<{ seconds: number; label: string } | null>(null)
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(e => e + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
 
   if (!dayId || !routineDays[dayId]) {
     return (
@@ -52,14 +55,34 @@ export default function DayView() {
 
   const dayDef = routineDays[dayId]
   const routineName = activeRoutineId ? (PRESET_ROUTINES[activeRoutineId]?.name ?? 'Rutina custom') : 'Sin rutina'
-  const total = session.exercises.length
-  const done = session.exercises.filter(e => e.done).length
-  const pct = total > 0 ? Math.round(done / total * 100) : 0
+  const exercises = dayDef.exercises ?? []
+
+  const totalExercises = session.exercises.length
+  const doneExercises = session.exercises.filter(ex => ex.done).length
+  const pct = totalExercises > 0 ? Math.round(doneExercises / totalExercises * 100) : 0
+
+  const sessionVolume = Math.round(
+    session.exercises.reduce((total, ex) =>
+      total + ex.sets.reduce((s, set) => {
+        const kg = parseFloat(set.kg), reps = parseFloat(set.reps)
+        return s + (isNaN(kg) || isNaN(reps) ? 0 : kg * reps)
+      }, 0)
+    , 0)
+  )
+
+  const elapsedStr = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`
 
   function toggleDone(exIdx: number) {
-    const updated = session!.exercises.map((ex, i) =>
-      i === exIdx ? { ...ex, done: !ex.done } : ex
-    )
+    const updated = session!.exercises.map((ex, i) => {
+      if (i !== exIdx) return ex
+      const newDone = !ex.done
+      const sets = ex.sets.map(s =>
+        newDone && s.kg && s.reps
+          ? { ...s, completed: true }
+          : { ...s, completed: false }
+      )
+      return { ...ex, done: newDone, sets }
+    })
     update({ exercises: updated })
   }
 
@@ -85,6 +108,21 @@ export default function DayView() {
     update({ exercises: updated })
   }
 
+  function completeSet(exIdx: number, setIdx: number) {
+    const set = session!.exercises[exIdx]?.sets[setIdx]
+    if (!set || !set.kg || !set.reps) return
+    const updated = session!.exercises.map((ex, i) => {
+      if (i !== exIdx) return ex
+      const sets = ex.sets.map((s, si) => si === setIdx ? { ...s, completed: true } : s)
+      const allDone = sets.every(s => s.completed)
+      return { ...ex, sets, done: allDone }
+    })
+    update({ exercises: updated })
+    const restSecs = exercises[exIdx]?.rest ?? 60
+    const label = `${exercises[exIdx]?.name ?? ''} · S${setIdx + 1}`
+    setTimer({ seconds: restSecs, label })
+  }
+
   function updateCardio(field: keyof CardioData, value: string) {
     const current: CardioData = session!.cardio ?? { machine: '', duration: user?.settings?.cardioDefault ?? '', intensity: '' }
     update({ cardio: { ...current, [field]: value } })
@@ -94,28 +132,50 @@ export default function DayView() {
     update({ complete: !session!.complete })
   }
 
-  const dayLabel = (dayDef as { label?: string }).label ?? dayId
   const daySubtitle = (dayDef as { subtitle?: string }).subtitle ?? routineName
-  const exercises = dayDef.exercises ?? []
+
+  const volDisplay = sessionVolume >= 1000
+    ? `${(sessionVolume / 1000).toFixed(1)}k`
+    : `${sessionVolume}`
 
   return (
     <section className="card fade-in">
-      <div className="panel-head">
-        <div>
-          <h3>{capitalize(dayId)} · {dayLabel}</h3>
-          <p>{daySubtitle}</p>
+      {/* Subtítulo + guardado */}
+      <div className="dayview-subhead">
+        <p className="muted">{daySubtitle}</p>
+        {(saving === 'pending' || saving === 'saved') && (
+          <span className={`save-indicator ${saving}`}>
+            {saving === 'pending' ? 'Guardando…' : 'Guardado ✓'}
+          </span>
+        )}
+      </div>
+
+      {/* Stats strip */}
+      <div className="dayview-stats">
+        {sessionVolume > 0 && (
+          <div className="dayview-stat">
+            <span className="dayview-stat-val">{volDisplay} kg</span>
+            <span className="dayview-stat-label">volumen</span>
+          </div>
+        )}
+        <div className="dayview-stat">
+          <span className="dayview-stat-val">{elapsedStr}</span>
+          <span className="dayview-stat-label">tiempo</span>
         </div>
-        <div style={{ flexShrink: 0, minWidth: 120, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '.3rem' }}>
-          {saving === 'pending' && <span className="save-indicator pending">Guardando…</span>}
-          {saving === 'saved'   && <span className="save-indicator saved">Guardado ✓</span>}
-          <div className="tiny muted">Progreso {done}/{total}</div>
-          <div className="progress" style={{ width: 120 }}>
+        <div className="dayview-stat">
+          <span className="dayview-stat-val">{doneExercises}/{totalExercises}</span>
+          <span className="dayview-stat-label">ejercicios</span>
+        </div>
+        <div className="dayview-stat dayview-stat-pct">
+          <div className="progress" style={{ flex: 1 }}>
             <span style={{ width: `${pct}%` }} />
           </div>
+          <span className="dayview-stat-label">{pct}%</span>
         </div>
       </div>
 
       <div className="panel-body" style={{ display: 'grid', gap: '1rem' }}>
+        {/* Ejercicios */}
         <div className="exercise-list">
           {exercises.map((exDef, idx) => {
             const exState = session.exercises[idx]
@@ -131,6 +191,7 @@ export default function DayView() {
                 routineDays={routineDays}
                 onToggleDone={() => toggleDone(idx)}
                 onSetChange={(setIdx, field, value) => updateSet(idx, setIdx, field, value)}
+                onCompleteSet={(setIdx) => completeSet(idx, setIdx)}
                 onStartTimer={(seconds, label) => setTimer({ seconds, label })}
                 onAutoFill={(prevSets) => autoFillExercise(idx, prevSets)}
               />
@@ -138,18 +199,22 @@ export default function DayView() {
           })}
         </div>
 
+        {/* Cardio + Notas */}
         <div className="split">
-          <section className="card">
-            <div className="panel-head">
-              <div><h3>Cardio</h3><p>Al final de la sesión.</p></div>
-            </div>
-            <div className="panel-body split">
+          <section className="card dayview-section">
+            <p className="dayview-section-label">Cardio</p>
+            <div className="split" style={{ gap: 'var(--space-3)' }}>
               <div className="field">
                 <label>Máquina</label>
-                <input
+                <select
                   value={session.cardio?.machine ?? ''}
                   onChange={(e) => updateCardio('machine', e.target.value)}
-                />
+                >
+                  <option value="">Sin cardio</option>
+                  <option value="Bicicleta fija">Bicicleta fija</option>
+                  <option value="Caminadora">Caminadora</option>
+                  <option value="Elíptica">Elíptica</option>
+                </select>
               </div>
               <div className="field">
                 <label>Duración</label>
@@ -170,25 +235,23 @@ export default function DayView() {
             </div>
           </section>
 
-          <section className="card notes">
-            <div className="panel-head">
-              <div><h3>Notas</h3><p>Sensaciones, técnica, PRs.</p></div>
-            </div>
-            <div className="panel-body">
-              <textarea
-                placeholder="Notas de la sesión..."
-                value={session.notes ?? ''}
-                onChange={(e) => update({ notes: e.target.value })}
-              />
-              <button
-                className={`complete-btn${session.complete ? ' is-complete' : ''}`}
-                onClick={toggleComplete}
-              >
-                {session.complete ? 'Sesión completada ✓' : 'Marcar sesión como completada'}
-              </button>
-            </div>
+          <section className="card dayview-section notes">
+            <p className="dayview-section-label">Notas de la sesión</p>
+            <textarea
+              placeholder="Sensaciones, técnica, PRs…"
+              value={session.notes ?? ''}
+              onChange={(e) => update({ notes: e.target.value })}
+            />
           </section>
         </div>
+
+        {/* Botón de completar — standalone al fondo */}
+        <button
+          className={`complete-btn${session.complete ? ' is-complete' : ''}`}
+          onClick={toggleComplete}
+        >
+          {session.complete ? 'Sesión completada ✓' : 'Marcar como completada'}
+        </button>
       </div>
 
       {timer && (

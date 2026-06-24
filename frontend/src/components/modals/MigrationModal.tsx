@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from '../../api/client'
+import { IconClose } from '../ui/Icons'
 
 interface Props {
   onDone: () => void
@@ -31,28 +33,56 @@ export default function MigrationModal({ onDone }: Props) {
     onDone()
   }
 
-  return (
-    <div className="confirm-overlay open" style={{ zIndex: 300 }}>
-      <div className="confirm-sheet">
-        <div className="confirm-sheet-handle" />
-        <div className="confirm-sheet-icon">📦</div>
-        <h3>Datos del historial detectados</h3>
-        <div className="confirm-sheet-body">
-          <p>Encontramos datos de la versión anterior de Gym Tracker en este navegador.</p>
-          <ul className="confirm-sheet-list" style={{ marginTop: 'var(--space-3)' }}>
-            <li>✓ Se importarán tus sesiones, notas, rutinas y configuración</li>
-            <li>✓ Los datos se sincronizarán en todos tus dispositivos</li>
-            <li>✓ Los datos locales originales no se eliminan</li>
-          </ul>
+  return createPortal(
+    <div className="side-panel-overlay open">
+      <div className="side-panel">
+        <div className="side-panel-drag-handle" />
+
+        <div className="side-panel-header">
+          <div className="side-panel-title-area">
+            <h3>📦 Datos detectados</h3>
+            <p>Historial de la versión anterior de Gym Tracker</p>
+          </div>
+          <button className="side-panel-close-btn" onClick={dismiss} aria-label="Cerrar">
+            <IconClose size={18} />
+            <span>Cerrar</span>
+          </button>
         </div>
-        {error && <p style={{ color: 'var(--color-warning)', fontSize: 'var(--text-sm)', marginTop: 'var(--space-3)' }}>{error}</p>}
-        <div className="confirm-sheet-actions">
-          <button className="primary-btn" onClick={migrate} disabled={loading}>
+
+        <div className="side-panel-body">
+          <div className="preview-day-card">
+            <div className="preview-day-card-head">
+              <span className="preview-day-label">¿Qué se importará?</span>
+            </div>
+            <div className="preview-day-exercises">
+              {[
+                'Sesiones, notas, rutinas y configuración',
+                'Los datos se sincronizarán en todos tus dispositivos',
+                'Los datos locales originales no se eliminan',
+              ].map((item, i) => (
+                <div key={i} className="preview-exercise-item">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
+                    <span className="preview-exercise-idx">✓</span>
+                    <div className="preview-exercise-name">{item}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <p style={{ color: 'var(--color-warning)', fontSize: 'var(--text-sm)', padding: '0 var(--space-1)' }}>{error}</p>
+          )}
+        </div>
+
+        <div className="side-panel-footer">
+          <button className="primary-btn" onClick={migrate} disabled={loading} style={{ flex: 1, padding: '1rem' }}>
             {loading ? 'Importando…' : 'Importar historial'}
           </button>
-          <button className="ghost-btn" onClick={dismiss} disabled={loading}>Saltar por ahora</button>
+          <button className="ghost-btn" onClick={dismiss} disabled={loading} style={{ flex: 0 }}>Saltar</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

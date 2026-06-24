@@ -4,8 +4,9 @@ import { useSessions } from '../../hooks/useSessions'
 import { useRoutines } from '../../hooks/useRoutines'
 import { getDayIds, calcStreak, calcWeekVolume } from '../../lib/fitness'
 import { aiApi, type ChatMessage } from '../../api/ai'
-import { IconFire } from '../ui/Icons'
+import { IconFire, IconStats, IconDumbbell, IconCheck, IconAI } from '../ui/Icons'
 
+// ── Markdown renderer ─────────────────────────────────────────────────────────
 function renderLine(line: string): React.ReactNode {
   const parts = line.split(/\*\*(.*?)\*\*/g)
   return parts.map((p, i) => i % 2 === 1 ? <strong key={i}>{p}</strong> : p)
@@ -13,16 +14,23 @@ function renderLine(line: string): React.ReactNode {
 
 function renderContent(content: string) {
   return content.split('\n').map((line, i) => {
-    if (!line.trim()) return <div key={i} style={{ height: '0.4em' }} />
+    if (!line.trim()) return <div key={i} className="chat-content-gap" />
     if (/^#+\s/.test(line)) {
-      return <div key={i} style={{ fontWeight: 700, marginTop: '0.75rem', marginBottom: '0.2rem', color: 'var(--color-accent)' }}>{renderLine(line.replace(/^#+\s/, ''))}</div>
+      return <div key={i} className="chat-content-h">{renderLine(line.replace(/^#+\s/, ''))}</div>
     }
     if (/^[-•]\s/.test(line)) {
-      return <div key={i} style={{ paddingLeft: '0.5rem', marginBottom: '0.2rem', borderLeft: '2px solid var(--color-border)', marginLeft: '0.2rem' }}>• {renderLine(line.replace(/^[-•]\s/, ''))}</div>
+      return <div key={i} className="chat-content-li">{renderLine(line.replace(/^[-•]\s/, ''))}</div>
     }
-    return <div key={i} style={{ lineHeight: 1.5 }}>{renderLine(line)}</div>
+    return <div key={i} className="chat-content-p">{renderLine(line)}</div>
   })
 }
+
+// ── Sugerencias de prompt ─────────────────────────────────────────────────────
+const SUGGESTED_PROMPTS = [
+  { emoji: '📊', label: 'Analizar mi carga semanal' },
+  { emoji: '💪', label: 'Sugerir ajustes de técnica' },
+  { emoji: '🥗', label: 'Tips para mis macros y agua' },
+]
 
 export default function Insights() {
   const { user } = useAuthStore()
@@ -44,6 +52,7 @@ export default function Insights() {
   const streak = useMemo(() => calcStreak(sessions, dayIds, weekNumber), [sessions, dayIds, weekNumber])
   const weekVol = useMemo(() => Math.round(calcWeekVolume(sessions, weekNumber, dayIds)), [sessions, weekNumber, dayIds])
   const completedDays = dayIds.filter(d => sessions.find(s => s.weekNumber === weekNumber && s.dayId === d)?.complete).length
+  const activeDays = dayIds.filter(d => sessions.find(s => s.weekNumber === weekNumber && s.dayId === d)).length
 
   useEffect(() => {
     if (!hasAI) { setHistoryLoaded(true); return }
@@ -96,41 +105,44 @@ export default function Insights() {
 
   return (
     <div className="fade-in">
-      <div className="kpis">
+      {/* KPIs */}
+      <div className="kpis kpis-4">
         <article className="card kpi">
+          <div className="kpi-icon"><IconFire size={16} className={streak > 0 ? 'accent-fire' : undefined} /></div>
           <div className="kpi-label">Racha activa</div>
-          <div className="kpi-value" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            {streak > 0 && <IconFire className="accent-fire" />} {streak}
-          </div>
+          <div className="kpi-value">{streak}</div>
           <div className="kpi-meta">{streak >= 2 ? 'semanas seguidas' : 'semanas'}</div>
         </article>
         <article className="card kpi">
+          <div className="kpi-icon"><IconStats size={16} /></div>
           <div className="kpi-label">Volumen semana {weekNumber}</div>
           <div className="kpi-value">{weekVol > 0 ? `${(weekVol / 1000).toFixed(1)}k` : '—'}</div>
           <div className="kpi-meta">kg × reps total</div>
         </article>
         <article className="card kpi">
+          <div className="kpi-icon"><IconCheck size={16} /></div>
           <div className="kpi-label">Sesiones cerradas</div>
           <div className="kpi-value">{completedDays}/{dayIds.length}</div>
           <div className="kpi-meta">esta semana</div>
         </article>
+        <article className="card kpi">
+          <div className="kpi-icon"><IconDumbbell size={16} /></div>
+          <div className="kpi-label">Días iniciados</div>
+          <div className="kpi-value">{activeDays}</div>
+          <div className="kpi-meta">con registro</div>
+        </article>
       </div>
 
+      {/* Chat */}
       <section className="card chat-card">
-        <div className="panel-head" style={{ padding: 'var(--space-5) var(--space-5) var(--space-3)' }}>
+        <div className="panel-head chat-card-head">
           <div>
             <h3>Chat con IA</h3>
             <p>Pregunta sobre tu progreso, técnica o planificación.</p>
           </div>
           {messages.length > 0 && (
             <button
-              className="ghost-btn"
-              style={{
-                padding: '.4rem .8rem',
-                fontSize: 'var(--text-xs)',
-                flexShrink: 0,
-                ...(confirmClear ? { color: 'var(--danger)', borderColor: 'var(--danger)' } : {}),
-              }}
+              className={confirmClear ? 'danger-outline-btn chat-clear-btn' : 'ghost-btn chat-clear-btn'}
               onClick={clearChat}
             >
               {confirmClear ? '¿Confirmar?' : 'Limpiar chat'}
@@ -141,11 +153,13 @@ export default function Insights() {
         <div className="chat-messages">
           {!hasAI && (
             <div className="chat-empty">
+              <div className="chat-empty-icon"><IconAI size={28} /></div>
               <p>Configura un proveedor de IA en <strong>Configuración → IA</strong> para usar el chat.</p>
             </div>
           )}
           {hasAI && historyLoaded && messages.length === 0 && !loading && (
             <div className="chat-empty">
+              <div className="chat-empty-icon"><IconAI size={28} /></div>
               <p>¡Hola{user?.name ? `, ${user.name.split(' ')[0]}` : ''}! Pregúntame sobre tu progreso, técnica o planificación de entrenamiento.</p>
             </div>
           )}
@@ -165,27 +179,22 @@ export default function Insights() {
           )}
           {error && !loading && (
             <div className="chat-msg assistant">
-              <div className="chat-bubble assistant" style={{ color: 'var(--color-warning)' }}>{error}</div>
+              <div className="chat-bubble assistant chat-error">{error}</div>
             </div>
           )}
           <div ref={bottomRef} />
         </div>
 
         {hasAI && (
-          <div style={{ display: 'flex', gap: 'var(--space-2)', padding: '0 var(--space-5) var(--space-3)', overflowX: 'auto', maxWidth: '100%', boxSizing: 'border-box' }}>
-            {[
-              '📊 Analizar mi carga semanal',
-              '💪 Sugerir ajustes de técnica',
-              '🥗 Tips para mis macros y agua',
-            ].map(prompt => (
+          <div className="chat-prompts">
+            {SUGGESTED_PROMPTS.map(({ emoji, label }) => (
               <button
-                key={prompt}
-                className="ghost-btn"
-                style={{ padding: '.25rem .6rem', fontSize: 'var(--text-xs)', whiteSpace: 'nowrap', background: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-full)' }}
-                onClick={() => send(prompt)}
+                key={label}
+                className="chat-prompt-chip"
+                onClick={() => send(`${emoji} ${label}`)}
                 disabled={loading}
               >
-                {prompt}
+                {emoji} {label}
               </button>
             ))}
           </div>

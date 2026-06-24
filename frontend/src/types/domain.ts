@@ -1,6 +1,17 @@
+export type WidgetType = 'today' | 'kpis' | 'heatmap' | 'week' | 'volume' | 'nutrition'
+
+export interface DashboardWidgetConfig {
+  id: string
+  type: WidgetType
+  visible: boolean
+  width: 'full' | 'half'
+  order: number
+}
+
 export interface SetData {
   kg: string
   reps: string
+  completed?: boolean
 }
 
 export interface ExerciseSession {
@@ -100,6 +111,8 @@ export interface UserSettings {
   aiProvider?: string | null
   aiModel?: string | null
   aiKeySet?: boolean
+  dashboardLayout?: DashboardWidgetConfig[] | null
+  bottomNavFavorites?: string[] | null
 }
 
 export interface User {

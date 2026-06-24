@@ -3,12 +3,15 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useUIStore, useAuthStore, useOfflineStore } from '../../store'
 import { getRoutineDays } from '../../lib/fitness'
 import { useRoutines } from '../../hooks/useRoutines'
+import { useUser } from '../../hooks/useUser'
+import { usersApi } from '../../api/users'
 import Toaster from '../ui/Toaster'
 import InstallPrompt from '../ui/InstallPrompt'
 import {
   ModuleIcon,
   IconMenu, IconClose, IconSun, IconMoon,
   IconStarFilled, IconStar, IconCheck, IconArrowUp, IconArrowDown,
+  IconDumbbell, UserAvatar, IconSettings,
 } from '../ui/Icons'
 
 function capitalize(s: string) { return s.charAt(0).toUpperCase() + s.slice(1) }
@@ -41,19 +44,25 @@ export const ALL_MODULES = [
 
 const MIN_FAV = 3
 const MAX_FAV = 5
-const DEFAULT_FAVORITES = ['/dashboard', '/agenda', '/stats', '/duelos', '/config']
-const FAV_KEY = 'gym-bottom-nav-favs'
 
-function loadFavs(): string[] {
-  try {
-    const s = localStorage.getItem(FAV_KEY)
-    if (s) {
-      const a = JSON.parse(s)
-      if (Array.isArray(a) && a.length >= MIN_FAV && a.length <= MAX_FAV) return a
-    }
-  } catch {}
-  return DEFAULT_FAVORITES
-}
+const NAV_MAIN = [
+  { path: '/dashboard', label: 'Inicio' },
+  { path: '/agenda',    label: 'Agenda' },
+  { path: '/nutricion', label: 'Nutrición' },
+  { path: '/stats',     label: 'Estadísticas' },
+  { path: '/insights',  label: 'Insights IA' },
+  { path: '/duelos',    label: 'Duelos', badge: 'Nuevo' },
+]
+
+const NAV_CONTROL = [
+  { path: '/rutinas', label: 'Mis Rutinas' },
+  { path: '/cardio',  label: 'Cardio' },
+  { path: '/notas',   label: 'Notas' },
+  { path: '/config',  label: 'Configuración' },
+]
+
+const MENU_GROUPS = ['Principal', 'Social', 'Herramientas'] as const
+const byGroup = (g: string) => ALL_MODULES.filter(m => m.group === g)
 
 // ── Nav editor component ─────────────────────────────────────────────────
 function NavEditor({
@@ -97,8 +106,6 @@ function NavEditor({
     onChange(draft)
     onClose()
   }
-
-  const groups = ['Principal', 'Social', 'Herramientas'] as const
 
   return (
     <div className="nav-editor-overlay">
@@ -155,7 +162,7 @@ function NavEditor({
           {/* Module picker */}
           <div className="nav-editor-section">
             <div className="nav-editor-label">Módulos disponibles</div>
-            {groups.map(group => (
+            {MENU_GROUPS.map(group => (
               <div key={group} className="nav-picker-group">
                 <div className="nav-picker-group-title">{group}</div>
                 <div className="nav-picker-grid">
@@ -205,7 +212,8 @@ function NavEditor({
 
 // ── Main AppShell ─────────────────────────────────────────────────────────
 export default function AppShell() {
-  const { theme, toggleTheme, isOffline } = useUIStore()
+  useUser()
+  const { theme, toggleTheme, isOffline, bottomNavFavorites, setBottomNavFavorites, openDashboardEditor, openNutritionGoal } = useUIStore()
   const { user } = useAuthStore()
   const pendingSync = useOfflineStore(s => s.queue.length)
   const navigate = useNavigate()
@@ -213,7 +221,6 @@ export default function AppShell() {
 
   const [menuOpen, setMenuOpen]     = useState(false)
   const [editingNav, setEditingNav] = useState(false)
-  const [favorites, setFavorites]   = useState<string[]>(loadFavs)
 
   const menuToggleBtnRef = useRef<HTMLButtonElement>(null)
   const menuFirstItemRef = useRef<HTMLButtonElement>(null)
@@ -228,17 +235,11 @@ export default function AppShell() {
       if (day) return `${capitalize(dayId)} · ${(day as { label?: string }).label ?? dayId}`
       return 'Entrenamiento'
     }
+    if (pathname === '/rutinas/nueva') return 'Nueva rutina'
+    if (pathname.startsWith('/rutinas/') && pathname !== '/rutinas/') return 'Editar rutina'
     return PAGE_TITLES[pathname] ?? 'Gym Tracker'
   }, [pathname, routineDays])
 
-  const navMain = [
-    { path: '/dashboard', label: 'Inicio' },
-    { path: '/agenda',    label: 'Agenda' },
-    { path: '/nutricion', label: 'Nutrición' },
-    { path: '/stats',     label: 'Estadísticas' },
-    { path: '/insights',  label: 'Insights IA' },
-    { path: '/duelos',    label: 'Duelos', badge: 'Nuevo' },
-  ]
   const navWorkout = useMemo(() =>
     Object.entries(routineDays).map(([dayId, day]) => ({
       path: `/entrenamiento/${dayId}`,
@@ -246,12 +247,6 @@ export default function AppShell() {
       short: `${day.exercises.length}ej`,
     })),
   [routineDays])
-  const navControl = [
-    { path: '/rutinas', label: 'Mis Rutinas' },
-    { path: '/cardio',  label: 'Cardio' },
-    { path: '/notas',   label: 'Notas' },
-    { path: '/config',  label: 'Configuración' },
-  ]
 
   const isActive = (path: string) => pathname === path || pathname.startsWith(path + '/')
 
@@ -261,8 +256,8 @@ export default function AppShell() {
   }
 
   function saveFavorites(next: string[]) {
-    setFavorites(next)
-    localStorage.setItem(FAV_KEY, JSON.stringify(next))
+    setBottomNavFavorites(next)
+    usersApi.updateSettings({ bottomNavFavorites: next }).catch(() => {})
   }
 
   useEffect(() => { setMenuOpen(false) }, [pathname])
@@ -279,9 +274,7 @@ export default function AppShell() {
     }
   }, [menuOpen])
 
-  const groups = ['Principal', 'Social', 'Herramientas'] as const
-  const byGroup = (g: string) => ALL_MODULES.filter(m => m.group === g)
-  const favModules = favorites.map(f => ALL_MODULES.find(m => m.path === f)).filter(Boolean) as typeof ALL_MODULES
+  const favModules = bottomNavFavorites.map(f => ALL_MODULES.find(m => m.path === f)).filter(Boolean) as typeof ALL_MODULES
 
   return (
     <div className="app">
@@ -289,7 +282,7 @@ export default function AppShell() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
-            <IconMenu size={18} strokeWidth={2} />
+            <IconDumbbell size={18} strokeWidth={2} />
           </div>
           <div><h1>Gym Tracker</h1><p>{user?.name}</p></div>
         </div>
@@ -297,7 +290,7 @@ export default function AppShell() {
         <div>
           <div className="nav-group-title">Principal</div>
           <nav className="nav">
-            {navMain.map(item => (
+            {NAV_MAIN.map(item => (
               <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => navigate(item.path)}>
                 <span className="nav-icon"><ModuleIcon path={item.path} size={16} /></span>
                 <span>{item.label}</span>
@@ -323,7 +316,7 @@ export default function AppShell() {
         <div>
           <div className="nav-group-title">Control</div>
           <nav className="nav">
-            {navControl.map(item => (
+            {NAV_CONTROL.map(item => (
               <button key={item.path} className={isActive(item.path) ? 'active' : ''} onClick={() => navigate(item.path)}>
                 <span className="nav-icon"><ModuleIcon path={item.path} size={16} /></span>
                 <span>{item.label}</span>
@@ -356,6 +349,22 @@ export default function AppShell() {
         <header className="topbar">
           <div className="topbar-title"><h2>{pageTitle}</h2></div>
           <div className="topbar-actions">
+            <div className="topbar-user" aria-hidden="true">
+              <div className="topbar-user-avatar">
+                <UserAvatar avatar={user?.avatar} size={16} />
+              </div>
+              <span className="topbar-user-name">{user?.name}</span>
+            </div>
+            {pathname === '/dashboard' && (
+              <button className="icon-btn" onClick={openDashboardEditor} aria-label="Personalizar dashboard">
+                <IconSettings size={18} />
+              </button>
+            )}
+            {pathname === '/nutricion' && (
+              <button className="icon-btn" onClick={openNutritionGoal} aria-label="Metas de nutrición">
+                <IconSettings size={18} />
+              </button>
+            )}
             <button className="icon-btn" onClick={toggleTheme} aria-label="Cambiar tema">
               {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
             </button>
@@ -400,7 +409,7 @@ export default function AppShell() {
           </div>
 
           <div className="fsmenu-body">
-            {groups.map((group, gIdx) => (
+            {MENU_GROUPS.map((group, gIdx) => (
               <div key={group} className="fsmenu-group">
                 <div className="fsmenu-group-title">{group}</div>
                 <div className="fsmenu-grid">
@@ -445,7 +454,7 @@ export default function AppShell() {
       {/* ── Nav editor ───────────────────────────────────────── */}
       {editingNav && (
         <NavEditor
-          favorites={favorites}
+          favorites={bottomNavFavorites}
           onChange={saveFavorites}
           onClose={() => setEditingNav(false)}
         />

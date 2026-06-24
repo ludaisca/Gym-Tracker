@@ -1,6 +1,38 @@
 import type { FastifyPluginAsync } from 'fastify'
+import type { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
 import { getRoutineDays, PRESET_ROUTINES } from '../lib/presetRoutines'
+
+type GeminiBody = Record<string, unknown>
+
+async function callGemini(apiKey: string, model: string, body: GeminiBody): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    )
+    const data = await res.json() as { candidates?: { content?: { parts?: { text: string }[] } }[]; error?: { message: string } }
+    if (data.error) return { ok: false, error: `Error de Gemini: ${data.error.message}` }
+    return { ok: true, text: data.candidates?.[0]?.content?.parts?.[0]?.text ?? '' }
+  } catch {
+    return { ok: false, error: 'Error al contactar la API de IA.' }
+  }
+}
+
+async function loadUserAiContext(prisma: PrismaClient, userId: string) {
+  const [user, settings, sessions, customRoutines] = await Promise.all([
+    prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+    prisma.userSettings.findUnique({ where: { userId } }),
+    prisma.workoutSession.findMany({ where: { userId }, orderBy: { weekNumber: 'asc' } }),
+    prisma.routine.findMany({ where: { userId } }),
+  ])
+  return { user, settings, sessions, customRoutines }
+}
+
+function resolveRoutineName(id: string | null, customs: { id: string; name: string }[]): string {
+  if (!id) return 'Sin rutina'
+  return PRESET_ROUTINES[id]?.name ?? customs.find(r => r.id === id)?.name ?? id
+}
 
 const analyzeFoodSchema = z.object({
   imageBase64: z.string().min(1).max(2_000_000),
@@ -179,174 +211,45 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: 'Configura tu proveedor de IA y API key en Configuración' })
     }
 
-    const { aiProvider, aiKey, aiModel } = settings
+    const { aiKey, aiModel } = settings
+    const model = aiModel ?? 'gemini-2.5-flash-lite'
 
+    const result = await callGemini(aiKey!, model, {
+      contents: [{ parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: FOOD_PROMPT }] }]
+    })
+    if (!result.ok) return reply.status(502).send({ error: result.error })
+
+    const jsonStr = result.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     try {
-      let raw = ''
-
-      if (aiProvider === 'google') {
-        const model = aiModel ?? 'gemini-2.5-flash-lite'
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${aiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ inlineData: { mimeType, data: imageBase64 } }, { text: FOOD_PROMPT }] }]
-            }),
-          }
-        )
-        const data = await res.json() as { candidates?: { content?: { parts?: { text: string }[] } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Gemini: ${data.error.message}` })
-        raw = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-      } else if (aiProvider === 'openai') {
-        const model = aiModel ?? 'gpt-4o-mini'
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
-          body: JSON.stringify({
-            model,
-            response_format: { type: 'json_object' },
-            messages: [{ role: 'user', content: [
-              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-              { type: 'text', text: FOOD_PROMPT },
-            ]}],
-          }),
-        })
-        const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de OpenAI: ${data.error.message}` })
-        raw = data.choices?.[0]?.message?.content ?? ''
-      } else if (aiProvider === 'anthropic') {
-        const model = aiModel ?? 'claude-haiku-4-5-20251001'
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': aiKey, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({
-            model,
-            max_tokens: 1024,
-            messages: [{ role: 'user', content: [
-              { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
-              { type: 'text', text: FOOD_PROMPT },
-            ]}],
-          }),
-        })
-        const data = await res.json() as { content?: { text: string }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Anthropic: ${data.error.message}` })
-        raw = data.content?.[0]?.text ?? ''
-      } else if (aiProvider === 'opencode') {
-        const model = aiModel ?? 'glm-5.2'
-        const res = await fetch('https://opencode.ai/zen/go/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: 'user', content: [
-              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-              { type: 'text', text: FOOD_PROMPT },
-            ]}],
-          }),
-        })
-        const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de OpenCode: ${data.error.message}` })
-        raw = data.choices?.[0]?.message?.content ?? ''
-      } else {
-        return reply.status(400).send({ error: `Proveedor desconocido: ${aiProvider}` })
-      }
-
-      const jsonStr = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      try {
-        return JSON.parse(jsonStr)
-      } catch {
-        return reply.status(502).send({ error: 'La IA no devolvió JSON válido. Intenta de nuevo.' })
-      }
+      return JSON.parse(jsonStr)
     } catch {
-      return reply.status(502).send({ error: 'Error al contactar la API de IA.' })
+      return reply.status(502).send({ error: 'La IA no devolvió JSON válido. Intenta de nuevo.' })
     }
   })
 
   fastify.post('/analyze', async (request, reply) => {
     const { sub } = request.user as { sub: string }
-
-    const [user, settings, sessions, customRoutines] = await Promise.all([
-      prisma.user.findUniqueOrThrow({ where: { id: sub } }),
-      prisma.userSettings.findUnique({ where: { userId: sub } }),
-      prisma.workoutSession.findMany({ where: { userId: sub }, orderBy: { weekNumber: 'asc' } }),
-      prisma.routine.findMany({ where: { userId: sub } }),
-    ])
+    const { user, settings, sessions, customRoutines } = await loadUserAiContext(prisma, sub)
 
     if (!settings?.aiKey || !settings.aiProvider) {
       return reply.status(400).send({ error: 'Configura tu proveedor de IA y API key en Configuración' })
     }
 
-    const { aiProvider, aiKey, aiModel } = settings
     const routineDays = getRoutineDays(user.activeRoutineId, customRoutines)
     const dayIds = Object.keys(routineDays)
-
-    let routineName = 'Sin rutina'
-    if (user.activeRoutineId) {
-      routineName = PRESET_ROUTINES[user.activeRoutineId]?.name
-        ?? customRoutines.find(r => r.id === user.activeRoutineId)?.name
-        ?? user.activeRoutineId
-    }
-
     const prompt = buildPrompt(
-      user.name,
-      settings.goal ?? 'Hipertrofia',
-      user.currentWeek,
-      routineName,
+      user.name, settings.goal ?? 'Hipertrofia', user.currentWeek,
+      resolveRoutineName(user.activeRoutineId, customRoutines),
       dayIds,
       routineDays as Record<string, { label: string; exercises: { name: string; reps: string }[] }>,
       sessions as DbSession[],
     )
 
-    try {
-      let result = ''
-
-      if (aiProvider === 'google') {
-        const model = aiModel ?? 'gemini-2.5-flash-lite'
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${aiKey}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) }
-        )
-        const data = await res.json() as { candidates?: { content?: { parts?: { text: string }[] } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Gemini: ${data.error.message}` })
-        result = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-      } else if (aiProvider === 'openai') {
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
-          body: JSON.stringify({ model: aiModel ?? 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }] }),
-        })
-        const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de OpenAI: ${data.error.message}` })
-        result = data.choices?.[0]?.message?.content ?? ''
-      } else if (aiProvider === 'anthropic') {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': aiKey, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: aiModel ?? 'claude-haiku-4-5-20251001', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }),
-        })
-        const data = await res.json() as { content?: { text: string }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Anthropic: ${data.error.message}` })
-        result = data.content?.[0]?.text ?? ''
-      } else if (aiProvider === 'opencode') {
-        const res = await fetch('https://opencode.ai/zen/go/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
-          body: JSON.stringify({ model: aiModel ?? 'glm-5.2', messages: [{ role: 'user', content: prompt }] }),
-        })
-        const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de OpenCode: ${data.error.message}` })
-        result = data.choices?.[0]?.message?.content ?? ''
-      } else {
-        return reply.status(400).send({ error: `Proveedor desconocido: ${aiProvider}` })
-      }
-
-      if (!result) return reply.status(502).send({ error: 'La IA no devolvió texto. Verifica tu API key.' })
-      return { result }
-    } catch {
-      return reply.status(502).send({ error: 'Error al contactar la API de IA. Verifica tu conexión y API key.' })
-    }
+    const model = settings.aiModel ?? 'gemini-2.5-flash-lite'
+    const gemini = await callGemini(settings.aiKey, model, { contents: [{ parts: [{ text: prompt }] }] })
+    if (!gemini.ok) return reply.status(502).send({ error: gemini.error })
+    if (!gemini.text) return reply.status(502).send({ error: 'La IA no devolvió texto. Verifica tu API key.' })
+    return { result: gemini.text }
   })
 
   // ── Chat con memoria persistente ─────────────────────────────────
@@ -370,112 +273,49 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.issues[0].message })
     const { message } = parsed.data
 
-    const [user, settings, sessions, customRoutines] = await Promise.all([
-      prisma.user.findUniqueOrThrow({ where: { id: sub } }),
-      prisma.userSettings.findUnique({ where: { userId: sub } }),
-      prisma.workoutSession.findMany({ where: { userId: sub }, orderBy: { weekNumber: 'asc' } }),
-      prisma.routine.findMany({ where: { userId: sub } }),
+    const [{ user, settings, sessions, customRoutines }, chatRecord] = await Promise.all([
+      loadUserAiContext(prisma, sub),
+      prisma.aIChat.findUnique({ where: { userId: sub } }),
     ])
 
     if (!settings?.aiKey || !settings.aiProvider) {
       return reply.status(400).send({ error: 'Configura tu proveedor de IA y API key en Configuración' })
     }
 
-    const { aiProvider, aiKey, aiModel } = settings
     const routineDays = getRoutineDays(user.activeRoutineId, customRoutines)
     const dayIds = Object.keys(routineDays)
-    const routineName = user.activeRoutineId
-      ? (PRESET_ROUTINES[user.activeRoutineId]?.name ?? customRoutines.find(r => r.id === user.activeRoutineId)?.name ?? user.activeRoutineId)
-      : 'Sin rutina'
-
     const systemPrompt = buildPrompt(
       user.name, settings.goal ?? 'Hipertrofia', user.currentWeek,
-      routineName, dayIds,
+      resolveRoutineName(user.activeRoutineId, customRoutines),
+      dayIds,
       routineDays as Record<string, { label: string; exercises: { name: string; reps: string }[] }>,
       sessions as DbSession[],
     ) + '\n\nResponde de forma conversacional y concisa. Si el usuario hace preguntas fuera del entrenamiento, redirige amablemente al contexto del fitness.'
 
-    const chatRecord = await prisma.aIChat.findUnique({ where: { userId: sub } })
     const history = (chatRecord?.messages ?? []) as unknown as ChatMessage[]
-
     const newUserMsg: ChatMessage = { role: 'user', content: message.trim(), ts: new Date().toISOString() }
 
-    try {
-      let reply_text = ''
+    const model = settings.aiModel ?? 'gemini-2.5-flash-lite'
+    const contents = [
+      ...history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+      { role: 'user', parts: [{ text: message.trim() }] },
+    ]
+    const gemini = await callGemini(settings.aiKey, model, {
+      system_instruction: { parts: [{ text: systemPrompt }] }, contents
+    })
+    if (!gemini.ok) return reply.status(502).send({ error: gemini.error })
+    if (!gemini.text) return reply.status(502).send({ error: 'La IA no devolvió respuesta.' })
 
-      if (aiProvider === 'google') {
-        const model = aiModel ?? 'gemini-2.5-flash-lite'
-        const contents = [
-          ...history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-          { role: 'user', parts: [{ text: message.trim() }] },
-        ]
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${aiKey}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ system_instruction: { parts: [{ text: systemPrompt }] }, contents }) }
-        )
-        const data = await res.json() as { candidates?: { content?: { parts?: { text: string }[] } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Gemini: ${data.error.message}` })
-        reply_text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-      } else if (aiProvider === 'openai') {
-        const messages = [
-          { role: 'system', content: systemPrompt },
-          ...history.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user', content: message.trim() },
-        ]
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
-          body: JSON.stringify({ model: aiModel ?? 'gpt-4o-mini', messages }),
-        })
-        const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de OpenAI: ${data.error.message}` })
-        reply_text = data.choices?.[0]?.message?.content ?? ''
-      } else if (aiProvider === 'anthropic') {
-        const messages = [
-          ...history.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user', content: message.trim() },
-        ]
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': aiKey, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: aiModel ?? 'claude-haiku-4-5-20251001', max_tokens: 1024, system: systemPrompt, messages }),
-        })
-        const data = await res.json() as { content?: { text: string }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de Anthropic: ${data.error.message}` })
-        reply_text = data.content?.[0]?.text ?? ''
-      } else if (aiProvider === 'opencode') {
-        const messages = [
-          { role: 'system', content: systemPrompt },
-          ...history.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user', content: message.trim() },
-        ]
-        const res = await fetch('https://opencode.ai/zen/go/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${aiKey}` },
-          body: JSON.stringify({ model: aiModel ?? 'glm-5.2', messages }),
-        })
-        const data = await res.json() as { choices?: { message?: { content: string } }[]; error?: { message: string } }
-        if (data.error) return reply.status(502).send({ error: `Error de OpenCode: ${data.error.message}` })
-        reply_text = data.choices?.[0]?.message?.content ?? ''
-      } else {
-        return reply.status(400).send({ error: `Proveedor desconocido: ${aiProvider}` })
-      }
+    const assistantMsg: ChatMessage = { role: 'assistant', content: gemini.text, ts: new Date().toISOString() }
+    const updatedMessages = [...history, newUserMsg, assistantMsg]
 
-      if (!reply_text) return reply.status(502).send({ error: 'La IA no devolvió respuesta.' })
+    await prisma.aIChat.upsert({
+      where: { userId: sub },
+      update: { messages: updatedMessages as unknown as object },
+      create: { userId: sub, messages: updatedMessages as unknown as object },
+    })
 
-      const assistantMsg: ChatMessage = { role: 'assistant', content: reply_text, ts: new Date().toISOString() }
-      const updatedMessages = [...history, newUserMsg, assistantMsg]
-
-      await prisma.aIChat.upsert({
-        where: { userId: sub },
-        update: { messages: updatedMessages as unknown as object },
-        create: { userId: sub, messages: updatedMessages as unknown as object },
-      })
-
-      return { message: assistantMsg }
-    } catch {
-      return reply.status(502).send({ error: 'Error al contactar la API de IA.' })
-    }
+    return { message: assistantMsg }
   })
 }
 

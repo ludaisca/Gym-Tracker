@@ -16,13 +16,14 @@ interface Props {
   routineDays: Record<string, { exercises: ExerciseDef[] }>
   onToggleDone: () => void
   onSetChange: (setIdx: number, field: 'kg' | 'reps', value: string) => void
+  onCompleteSet: (setIdx: number) => void
   onStartTimer: (seconds: number, label: string) => void
   onAutoFill?: (previousSets: { kg: string; reps: string }[]) => void
 }
 
 export default function ExerciseCard({
   exDef, exState, allSessions, dayIds, currentWeek, routineDays,
-  onToggleDone, onSetChange, onStartTimer, onAutoFill,
+  onToggleDone, onSetChange, onCompleteSet, onStartTimer, onAutoFill,
 }: Props) {
   const currentBest = useMemo(() => {
     let best = 0
@@ -57,8 +58,11 @@ export default function ExerciseCard({
     [allSessions, dayIds, exDef.name, currentWeek, routineDays]
   )
 
+  const completedSets = exState.sets.filter(s => s.completed).length
+
   const isCurrentEmpty = useMemo(() => {
-    return exState.sets.every((s) => !s.kg || parseFloat(s.kg) === 0 || !s.reps || parseFloat(s.reps) === 0)
+    return exState.sets.every(s => !s.completed) &&
+      exState.sets.every(s => !s.kg || parseFloat(s.kg) === 0 || !s.reps || parseFloat(s.reps) === 0)
   }, [exState.sets])
 
   return (
@@ -73,7 +77,8 @@ export default function ExerciseCard({
             {hasPR && <span className="pr-badge"><IconTrophy size={11} strokeWidth={2} /> PR</span>}
           </div>
           <div className="exercise-meta">
-            Series: {exDef.sets} · Reps objetivo: {exDef.reps}
+            <span className={completedSets === exDef.sets ? 'text-success' : ''}>{completedSets}/{exDef.sets} series</span>
+            {' '}· Reps objetivo: {exDef.reps}
             {max1RM > 0 && <span> · <strong>1RM máx ≈ {max1RM} kg</strong></span>}
           </div>
         </div>
@@ -108,10 +113,9 @@ export default function ExerciseCard({
             key={sidx}
             setIndex={sidx}
             data={set}
-            restSeconds={exDef.rest}
-            exerciseName={exDef.name}
+            hint={lastRecordedSets?.[sidx]}
             onChange={(field, value) => onSetChange(sidx, field, value)}
-            onStartTimer={onStartTimer}
+            onComplete={() => onCompleteSet(sidx)}
           />
         ))}
       </div>

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore, useUIStore, useOfflineStore } from '../../store'
 import { usersApi } from '../../api/users'
@@ -6,51 +7,12 @@ import { api } from '../../api/client'
 import type { UserSettings } from '../../types/domain'
 import {
   IconSun, IconMoon, IconDownload, IconUpload, IconTrash, IconLogout,
-  IconUser, IconMail, IconLock, IconCamera,
+  IconUser, IconMail, IconLock, IconCamera, IconClose,
   AVATAR_IDS, AvatarIcon, UserAvatar,
 } from '../ui/Icons'
 import { toast } from '../../lib/toast'
 
-const AI_PROVIDERS = [
-  { id: 'opencode',  label: 'OpenCode Go',      placeholder: 'oc-…',          link: 'https://opencode.ai',             linkLabel: 'opencode.ai' },
-  { id: 'google',    label: 'Google Gemini',     placeholder: 'AIzaSy…',       link: 'https://aistudio.google.com/',    linkLabel: 'Google AI Studio' },
-  { id: 'openai',    label: 'OpenAI',            placeholder: 'sk-…',          link: 'https://platform.openai.com/',   linkLabel: 'platform.openai.com' },
-  { id: 'anthropic', label: 'Anthropic (Claude)', placeholder: 'sk-ant-…',     link: 'https://console.anthropic.com/', linkLabel: 'console.anthropic.com' },
-]
-
-const AI_MODELS: Record<string, { id: string; label: string }[]> = {
-  opencode: [
-    { id: 'glm-5.2',           label: 'GLM-5.2 — visión + texto (recomendado)' },
-    { id: 'glm-5.1',           label: 'GLM-5.1' },
-    { id: 'deepseek-v4-pro',   label: 'DeepSeek V4 Pro — texto, razonamiento potente' },
-    { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash — texto, muy económico' },
-    { id: 'qwen3.7-max',       label: 'Qwen3.7 Max — multilingüe' },
-    { id: 'qwen3.7-plus',      label: 'Qwen3.7 Plus' },
-    { id: 'minimax-m3',        label: 'MiniMax M3' },
-    { id: 'kimi-k2.7-code',    label: 'Kimi K2.7 Code' },
-  ],
-  google: [
-    { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite (recomendado)' },
-    { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash' },
-    { id: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro' },
-  ],
-  openai: [
-    { id: 'gpt-4o-mini', label: 'GPT-4o Mini (recomendado)' },
-    { id: 'gpt-4o',      label: 'GPT-4o' },
-    { id: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
-  ],
-  anthropic: [
-    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (recomendado)' },
-    { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6' },
-  ],
-}
-
-const AI_DEFAULT_MODELS: Record<string, string> = {
-  opencode: 'glm-5.2',
-  google:   'gemini-2.5-flash-lite',
-  openai:   'gpt-4o-mini',
-  anthropic: 'claude-haiku-4-5-20251001',
-}
+const GEMINI_MODEL = 'gemini-2.5-flash-lite'
 
 const ACCENT_THEMES = [
   { id: 'teal',   label: 'Teal',   lightColor: '#01696f', darkColor: '#4f98a3' },
@@ -67,8 +29,6 @@ export default function Config() {
   const { queue, dequeue, clearQueue } = useOfflineStore()
   const [settings, setSettings] = useState<Partial<UserSettings>>(user?.settings ?? {})
   const [aiKey, setAiKey] = useState('')
-  const [aiProvider, setAiProvider] = useState(user?.settings?.aiProvider ?? 'opencode')
-  const [aiModel, setAiModel] = useState(user?.settings?.aiModel ?? AI_DEFAULT_MODELS['opencode'])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [savingAi, setSavingAi] = useState(false)
@@ -194,8 +154,8 @@ export default function Config() {
     setSavingAi(true)
     try {
       const payload: Partial<UserSettings> & { aiKey?: string | null } = {
-        aiProvider,
-        aiModel: aiModel || AI_DEFAULT_MODELS[aiProvider] || null,
+        aiProvider: 'google',
+        aiModel: GEMINI_MODEL,
       }
       if (aiKey.trim()) payload.aiKey = aiKey.trim()
       const updated = await usersApi.updateSettings(payload)
@@ -263,11 +223,10 @@ export default function Config() {
     navigate('/login')
   }
 
-  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   async function handleDeleteAccount() {
-    if (!deleteConfirm) { setDeleteConfirm(true); return }
     setDeleting(true)
     try {
       await api.delete('/users/me')
@@ -275,7 +234,7 @@ export default function Config() {
       navigate('/login')
     } catch {
       setDeleting(false)
-      setDeleteConfirm(false)
+      setShowDeleteModal(false)
     }
   }
 
@@ -497,46 +456,16 @@ export default function Config() {
         <div className="panel-head">
           <div>
             <h3>Asistente de Inteligencia Artificial</h3>
-            <p>Conecta un proveedor de IA para análisis de entrenamientos y escaneo visual de comidas. <strong>OpenCode Go</strong> es la opción más económica ($10/mes, 13 modelos).</p>
+            <p>Conecta tu API Key de Google Gemini para análisis de entrenamientos y escaneo visual de comidas. Obtén tu clave gratuita en{' '}
+              <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>Google AI Studio</a>.
+            </p>
           </div>
         </div>
         <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          {/* Selector de proveedor */}
-          <div className="field" style={{ maxWidth: '400px' }}>
-            <label>Proveedor</label>
-            <select
-              value={aiProvider}
-              onChange={e => {
-                const p = e.target.value
-                setAiProvider(p)
-                setAiModel(AI_DEFAULT_MODELS[p] ?? '')
-              }}
-            >
-              {AI_PROVIDERS.map(p => (
-                <option key={p.id} value={p.id}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Selector de modelo */}
-          <div className="field" style={{ maxWidth: '400px' }}>
-            <label>Modelo</label>
-            <select value={aiModel} onChange={e => setAiModel(e.target.value)}>
-              {(AI_MODELS[aiProvider] ?? []).map(m => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
-            {aiProvider === 'opencode' && aiModel && !['glm-5.2', 'glm-5.1'].includes(aiModel) && (
-              <div className="tiny muted" style={{ marginTop: 'var(--space-1)', color: 'var(--color-warning)' }}>
-                Solo GLM-5.2 tiene soporte de visión confirmado. El análisis de fotos de comida puede no funcionar con este modelo.
-              </div>
-            )}
-          </div>
-
           {/* API Key */}
           <div className="field" style={{ maxWidth: '400px' }}>
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>API Key</span>
+              <span>API Key de Gemini</span>
               {user?.settings?.aiKeySet && (
                 <span style={{ color: 'var(--color-success)', fontSize: 'var(--text-xs)', fontWeight: 700 }}>
                   ● Conectado
@@ -547,22 +476,17 @@ export default function Config() {
               type="password"
               placeholder={user?.settings?.aiKeySet
                 ? '••••••••••••••••••••  (dejar vacío para mantener)'
-                : (AI_PROVIDERS.find(p => p.id === aiProvider)?.placeholder ?? '…')}
+                : 'AIzaSy…'}
               value={aiKey}
               onChange={e => setAiKey(e.target.value)}
               autoComplete="off"
             />
-            {(() => {
-              const prov = AI_PROVIDERS.find(p => p.id === aiProvider)
-              return prov ? (
-                <div className="tiny muted" style={{ marginTop: 'var(--space-1)' }}>
-                  Obtén tu clave en{' '}
-                  <a href={prov.link} target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>
-                    {prov.linkLabel}
-                  </a>
-                </div>
-              ) : null
-            })()}
+            <div className="tiny muted" style={{ marginTop: 'var(--space-1)' }}>
+              Obtén tu clave gratuita en{' '}
+              <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--color-primary)' }}>
+                aistudio.google.com
+              </a>
+            </div>
           </div>
         </div>
         <div className="panel-body" style={{ paddingTop: 0, display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
@@ -663,31 +587,57 @@ export default function Config() {
           </div>
           <div>
             <p className="tiny muted" style={{ marginBottom: '.75rem' }}>Elimina permanentemente tu cuenta y todos tus datos. Esta acción es irreversible.</p>
-            {!deleteConfirm ? (
-              <button
-                style={{ borderRadius: 'var(--radius-lg)', padding: '.7rem 1rem', border: '1px solid var(--color-warning)', background: 'transparent', color: 'var(--color-warning)', fontWeight: 700, cursor: 'pointer', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.4rem' }}
-                onClick={handleDeleteAccount}
-              >
-                <IconTrash size={15} /> Eliminar cuenta
-              </button>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
-                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning)', fontWeight: 700 }}>¿Seguro? Esta acción no se puede deshacer.</p>
-                <div style={{ display: 'flex', gap: '.5rem' }}>
-                  <button
-                    style={{ flex: 1, padding: '.6rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-warning)', background: 'var(--color-warning)', color: '#fff', fontWeight: 800, cursor: 'pointer' }}
-                    onClick={handleDeleteAccount}
-                    disabled={deleting}
-                  >
-                    {deleting ? 'Eliminando…' : 'Sí, eliminar'}
-                  </button>
-                  <button className="ghost-btn" style={{ flex: 1 }} onClick={() => setDeleteConfirm(false)}>Cancelar</button>
-                </div>
-              </div>
-            )}
+            <button className="danger-outline-btn" onClick={() => setShowDeleteModal(true)}>
+              <IconTrash size={15} /> Eliminar cuenta
+            </button>
           </div>
         </div>
       </section>
+
+      {showDeleteModal && createPortal(
+        <div className="side-panel-overlay open" onClick={e => { if (e.target === e.currentTarget) setShowDeleteModal(false) }}>
+          <div className="side-panel">
+            <div className="side-panel-drag-handle" />
+
+            <div className="side-panel-header">
+              <div className="side-panel-title-area">
+                <h3 style={{ color: 'var(--color-warning)' }}>Eliminar cuenta</h3>
+                <p>Esta acción no se puede deshacer</p>
+              </div>
+              <button className="side-panel-close-btn" onClick={() => setShowDeleteModal(false)} aria-label="Cerrar">
+                <IconClose size={18} />
+                <span>Cerrar</span>
+              </button>
+            </div>
+
+            <div className="side-panel-body">
+              <div className="preview-day-card">
+                <div className="preview-day-card-head">
+                  <span className="preview-day-label" style={{ color: 'var(--color-warning)' }}>Se eliminará permanentemente</span>
+                </div>
+                <div className="preview-day-exercises">
+                  {['Tu perfil y configuración', 'Historial de entrenamientos', 'Rutinas personalizadas', 'Notas y datos de nutrición'].map((item, i) => (
+                    <div key={i} className="preview-exercise-item">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
+                        <span className="preview-exercise-idx" style={{ background: 'color-mix(in srgb, var(--color-warning) 12%, transparent)', color: 'var(--color-warning)' }}>×</span>
+                        <div className="preview-exercise-name">{item}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="side-panel-footer">
+              <button className="danger-btn" onClick={handleDeleteAccount} disabled={deleting} style={{ flex: 1 }}>
+                {deleting ? 'Eliminando…' : 'Sí, eliminar permanentemente'}
+              </button>
+              <button className="ghost-btn" onClick={() => setShowDeleteModal(false)} style={{ flex: 0 }}>Cancelar</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

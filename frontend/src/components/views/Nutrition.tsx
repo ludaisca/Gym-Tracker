@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { useAuthStore } from '../../store'
+import { createPortal } from 'react-dom'
+import { useAuthStore, useUIStore } from '../../store'
 import { nutritionApi } from '../../api/nutrition'
 import { usersApi } from '../../api/users'
 import { aiApi, type FoodAnalysisResult } from '../../api/ai'
 import type { NutritionDay, FoodEntry, MealType, SavedFood } from '../../types/domain'
+import { IconClose } from '../ui/Icons'
 
 const MEAL_DEFS: { id: MealType; label: string; icon: ReactNode }[] = [
   {
@@ -65,6 +67,8 @@ interface FoodSheet {
 
 export default function Nutrition() {
   const { user, updateUser } = useAuthStore()
+  const { nutritionGoalOpen, closeNutritionGoal } = useUIStore()
+
   const goals = {
     kcal:    user?.settings?.calorieGoal ?? 2500,
     protein: user?.settings?.proteinGoal ?? 150,
@@ -78,6 +82,13 @@ export default function Nutrition() {
   const [savedFoods, setSavedFoods] = useState<SavedFood[]>([])
   const [sheet, setSheet] = useState<FoodSheet | null>(null)
   const [showGoalModal, setShowGoalModal] = useState(false)
+
+  useEffect(() => {
+    if (nutritionGoalOpen) {
+      setShowGoalModal(true)
+      closeNutritionGoal()
+    }
+  }, [nutritionGoalOpen, closeNutritionGoal])
   const [weekAvg, setWeekAvg] = useState<{ kcal: number; protein: number; carbs: number; fat: number } | null>(null)
 
   const loadDay = useCallback(async (d: string) => {
@@ -156,21 +167,11 @@ export default function Nutrition() {
   return (
     <div className="fade-in">
       <section className="card">
-        <div className="panel-head" style={{ paddingBottom: 0 }}>
+        <div className="panel-head">
           <div>
-            <h3>Nutrición e Hidratación</h3>
-            <p>Registro diario y progreso.</p>
+            <h3>Nutrición</h3>
+            <p>Registro diario de calorías y macros</p>
           </div>
-          <button
-            className="icon-btn-subtle"
-            onClick={() => setShowGoalModal(true)}
-            title="Establecer metas propias"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2-2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
-            </svg>
-          </button>
         </div>
 
         <div className="nut-date-nav">
@@ -232,8 +233,7 @@ export default function Nutrition() {
         </div>
 
         <div className="nut-water">
-          <div>
-            <div className="nut-water-label">Agua</div>
+          <div className="nut-water-row">
             <div className="nut-water-glasses">
               {Array.from({ length: goals.water }, (_, i) => (
                 <span
@@ -241,18 +241,19 @@ export default function Nutrition() {
                   className={`nut-glass${i < water ? ' filled' : ''}`}
                   onClick={() => updateWater(i < water ? -1 : 1)}
                 >
-                  <svg width="12" height="14" viewBox="0 0 24 28" fill={i < water ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.75">
+                  <svg width="13" height="15" viewBox="0 0 24 28" fill={i < water ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.75">
                     <path d="M12 2C6 10 4 14 4 18a8 8 0 0 0 16 0c0-4-2-8-8-16Z"/>
                   </svg>
                 </span>
               ))}
             </div>
+            <div className="nut-water-controls">
+              <button className="nut-water-btn" onClick={() => updateWater(-1)}>−</button>
+              <span className="nut-water-count">{water}/{goals.water}</span>
+              <button className="nut-water-btn" onClick={() => updateWater(1)}>+</button>
+            </div>
           </div>
-          <div className="nut-water-controls">
-            <button className="nut-water-btn" onClick={() => updateWater(-1)}>−</button>
-            <span className="nut-water-count">{water}/{goals.water}</span>
-            <button className="nut-water-btn" onClick={() => updateWater(1)}>+</button>
-          </div>
+          <span className="nut-water-label">Agua · {water * 250}ml de {goals.water * 250}ml</span>
         </div>
 
         <div className="nut-meals">
@@ -260,7 +261,7 @@ export default function Nutrition() {
             const entries = meals[id] ?? []
             const mkcal = Math.round(entries.reduce((s, e) => s + (Number(e.kcal) || 0), 0))
             return (
-              <div key={id} className="nut-meal-section">
+              <div key={id} className={`nut-meal-section nut-meal-${id}`}>
                 <div className="nut-meal-head">
                   <div>
                     <span className="nut-meal-label">{icon} {label}</span>
@@ -324,7 +325,7 @@ export default function Nutrition() {
           <div className="panel-head">
             <div><h3>Promedio últimos 7 días</h3><p>Excluye el día actual (datos parciales).</p></div>
           </div>
-          <div className="panel-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)', textAlign: 'center' }}>
+          <div className="panel-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', textAlign: 'center' }}>
             {[
               { label: 'Calorías', val: weekAvg.kcal, unit: 'kcal', goal: goals.kcal },
               { label: 'Proteína', val: weekAvg.protein, unit: 'g', goal: goals.protein },
@@ -480,110 +481,168 @@ function FoodSheetModal({ mealType, savedFoods, hasAI, onSave, onClose }: FoodSh
   const confLevel = aiResult ? confidenceLevel(aiResult.confidence_overall) : null
   const confPct = aiResult ? Math.round(aiResult.confidence_overall * 100) : 0
 
-  return (
-    <div className="confirm-overlay open" style={{ zIndex: 200 }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="confirm-sheet" style={{ maxWidth: 480 }}>
-        <div className="confirm-sheet-handle" />
-        <h3>Agregar a {mealLabel}</h3>
+  return createPortal(
+    <div className="side-panel-overlay open" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="side-panel">
+        <div className="side-panel-drag-handle" />
 
-        {savedFoods.length > 0 && (
-          <div className="nut-saved-chips">
-            {savedFoods.map(f => (
-              <button key={f.id} className="nut-saved-chip" onClick={() => selectSaved(f)}>
-                ⭐ {f.name} <span style={{ opacity: .6 }}>{f.kcal}kcal</span>
-              </button>
-            ))}
+        <div className="side-panel-header">
+          <div className="side-panel-title-area">
+            <h3>Agregar alimento</h3>
+            <p>{mealLabel}</p>
           </div>
-        )}
+          <button className="side-panel-close-btn" onClick={onClose} aria-label="Cerrar panel">
+            <IconClose size={18} />
+            <span>Cerrar</span>
+          </button>
+        </div>
 
-        {/* ── Foto IA ─────────────────────────────────────── */}
-        {hasAI && (
-          <div className="food-photo-area">
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handlePhoto} />
+        <div className="side-panel-body">
 
-            {!imgPreview && !aiLoading && (
-              <button className="food-photo-btn" onClick={() => fileRef.current?.click()}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                  <circle cx="12" cy="13" r="4"/>
-                </svg>
-                Analizar foto con IA
-              </button>
-            )}
-
-            {(imgPreview || aiLoading) && (
-              <div className="food-preview-row">
-                {imgPreview && (
-                  <button onClick={() => fileRef.current?.click()} style={{ padding: 0, background: 'none', border: 'none' }}>
-                    <img src={imgPreview} alt="Vista previa" className="food-preview-img" />
-                  </button>
-                )}
-                <div className="food-preview-meta">
-                  {aiLoading && (
-                    <div className="food-ai-loading">
-                      <div className="spinner" />
-                      Analizando tu plato…
-                    </div>
-                  )}
-                  {!aiLoading && aiResult && confLevel && (
-                    <>
-                      <span className={`food-confidence ${confLevel}`}>
-                        {confLevel === 'high' ? '✓' : confLevel === 'medium' ? '~' : '?'} {confPct}% confianza
-                      </span>
-                      {aiResult.notes && <p className="food-ai-note">{aiResult.notes}</p>}
-                    </>
-                  )}
-                  {!aiLoading && aiError && (
-                    <p className="food-ai-error">{aiError}</p>
-                  )}
-                </div>
+          {/* ── Favoritos ── */}
+          {savedFoods.length > 0 && (
+            <div className="preview-day-card">
+              <div className="preview-day-card-head">
+                <span className="preview-day-label">Favoritos</span>
+                <span className="preview-day-badge">{savedFoods.length} guardados</span>
               </div>
-            )}
-
-            {!aiLoading && aiResult && aiResult.items.length > 0 && (
-              <div className="food-items-list">
-                {aiResult.items.map((item, i) => (
-                  <div key={i} className="food-item-row">
-                    <span className="food-item-name">{item.name}</span>
-                    <span className="food-item-macros">{item.kcal} kcal · P:{item.protein_g}g C:{item.carbs_g}g G:{item.fat_g}g</span>
+              <div className="preview-day-exercises">
+                {savedFoods.map((f, idx) => (
+                  <div
+                    key={f.id}
+                    className="preview-exercise-item"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => selectSaved(f)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
+                      <span className="preview-exercise-idx">{idx + 1}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="preview-exercise-name">{f.name}</div>
+                        <div className="preview-exercise-rest">P:{f.protein}g · C:{f.carbs}g · G:{f.fat}g</div>
+                      </div>
+                    </div>
+                    <div className="preview-exercise-meta">{f.kcal} kcal</div>
                   </div>
                 ))}
               </div>
-            )}
+            </div>
+          )}
 
-            {hiddenSugs.length > 0 && (
-              <div className="food-hidden-chips">
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)', alignSelf: 'center' }}>¿Olvidaste?</span>
-                {hiddenSugs.map((s, i) => (
-                  <button key={i} className="food-hidden-chip" onClick={() => setHiddenSugs(p => p.filter((_, j) => j !== i))}>
-                    + {s} ×
-                  </button>
-                ))}
+          {/* ── Foto IA ── */}
+          {hasAI && (
+            <div className="preview-day-card">
+              <div className="preview-day-card-head">
+                <span className="preview-day-label">Analizar con IA</span>
               </div>
-            )}
-          </div>
-        )}
+              <div style={{ padding: 'var(--space-3) var(--space-4)' }}>
+                <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handlePhoto} />
 
-        <div className="panel-body" style={{ display: 'grid', gap: 'var(--space-3)', padding: 0 }}>
-          <div className="field"><label>Alimento</label><input placeholder="Ej. Pollo a la plancha" value={name} onChange={e => setName(e.target.value)} autoFocus={!hasAI} /></div>
-          <div className="food-macro-grid">
-            <div className="field"><label>Kcal</label><input type="number" placeholder="0" value={kcal} onChange={e => setKcal(e.target.value)} /></div>
-            <div className="field"><label>Proteína g</label><input type="number" placeholder="0" value={protein} onChange={e => setProtein(e.target.value)} /></div>
-            <div className="field"><label>Carbos g</label><input type="number" placeholder="0" value={carbs} onChange={e => setCarbs(e.target.value)} /></div>
-            <div className="field"><label>Grasa g</label><input type="number" placeholder="0" value={fat} onChange={e => setFat(e.target.value)} /></div>
+                {!imgPreview && !aiLoading && (
+                  <button className="food-photo-btn" onClick={() => fileRef.current?.click()}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                      <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    Analizar foto con IA
+                  </button>
+                )}
+
+                {(imgPreview || aiLoading) && (
+                  <div className="food-preview-row">
+                    {imgPreview && (
+                      <button onClick={() => fileRef.current?.click()} style={{ padding: 0, background: 'none', border: 'none' }}>
+                        <img src={imgPreview} alt="Vista previa" className="food-preview-img" />
+                      </button>
+                    )}
+                    <div className="food-preview-meta">
+                      {aiLoading && (
+                        <div className="food-ai-loading">
+                          <div className="spinner" />
+                          Analizando tu plato…
+                        </div>
+                      )}
+                      {!aiLoading && aiResult && confLevel && (
+                        <>
+                          <span className={`food-confidence ${confLevel}`}>
+                            {confLevel === 'high' ? '✓' : confLevel === 'medium' ? '~' : '?'} {confPct}% confianza
+                          </span>
+                          {aiResult.notes && <p className="food-ai-note">{aiResult.notes}</p>}
+                        </>
+                      )}
+                      {!aiLoading && aiError && <p className="food-ai-error">{aiError}</p>}
+                    </div>
+                  </div>
+                )}
+
+                {!aiLoading && aiResult && aiResult.items.length > 0 && (
+                  <div className="food-items-list">
+                    {aiResult.items.map((item, i) => (
+                      <div key={i} className="food-item-row">
+                        <span className="food-item-name">{item.name}</span>
+                        <span className="food-item-macros">{item.kcal} kcal · P:{item.protein_g}g C:{item.carbs_g}g G:{item.fat_g}g</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {hiddenSugs.length > 0 && (
+                  <div className="food-hidden-chips">
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)', alignSelf: 'center' }}>¿Olvidaste?</span>
+                    {hiddenSugs.map((s, i) => (
+                      <button key={i} className="food-hidden-chip" onClick={() => setHiddenSugs(p => p.filter((_, j) => j !== i))}>
+                        + {s} ×
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Datos del alimento ── */}
+          <div className="preview-day-card">
+            <div className="preview-day-card-head">
+              <span className="preview-day-label">Datos del alimento</span>
+            </div>
+            <div style={{ padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
+              <div className="field">
+                <label>Alimento</label>
+                <input
+                  placeholder="Ej. Pollo a la plancha"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  autoFocus={!hasAI}
+                />
+              </div>
+              <div className="food-macro-grid">
+                <div className="field"><label>Kcal</label><input type="number" placeholder="0" value={kcal} onChange={e => setKcal(e.target.value)} /></div>
+                <div className="field"><label>Proteína g</label><input type="number" placeholder="0" value={protein} onChange={e => setProtein(e.target.value)} /></div>
+                <div className="field"><label>Carbos g</label><input type="number" placeholder="0" value={carbs} onChange={e => setCarbs(e.target.value)} /></div>
+                <div className="field"><label>Grasa g</label><input type="number" placeholder="0" value={fat} onChange={e => setFat(e.target.value)} /></div>
+              </div>
+              <label style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={saveFav} onChange={e => setSaveFav(e.target.checked)} />
+                Guardar en favoritos
+              </label>
+            </div>
           </div>
-          <label style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
-            <input type="checkbox" checked={saveFav} onChange={e => setSaveFav(e.target.checked)} />
-            Guardar en favoritos
-          </label>
+
         </div>
 
-        <div className="confirm-sheet-actions">
-          <button className="primary-btn" onClick={submit} disabled={!name.trim() || !kcal}>Agregar</button>
-          <button className="ghost-btn" onClick={onClose}>Cancelar</button>
+        <div className="side-panel-footer">
+          <button
+            className="primary-btn"
+            onClick={submit}
+            disabled={!name.trim() || !kcal}
+            style={{ flex: 1, padding: '1rem' }}
+          >
+            Agregar alimento
+          </button>
+          <button className="ghost-btn" style={{ flex: 0 }} onClick={onClose}>Cancelar</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -600,26 +659,67 @@ function GoalModal({ currentGoals, onSave, onClose }: GoalModalProps) {
   const [fat, setFat] = useState(currentGoals.fat)
   const [water, setWater] = useState(currentGoals.water)
 
-  return (
-    <div className="confirm-overlay open" style={{ zIndex: 300 }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="confirm-sheet" style={{ maxWidth: 400 }}>
-        <div className="confirm-sheet-handle" />
-        <h3>Ajustar Metas Propias</h3>
-        <p className="tiny muted">Personaliza tus objetivos diarios de nutrición.</p>
-        <div className="panel-body" style={{ display: 'grid', gap: 'var(--space-3)', padding: 'var(--space-4) 0' }}>
-          <div className="field"><label>Calorías (kcal)</label><input type="number" value={kcal} onChange={e => setKcal(Number(e.target.value))} /></div>
-          <div className="food-macro-grid">
-            <div className="field"><label>Proteína (g)</label><input type="number" value={protein} onChange={e => setProtein(Number(e.target.value))} /></div>
-            <div className="field"><label>Carbos (g)</label><input type="number" value={carbs} onChange={e => setCarbs(Number(e.target.value))} /></div>
-            <div className="field"><label>Grasa (g)</label><input type="number" value={fat} onChange={e => setFat(Number(e.target.value))} /></div>
+  return createPortal(
+    <div className="side-panel-overlay open" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="side-panel">
+        <div className="side-panel-drag-handle" />
+
+        <div className="side-panel-header">
+          <div className="side-panel-title-area">
+            <h3>Metas diarias</h3>
+            <p>Personaliza tus objetivos de nutrición</p>
           </div>
-          <div className="field"><label>Agua (vasos)</label><input type="number" value={water} onChange={e => setWater(Number(e.target.value))} /></div>
+          <button className="side-panel-close-btn" onClick={onClose} aria-label="Cerrar panel">
+            <IconClose size={18} />
+            <span>Cerrar</span>
+          </button>
         </div>
-        <div className="confirm-sheet-actions">
-          <button className="primary-btn" onClick={() => onSave({ kcal, protein, carbs, fat, water })}>Guardar cambios</button>
-          <button className="ghost-btn" onClick={onClose}>Cancelar</button>
+
+        <div className="side-panel-body">
+
+          <div className="preview-day-card">
+            <div className="preview-day-card-head">
+              <span className="preview-day-label">Macronutrientes</span>
+            </div>
+            <div style={{ padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
+              <div className="field">
+                <label>Calorías (kcal)</label>
+                <input type="number" value={kcal} onChange={e => setKcal(Number(e.target.value))} />
+              </div>
+              <div className="food-macro-grid">
+                <div className="field"><label>Proteína (g)</label><input type="number" value={protein} onChange={e => setProtein(Number(e.target.value))} /></div>
+                <div className="field"><label>Carbos (g)</label><input type="number" value={carbs} onChange={e => setCarbs(Number(e.target.value))} /></div>
+                <div className="field"><label>Grasa (g)</label><input type="number" value={fat} onChange={e => setFat(Number(e.target.value))} /></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="preview-day-card">
+            <div className="preview-day-card-head">
+              <span className="preview-day-label">Hidratación</span>
+            </div>
+            <div style={{ padding: 'var(--space-4)' }}>
+              <div className="field">
+                <label>Agua (vasos de 250 ml)</label>
+                <input type="number" value={water} onChange={e => setWater(Number(e.target.value))} />
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div className="side-panel-footer">
+          <button
+            className="primary-btn"
+            onClick={() => onSave({ kcal, protein, carbs, fat, water })}
+            style={{ flex: 1, padding: '1rem' }}
+          >
+            Guardar cambios
+          </button>
+          <button className="ghost-btn" style={{ flex: 0 }} onClick={onClose}>Cancelar</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

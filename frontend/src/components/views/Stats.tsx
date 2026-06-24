@@ -10,40 +10,22 @@ import { sessionsApi } from '../../api/sessions'
 import { getRoutineDays, getDayIds, calcStreak, getBestKgForWeek } from '../../lib/fitness'
 import { bodyWeightApi, type BodyWeightEntry } from '../../api/bodyweight'
 import type { WorkoutSession } from '../../types/domain'
-import { IconClose } from '../ui/Icons'
+import {
+  IconClose, IconTarget, IconTrophy, IconFire, IconBolt,
+  IconStats, IconRocket, IconNotes, IconLock, IconDumbbell, IconCheck,
+} from '../ui/Icons'
 
 type Sessions = WorkoutSession[]
 
-// ── Icons ────────────────────────────────────────────────────────────────────
-function IconTarget({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-}
-function IconBicep({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4.5l-3 3-4-2.5 1.5 5 2.5 1.5-1.5 4.5 4.5 1.5 5.5-2.5 1.5-6.5-6.5-4z"/><path d="M11 12l1 1"/><path d="M9 16c0 1 1 2 2 2s2-1 2-2"/></svg>
-}
-function IconTrophy({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-}
-function IconFire({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
-}
-function IconLightning({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-}
-function IconChart({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
-}
-function IconRocket({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-5c1.62-2.2 5-3 5-3"/><path d="M12 15v5s3.03-.55 5-2c2.2-1.62 3-5 3-5"/></svg>
-}
-function IconNote({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12c0 2.21-1.79 4-4 4H4"/></svg>
-}
-function IconWeight({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-}
-function IconLock({ className }: { className?: string }) {
-  return <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+// ── Iconos locales (no existen en el sistema) ────────────────────────────────
+function IconWeight({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="6" r="3" />
+      <path d="M5 20a7 7 0 0 1 14 0" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+    </svg>
+  )
 }
 
 // ── Achievements ─────────────────────────────────────────────────────────────
@@ -53,16 +35,16 @@ interface Achievement {
 }
 
 const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first-session',  icon: <IconTarget />, title: 'Primera sesión',    desc: 'Completaste tu primer entreno',              check: (_s, _st, t) => t >= 1 },
-  { id: 'decena',         icon: <IconBicep />, title: 'Decatleta',          desc: '10 sesiones completadas',                    check: (_s, _st, t) => t >= 10 },
-  { id: 'cincuenta',      icon: <IconTrophy />, title: 'Veterano',           desc: '50 sesiones completadas',                    check: (_s, _st, t) => t >= 50 },
-  { id: 'centurion',      icon: <IconTrophy />, title: 'Centurión',          desc: '100 sesiones completadas',                   check: (_s, _st, t) => t >= 100 },
-  { id: 'racha-2',        icon: <IconFire />, title: 'Racha inicial',      desc: '2 semanas consecutivas (≥75%)',              check: (_s, s) => s >= 2 },
-  { id: 'racha-4',        icon: <IconFire />, title: 'Racha de fuego',  desc: '4 semanas consecutivas (≥75%)',              check: (_s, s) => s >= 4 },
-  { id: 'racha-8',        icon: <IconLightning />, title: 'Imparable',          desc: '8 semanas consecutivas (≥75%)',              check: (_s, s) => s >= 8 },
-  { id: 'volumen-5k',     icon: <IconChart />, title: 'Volumen 5K',         desc: '5,000 kg×reps en una semana',               check: (sessions) => sessions.some(s => s.exercises.reduce((a, ex) => a + ex.sets.reduce((b, set) => b + (parseFloat(set.kg) * parseFloat(set.reps) || 0), 0), 0) >= 5000) },
-  { id: 'volumen-10k',    icon: <IconRocket />, title: 'Volumen 10K',        desc: '10,000 kg×reps en una semana',              check: (sessions) => sessions.some(s => s.exercises.reduce((a, ex) => a + ex.sets.reduce((b, set) => b + (parseFloat(set.kg) * parseFloat(set.reps) || 0), 0), 0) >= 10000) },
-  { id: 'notas',          icon: <IconNote />, title: 'Anotador',           desc: 'Registraste notas en una sesión',            check: (sessions) => sessions.some(s => s.notes && s.notes.trim().length > 0) },
+  { id: 'first-session',  icon: <IconTarget size={20} />,   title: 'Primera sesión',  desc: 'Completaste tu primer entreno',         check: (_s, _st, t) => t >= 1 },
+  { id: 'decena',         icon: <IconDumbbell size={20} />, title: 'Decatleta',        desc: '10 sesiones completadas',               check: (_s, _st, t) => t >= 10 },
+  { id: 'cincuenta',      icon: <IconTrophy size={20} />,   title: 'Veterano',         desc: '50 sesiones completadas',               check: (_s, _st, t) => t >= 50 },
+  { id: 'centurion',      icon: <IconTrophy size={20} />,   title: 'Centurión',        desc: '100 sesiones completadas',              check: (_s, _st, t) => t >= 100 },
+  { id: 'racha-2',        icon: <IconFire size={20} />,     title: 'Racha inicial',    desc: '2 semanas consecutivas (≥75%)',         check: (_s, s) => s >= 2 },
+  { id: 'racha-4',        icon: <IconFire size={20} />,     title: 'Racha de fuego',   desc: '4 semanas consecutivas (≥75%)',         check: (_s, s) => s >= 4 },
+  { id: 'racha-8',        icon: <IconBolt size={20} />,     title: 'Imparable',        desc: '8 semanas consecutivas (≥75%)',         check: (_s, s) => s >= 8 },
+  { id: 'volumen-5k',     icon: <IconStats size={20} />,    title: 'Volumen 5K',       desc: '5,000 kg×reps en una semana',          check: (sessions) => sessions.some(s => s.exercises.reduce((a, ex) => a + ex.sets.reduce((b, set) => b + (parseFloat(set.kg) * parseFloat(set.reps) || 0), 0), 0) >= 5000) },
+  { id: 'volumen-10k',    icon: <IconRocket size={20} />,   title: 'Volumen 10K',      desc: '10,000 kg×reps en una semana',         check: (sessions) => sessions.some(s => s.exercises.reduce((a, ex) => a + ex.sets.reduce((b, set) => b + (parseFloat(set.kg) * parseFloat(set.reps) || 0), 0), 0) >= 10000) },
+  { id: 'notas',          icon: <IconNotes size={20} />,    title: 'Anotador',         desc: 'Registraste notas en una sesión',      check: (sessions) => sessions.some(s => s.notes && s.notes.trim().length > 0) },
 ]
 
 function capitalize(s: string) { return s.charAt(0).toUpperCase() + s.slice(1) }
@@ -119,8 +101,14 @@ function WeightTab() {
         </div>
         <div className="panel-body">
           <div className="weight-form">
-            <input type="date" className="input" value={date} onChange={e => setDate(e.target.value)} />
-            <input type="number" className="input" placeholder="kg (ej. 78.5)" step="0.1" min="20" max="300" value={kg} onChange={e => setKg(e.target.value)} />
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Fecha</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Peso (kg)</label>
+              <input type="number" placeholder="78.5" step="0.1" min="20" max="300" value={kg} onChange={e => setKg(e.target.value)} />
+            </div>
             <button className="primary-btn" onClick={handleSave} disabled={saving || !kg}>
               {saving ? '…' : 'Guardar'}
             </button>
@@ -162,7 +150,9 @@ function WeightTab() {
                 <div key={e.date} className="weight-row">
                   <span className="weight-date">{e.date}</span>
                   <span className="weight-val">{e.weight_kg} kg</span>
-                  <button className="ghost-btn weight-del" onClick={() => handleDelete(e.date)} aria-label="Eliminar registro"><IconClose size={14} strokeWidth={2.5} /></button>
+                  <button className="icon-btn-subtle weight-del" onClick={() => handleDelete(e.date)} aria-label="Eliminar registro">
+                    <IconClose size={14} strokeWidth={2.5} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -172,7 +162,7 @@ function WeightTab() {
 
       {entries.length === 0 && (
         <div className="empty-state">
-          <div className="empty-icon"><IconWeight /></div>
+          <div className="empty-icon"><IconWeight size={32} /></div>
           <p>Registra tu primer peso para ver la evolución.</p>
         </div>
       )}
@@ -258,7 +248,6 @@ export default function Stats() {
     [sessions, streak, totalCompleteSessions]
   )
 
-  // Persistir fechas de desbloqueo en localStorage por userId
   const [achievementDates, setAchievementDates] = useState<Record<string, string>>({})
   useEffect(() => {
     if (!user?.id) return
@@ -277,30 +266,34 @@ export default function Stats() {
     setAchievementDates(saved)
   }, [unlockedAchievements, user?.id])
 
+  const hasProgressData = volData.length >= 2 || allExercises.length > 0 || prRows.length > 0
+
   return (
     <div className="fade-in">
+      {/* KPIs */}
       <div className="kpis">
         <article className="card kpi">
+          <div className="kpi-icon"><IconCheck size={16} /></div>
           <div className="kpi-label">Ejercicios marcados</div>
           <div className="kpi-value">{totalCompleted}</div>
           <div className="kpi-meta">esta semana</div>
         </article>
         <article className="card kpi">
+          <div className="kpi-icon"><IconDumbbell size={16} /></div>
           <div className="kpi-label">Sesiones cerradas</div>
           <div className="kpi-value">{completedDays}/{dayIds.length}</div>
           <div className="kpi-meta">semana {weekNumber}</div>
         </article>
         <article className="card kpi">
+          <div className="kpi-icon"><IconStats size={16} /></div>
           <div className="kpi-label">Total sesiones</div>
           <div className="kpi-value">{totalCompleteSessions}</div>
           <div className="kpi-meta">historial completo</div>
         </article>
         <article className="card kpi">
+          <div className="kpi-icon"><IconFire size={16} className={streak > 0 ? 'accent-fire' : undefined} /></div>
           <div className="kpi-label">Racha activa</div>
-          <div className="kpi-value" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            {streak > 0 && <IconFire className="accent-fire" />}
-            {streak}
-          </div>
+          <div className="kpi-value">{streak}</div>
           <div className="kpi-meta">{streak >= 2 ? 'semanas consecutivas' : 'semanas'}</div>
         </article>
       </div>
@@ -309,13 +302,26 @@ export default function Stats() {
       <div className="stats-tabs">
         {(['progreso', 'peso', 'logros'] as const).map(t => (
           <button key={t} className={`stats-tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'progreso' ? <><IconChart /> Progreso</> : t === 'peso' ? <><IconWeight /> Peso</> : <><IconTrophy /> Logros ({unlockedAchievements.length})</>}
+            {t === 'progreso'
+              ? <><IconStats size={16} /> Progreso</>
+              : t === 'peso'
+              ? <><IconWeight size={16} /> Peso</>
+              : <><IconTrophy size={16} /> Logros ({unlockedAchievements.length})</>
+            }
           </button>
         ))}
       </div>
 
+      {/* Tab Progreso */}
       {tab === 'progreso' && (
         <div className="stats-tab-content">
+          {!hasProgressData && (
+            <div className="empty-state">
+              <div className="empty-icon"><IconStats size={32} /></div>
+              <p>Completa algunas sesiones para ver tus estadísticas aquí.</p>
+            </div>
+          )}
+
           {volData.length >= 2 && (
             <section className="card">
               <div className="panel-head">
@@ -345,11 +351,14 @@ export default function Stats() {
             <section className="card">
               <div className="panel-head">
                 <div><h3>Progreso por ejercicio</h3><p>Mejor kg registrado por semana.</p></div>
-                <select className="input" style={{ maxWidth: 200 }} value={selectedExercise} onChange={e => setSelectedExercise(e.target.value)}>
-                  {allExercises.map(ex => <option key={ex} value={ex}>{ex}</option>)}
-                </select>
               </div>
               <div className="panel-body">
+                <div className="field" style={{ marginBottom: exerciseHistory.length >= 2 ? 'var(--space-4)' : 0 }}>
+                  <label>Ejercicio</label>
+                  <select value={selectedExercise} onChange={e => setSelectedExercise(e.target.value)}>
+                    {allExercises.map(ex => <option key={ex} value={ex}>{ex}</option>)}
+                  </select>
+                </div>
                 {exerciseHistory.length >= 2 ? (
                   <ResponsiveContainer width="100%" height={180}>
                     <LineChart data={exerciseHistory} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
@@ -362,7 +371,7 @@ export default function Stats() {
                   </ResponsiveContainer>
                 ) : (
                   <p className="muted tiny" style={{ textAlign: 'center', padding: '1rem 0' }}>
-                    Necesitas al menos 2 semanas con datos para {selectedExercise}.
+                    Necesitas al menos 2 semanas con datos para <strong>{selectedExercise}</strong>.
                   </p>
                 )}
               </div>
@@ -373,12 +382,8 @@ export default function Stats() {
             <section className="card">
               <div className="panel-head">
                 <div><h3>Tabla de PRs</h3><p>Máximo kg por ejercicio (ejercicios completados).</p></div>
-                <button
-                  className="ghost-btn"
-                  style={{ padding: '.4rem .8rem', fontSize: 'var(--text-xs)', flexShrink: 0 }}
-                  onClick={() => navigate('/historial')}
-                >
-                  Ver historial completo →
+                <button className="ghost-btn" style={{ flexShrink: 0 }} onClick={() => navigate('/historial')}>
+                  Ver historial →
                 </button>
               </div>
               <div className="panel-body">
@@ -408,6 +413,7 @@ export default function Stats() {
               {dayIds.map(day => {
                 const s = sessions.find(s => s.weekNumber === weekNumber && s.dayId === day)
                 const dayLabel = (routineDays[day] as { label?: string })?.label ?? day
+                const done = s?.complete ?? false
                 return (
                   <article key={day} className="day-card">
                     <header>
@@ -415,11 +421,18 @@ export default function Stats() {
                         <h4>{capitalize(day)} · {dayLabel}</h4>
                         <div className="tiny muted">{s ? s.exercises.filter(e => e.done).length : 0} ejercicios marcados</div>
                       </div>
-                      <span className="pill">{s?.complete ? '✓ done' : 'open'}</span>
+                      <span className={`pill${done ? ' pill-success' : ''}`}>
+                        {done ? '✓ Completo' : 'Pendiente'}
+                      </span>
                     </header>
                   </article>
                 )
               })}
+              {dayIds.length === 0 && (
+                <p className="muted tiny" style={{ textAlign: 'center', padding: 'var(--space-4) 0' }}>
+                  Activa una rutina para ver el resumen por día.
+                </p>
+              )}
             </div>
           </section>
         </div>
@@ -431,9 +444,14 @@ export default function Stats() {
         <div className="stats-tab-content">
           <section className="card">
             <div className="panel-head">
-              <div><h3>Logros desbloqueados</h3><p>{unlockedAchievements.length} de {ACHIEVEMENTS.length}</p></div>
+              <div><h3>Logros</h3><p>{unlockedAchievements.length} de {ACHIEVEMENTS.length} desbloqueados</p></div>
             </div>
             <div className="panel-body">
+              <div className="achievements-progress">
+                <div className="progress">
+                  <span style={{ width: `${(unlockedAchievements.length / ACHIEVEMENTS.length) * 100}%` }} />
+                </div>
+              </div>
               <div className="achievements-grid">
                 {ACHIEVEMENTS.map(a => {
                   const unlocked = unlockedAchievements.some(u => u.id === a.id)
@@ -444,14 +462,12 @@ export default function Stats() {
                   return (
                     <div key={a.id} className={`achievement-card ${unlocked ? 'unlocked' : 'locked'}`}>
                       <div className={`achievement-icon ${unlocked ? 'unlocked' : ''}`}>
-                        {unlocked ? a.icon : <IconLock />}
+                        {unlocked ? a.icon : <IconLock size={20} />}
                       </div>
                       <div className="achievement-title">{a.title}</div>
                       <div className="achievement-desc">{a.desc}</div>
                       {unlocked && unlockedLabel && (
-                        <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                          {unlockedLabel}
-                        </div>
+                        <div className="achievement-date">{unlockedLabel}</div>
                       )}
                     </div>
                   )

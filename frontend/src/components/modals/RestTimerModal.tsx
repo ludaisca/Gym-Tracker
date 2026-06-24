@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 
 interface Props {
   seconds: number
@@ -48,9 +49,7 @@ export default function RestTimerModal({ seconds, label, onClose }: Props) {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
   }, [running, playBeep])
 
-  function toggle() {
-    setRunning(r => !r)
-  }
+  function toggle() { setRunning(r => !r) }
 
   function reset() {
     if (intervalRef.current) clearInterval(intervalRef.current)
@@ -65,14 +64,19 @@ export default function RestTimerModal({ seconds, label, onClose }: Props) {
 
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0')
   const ss = String(remaining % 60).padStart(2, '0')
-
   const urgent = remaining <= 5 && remaining > 0
+  const done = remaining === 0
 
-  return (
-    <div className="timer-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="timer-modal">
-        <div className="timer-label">Descanso</div>
-        <div className="timer-ex-name">{label}</div>
+  return createPortal(
+    <div className="confirm-overlay open" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="timer-sheet">
+        <div className="confirm-sheet-handle" />
+
+        <div className="timer-sheet-header">
+          <div className="timer-label">Descanso</div>
+          <div className="timer-ex-name">{label}</div>
+        </div>
+
         <div className="timer-ring-wrap">
           <svg viewBox="0 0 120 120">
             <circle className="timer-ring-bg" cx="60" cy="60" r={radius} />
@@ -85,17 +89,22 @@ export default function RestTimerModal({ seconds, label, onClose }: Props) {
           </svg>
           <div className={`timer-digits${urgent ? ' urgent' : ''}`}>{mm}:{ss}</div>
         </div>
-        <div className="timer-ex-name" style={{ fontSize: 'var(--text-xs)', opacity: .7 }}>
-          {remaining === 0 ? '¡Listo para la siguiente serie!' : running ? 'Descansando…' : 'Pausado'}
+
+        <div className="timer-status-text">
+          {done ? '¡Listo para la siguiente serie!' : running ? 'Descansando…' : 'Pausado'}
         </div>
-        <div className="timer-actions">
-          <button className="timer-btn" onClick={reset}>Reiniciar</button>
-          <button className="timer-btn primary" onClick={remaining === 0 ? onClose : toggle}>
-            {remaining === 0 ? 'Cerrar' : running ? 'Pausar' : 'Reanudar'}
+
+        <div className="confirm-sheet-actions">
+          <button className="primary-btn timer-sheet-main-btn" onClick={done ? onClose : toggle}>
+            {done ? 'Continuar' : running ? 'Pausar' : 'Reanudar'}
           </button>
-          <button className="timer-btn skip" onClick={onClose}>Saltar</button>
+          <div className="timer-sheet-secondary">
+            <button className="ghost-btn" onClick={reset}>Reiniciar</button>
+            <button className="ghost-btn" onClick={onClose}>Saltar</button>
+          </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

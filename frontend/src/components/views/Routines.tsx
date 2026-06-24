@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store'
 import { usersApi } from '../../api/users'
@@ -6,7 +7,7 @@ import { routinesApi } from '../../api/routines'
 import { api } from '../../api/client'
 import { PRESET_ROUTINES } from '../../lib/presetRoutines'
 import type { Routine } from '../../types/domain'
-import { IconTarget, IconTrash, IconEdit, IconCopy, IconEye, IconPlus, IconCheck } from '../ui/Icons'
+import { IconTarget, IconTrash, IconEdit, IconCopy, IconEye, IconPlus, IconCheck, IconClose } from '../ui/Icons'
 import { toast } from '../../lib/toast'
 
 function capitalize(s: string) {
@@ -170,99 +171,133 @@ export default function Routines() {
         </div>
       )}
 
-      {/* Confirmation Sheet */}
-      {pendingId && (
-        <div className="confirm-overlay open" onClick={e => { if (e.target === e.currentTarget) { setPendingId(null); setClearWeek(false) } }}>
-          <div className="confirm-sheet">
-            <div className="confirm-sheet-handle" />
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <IconTarget className="accent-primary" /> Cambiar rutina
-            </h3>
-            <p className="confirm-sheet-text">
-              Vas a activar <strong>{pendingRoutineData?.name}</strong>. Tu historial se conserva, pero los registros de la semana actual pueden desincronizarse.
-            </p>
-            
-            <div className="confirm-option-card">
-              <label className="checkbox-container">
-                <input type="checkbox" checked={clearWeek} onChange={e => setClearWeek(e.target.checked)} />
-                <span className="checkmark" />
-                <div className="option-label">
-                  <strong>Limpiar semana actual</strong>
-                  <p>Recomendado si empiezas un nuevo ciclo de entrenamiento.</p>
-                </div>
-              </label>
+      {/* Confirmation Panel — portal para escapar overflow de .main */}
+      {pendingId && createPortal(
+        <div className="side-panel-overlay open" onClick={e => { if (e.target === e.currentTarget) { setPendingId(null); setClearWeek(false) } }}>
+          <div className="side-panel">
+            <div className="side-panel-drag-handle" />
+
+            <div className="side-panel-header">
+              <div className="side-panel-title-area">
+                <h3>Cambiar rutina</h3>
+                <p>{pendingRoutineData?.name}</p>
+              </div>
+              <button className="side-panel-close-btn" onClick={() => { setPendingId(null); setClearWeek(false) }} aria-label="Cerrar">
+                <IconClose size={18} />
+                <span>Cerrar</span>
+              </button>
             </div>
 
-            <div className="confirm-sheet-actions">
-              <button className="primary-btn" onClick={confirmActivate} disabled={activating} style={{ flex: 2 }}>
+            <div className="side-panel-body">
+              <div className="preview-day-card">
+                <div className="preview-day-card-head">
+                  <span className="preview-day-label">Antes de continuar</span>
+                </div>
+                <div style={{ padding: 'var(--space-4)', display: 'grid', gap: 'var(--space-3)' }}>
+                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+                    Tu historial se conserva, pero los registros de la semana actual pueden desincronizarse con la nueva rutina.
+                  </p>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-3)', cursor: 'pointer', padding: 'var(--space-3)', background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-divider)' }}>
+                    <input type="checkbox" checked={clearWeek} onChange={e => setClearWeek(e.target.checked)} style={{ marginTop: '2px', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 'var(--text-sm)' }}>Limpiar semana actual</div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: '2px' }}>Recomendado si empiezas un nuevo ciclo de entrenamiento.</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="side-panel-footer">
+              <button className="primary-btn" onClick={confirmActivate} disabled={activating} style={{ flex: 1, padding: '1rem' }}>
                 {activating ? 'Activando...' : 'Confirmar e iniciar'}
               </button>
-              <button className="ghost-btn" onClick={() => { setPendingId(null); setClearWeek(false) }} style={{ flex: 1 }}>Cancelar</button>
+              <button className="ghost-btn" onClick={() => { setPendingId(null); setClearWeek(false) }} style={{ flex: 0 }}>Cancelar</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Preview Side Panel */}
+      {/* Preview Side Panel — portal para escapar overflow de .main */}
+      {createPortal(
       <div className={`side-panel-overlay ${previewRoutine ? 'open' : ''}`} onClick={e => { if (e.target === e.currentTarget) setPreviewRoutine(null) }}>
         <div className="side-panel">
+          {/* Drag handle visible en móvil */}
+          <div className="side-panel-drag-handle" />
+
           <div className="side-panel-header">
             <div className="side-panel-title-area">
               <h3>{previewRoutine?.name}</h3>
               <p>{previewRoutine?.description || 'Plan de entrenamiento detallado'}</p>
             </div>
-            <button className="icon-btn-subtle" onClick={() => setPreviewRoutine(null)} aria-label="Cerrar vista previa">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <button className="side-panel-close-btn" onClick={() => setPreviewRoutine(null)} aria-label="Cerrar vista previa">
+              <IconClose size={18} />
+              <span>Cerrar</span>
             </button>
           </div>
-          
+
           <div className="side-panel-body">
-            {Object.entries(previewRoutine?.days || {}).map(([id, day]) => {
-              const d = day as any
-              return (
-                <div key={id} className="preview-day-card">
-                  <div className="preview-day-card-head">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                      <span className="preview-day-label">{capitalize(id)}</span>
-                      <span className="preview-day-badge">{d.exercises?.length ?? 0} ejercicios</span>
-                    </div>
-                    <span className="preview-day-subtitle">{d.label}</span>
-                  </div>
-                  <div className="preview-day-exercises">
-                    {d.exercises?.map((ex: any, idx: number) => (
-                      <div key={idx} className="preview-exercise-item">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
-                          <span className="preview-exercise-idx">{idx + 1}</span>
-                          <div style={{ minWidth: 0 }}>
-                            <div className="preview-exercise-name">{ex.name}</div>
-                            {ex.rest > 0 && <div className="preview-exercise-rest">{ex.rest}s descanso</div>}
-                          </div>
-                        </div>
-                        <div className="preview-exercise-meta">{ex.sets}×{ex.reps}</div>
+            {Object.entries(previewRoutine?.days || {}).length === 0 ? (
+              <div className="preview-empty-state">
+                <p>Esta rutina no tiene días configurados.</p>
+              </div>
+            ) : (
+              Object.entries(previewRoutine?.days || {}).map(([id, day]) => {
+                const d = day as any
+                const exs: any[] = d.exercises ?? []
+                return (
+                  <div key={id} className="preview-day-card">
+                    <div className="preview-day-card-head">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <span className="preview-day-label">{capitalize(id)}</span>
+                        {d.label && <span className="preview-day-subtitle">{d.label}</span>}
                       </div>
-                    ))}
+                      <span className="preview-day-badge">{exs.length} ejercicios</span>
+                    </div>
+                    <div className="preview-day-exercises">
+                      {exs.length === 0 ? (
+                        <div className="preview-no-exercises">Sin ejercicios configurados</div>
+                      ) : exs.map((ex: any, idx: number) => (
+                        <div key={idx} className="preview-exercise-item">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
+                            <span className="preview-exercise-idx">{idx + 1}</span>
+                            <div style={{ minWidth: 0 }}>
+                              <div className="preview-exercise-name">{ex.name}</div>
+                              {ex.rest > 0 && <div className="preview-exercise-rest">{ex.sets} series · {ex.reps} reps · {ex.rest}s descanso</div>}
+                            </div>
+                          </div>
+                          <div className="preview-exercise-meta">{ex.sets}×{ex.reps}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
 
           <div className="side-panel-footer">
-            <button 
-              className="primary-btn" 
-              style={{ width: '100%', padding: '1rem' }} 
-              onClick={() => { 
+            <button
+              className="primary-btn"
+              style={{ flex: 1, padding: '1rem' }}
+              onClick={() => {
                 if (previewRoutine) {
-                  setPendingId(previewRoutine.id!); 
-                  setPreviewRoutine(null); 
+                  setPendingId(previewRoutine.id!);
+                  setPreviewRoutine(null);
                 }
               }}
             >
-              Activar este plan ahora
+              Activar este plan
+            </button>
+            <button className="ghost-btn" style={{ flex: 0 }} onClick={() => setPreviewRoutine(null)}>
+              Cerrar
             </button>
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
+      )}
     </div>
   )
 }
